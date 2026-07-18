@@ -5,6 +5,10 @@ on:
     branches: [main, "feature/**"]
   pull_request:
 
+concurrency:
+  group: android-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -48,11 +52,28 @@ jobs:
         run: exit 1
 
       - name: Test and build debug APK
-        run: gradle :app:testDebugUnitTest :app:assembleDebug
+        id: android-build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          gradle :app:testDebugUnitTest :app:assembleDebug 2>&1 | tee android-build.log
 
-      - name: Verify native arm64 library
+      - name: Upload Android build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-log
+          path: android-build.log
+          if-no-files-found: warn
+
+      - name: Stop after Android build failure
+        if: steps.android-build.outcome != 'success'
+        run: exit 1
+
+      - name: Verify native arm64 libraries
         run: |
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep "lib/arm64-v8a/libpebble_runtime.so"
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep "lib/arm64-v8a/libpebble_qemu_exec.so"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

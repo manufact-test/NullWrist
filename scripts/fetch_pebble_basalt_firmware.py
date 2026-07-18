@@ -13,7 +13,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "app" / "src" / "main" / "assets" / "pebble" / "basalt"
-SDK_VERSION = os.environ.get("PEBBLE_SDK_VERSION", "latest")
+SDK_VERSION = os.environ.get("PEBBLE_SDK_VERSION", "4.17")
 API_URL = f"https://sdk.repebble.com/v1/files/sdk-core/{SDK_VERSION}?channel="
 MAX_ARCHIVE_BYTES = 200 * 1024 * 1024
 MAX_MEMBER_BYTES = 16 * 1024 * 1024

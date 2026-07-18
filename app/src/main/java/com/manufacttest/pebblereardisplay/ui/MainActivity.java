@@ -2,6 +2,7 @@ package com.manufacttest.pebblereardisplay.ui;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -31,21 +32,73 @@ public final class MainActivity extends Activity {
     private LinearLayout catalogContainer;
     private TextView selectionLabel;
     private List<WatchfaceMetadata> watchfaces = new ArrayList<>();
+    private boolean rearMode;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        renderForCurrentSurface();
+    }
 
-        if (DisplayUtils.isSecondaryDisplay(this)) {
-            startActivity(new Intent(this, RearDisplayActivity.class));
-            finish();
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        renderForCurrentSurface();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        renderForCurrentSurface();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus) {
             return;
         }
+        if (rearMode) {
+            RearUi.enterImmersive(this);
+        } else {
+            scheduleRearModeRecheck();
+        }
+    }
 
+    private void renderForCurrentSurface() {
+        if (DisplayUtils.shouldUseRearMode(this, getIntent())) {
+            showRearSurface();
+        } else {
+            showMainSurface();
+        }
+    }
+
+    private void showRearSurface() {
+        rearMode = true;
+        repository = new WatchfaceRepository(this);
+        preferences = new AppPreferences(this);
+        setContentView(new RearClockView(this, repository, preferences));
+        getWindow().getDecorView().post(() -> RearUi.enterImmersive(this));
+    }
+
+    private void showMainSurface() {
+        rearMode = false;
+        RearUi.leaveImmersive(this);
         repository = new WatchfaceRepository(this);
         preferences = new AppPreferences(this);
         setContentView(buildMainScreen());
         reloadCatalog();
+        scheduleRearModeRecheck();
+    }
+
+    private void scheduleRearModeRecheck() {
+        View decor = getWindow().getDecorView();
+        decor.post(() -> {
+            if (!rearMode && DisplayUtils.isCompactRearBounds(decor.getWidth(), decor.getHeight())) {
+                showRearSurface();
+            }
+        });
     }
 
     private View buildMainScreen() {
@@ -82,9 +135,7 @@ public final class MainActivity extends Activity {
         root.addView(importButton, matchWidthWrapHeight(dp(8)));
 
         Button rearPreviewButton = button("Open rear-display preview");
-        rearPreviewButton.setOnClickListener(view -> startActivity(
-                new Intent(this, RearDisplayActivity.class)
-        ));
+        rearPreviewButton.setOnClickListener(view -> openRearPreview());
         root.addView(rearPreviewButton, matchWidthWrapHeight(dp(18)));
 
         TextView listTitle = text("Watchfaces", 20, getColor(R.color.text_primary));
@@ -100,12 +151,25 @@ public final class MainActivity extends Activity {
         return scroll;
     }
 
+    private void openRearPreview() {
+        Intent preview = new Intent(this, RearDisplayActivity.class);
+        preview.putExtra(DisplayUtils.EXTRA_FORCE_REAR_MODE, true);
+        preview.putExtra(DisplayUtils.EXTRA_PREVIEW_MODE, true);
+        try {
+            startActivity(preview);
+        } catch (RuntimeException exception) {
+            showError("Cannot open rear preview: " + exception.getClass().getSimpleName());
+        }
+    }
+
     private View buildDisplayInfo() {
         Display display = DisplayUtils.currentDisplay(this);
+        android.graphics.Point windowSize = DisplayUtils.currentWindowSize(this);
         String details = display == null
                 ? "Display information unavailable"
                 : "Current display: ID " + display.getDisplayId()
-                + " · " + display.getMode().getPhysicalWidth()
+                + " · window " + windowSize.x + "×" + windowSize.y
+                + " · mode " + display.getMode().getPhysicalWidth()
                 + "×" + display.getMode().getPhysicalHeight()
                 + " · " + Math.round(display.getRefreshRate()) + " Hz";
 
@@ -175,7 +239,7 @@ public final class MainActivity extends Activity {
         name.setTypeface(name.getTypeface(), android.graphics.Typeface.BOLD);
         card.addView(name);
 
-        String source = watchface.isBundled() ? "Bundled test face" : "Imported";
+        String source = watchface.isBundled() ? "Bundled" : "Imported";
         TextView meta = text(
                 watchface.getAuthor() + " · v" + watchface.getVersion()
                         + "\n" + watchface.platformLabel()

@@ -15,13 +15,35 @@ The first scaffold is in place:
 
 - Android app shell without AndroidX or third-party runtime dependencies;
 - safe `.pbw` metadata parser for `appinfo.json`;
-- bundled and imported watchface catalog;
+- seven bundled watchfaces plus manual `.pbw` import;
 - persistent selection;
 - secondary-display detection;
 - fullscreen, non-interactive rear activity;
 - temporary clock renderer while PebbleOS/QEMU integration is developed.
 
 The rear display does **not** execute Pebble binaries yet. The next engineering milestone is replacing `RearClockView` with a framebuffer supplied by the Pebble runtime.
+
+## Bundled watchfaces
+
+The application ships with these pinned PBW packages:
+
+- Big Shadow 2.00.5
+- Nyan Cat 8.9
+- Pip Boy 100 5.4
+- Modern Watchface 3.1.1
+- Mario Time 3.41
+- 91 Dub 4.0 version 4.21
+- YWeather 3.7
+
+Source pages, download endpoints and SHA-256 hashes are recorded in [`bundled-watchfaces.json`](bundled-watchfaces.json) and [`THIRD_PARTY_WATCHFACES.md`](THIRD_PARTY_WATCHFACES.md).
+
+The PBW files live in `app/src/main/assets/watchfaces/` and therefore appear in the app library immediately after installation. Run the verified fetcher before a local build when the assets are not present:
+
+```bash
+python3 scripts/fetch_bundled_watchfaces.py
+```
+
+GitHub Actions runs this command automatically and refuses to build when a downloaded package does not match its pinned SHA-256 hash.
 
 ## Development stack
 
@@ -31,9 +53,10 @@ The rear display does **not** execute Pebble binaries yet. The next engineering 
 - compile/target SDK 36
 - minimum SDK 28
 
-Open the project in Android Studio or run with an installed Gradle 9.5.0:
+Build locally with:
 
 ```bash
+python3 scripts/fetch_bundled_watchfaces.py
 gradle :app:assembleDebug
 ```
 
@@ -42,12 +65,6 @@ The APK is generated at:
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
-
-## Test watchfaces
-
-The app automatically bundles any `.pbw` packages placed in `app/src/debug/assets/watchfaces/` into debug builds. The seven supplied test packages have been inspected and documented, but their binary files are not part of the first source commit.
-
-Keep test packages in the debug source set and exclude them from release builds until redistribution rights for each package and its embedded artwork/fonts are documented. See [`THIRD_PARTY_WATCHFACES.md`](THIRD_PARTY_WATCHFACES.md).
 
 ## Roadmap
 

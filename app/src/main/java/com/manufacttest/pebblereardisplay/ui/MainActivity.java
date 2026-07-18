@@ -144,7 +144,11 @@ public final class MainActivity extends Activity {
 
         Button qemuProbeButton = button("Test native Pebble QEMU");
         qemuProbeButton.setOnClickListener(view -> openQemuBinaryProbe());
-        root.addView(qemuProbeButton, matchWidthWrapHeight(dp(18)));
+        root.addView(qemuProbeButton, matchWidthWrapHeight(dp(8)));
+
+        Button pebbleOsProbeButton = button("Run real PebbleOS Basalt");
+        pebbleOsProbeButton.setOnClickListener(view -> openPebbleOsProbe());
+        root.addView(pebbleOsProbeButton, matchWidthWrapHeight(dp(18)));
 
         TextView listTitle = text("Watchfaces", 20, getColor(R.color.text_primary));
         listTitle.setTypeface(listTitle.getTypeface(), android.graphics.Typeface.BOLD);
@@ -183,6 +187,14 @@ public final class MainActivity extends Activity {
             startActivity(new Intent(this, QemuBinaryProbeActivity.class));
         } catch (RuntimeException exception) {
             showError("Cannot open QEMU test: " + exception.getClass().getSimpleName());
+        }
+    }
+
+    private void openPebbleOsProbe() {
+        try {
+            startActivity(new Intent(this, PebbleOsProbeActivity.class));
+        } catch (RuntimeException exception) {
+            showError("Cannot start PebbleOS: " + exception.getClass().getSimpleName());
         }
     }
 

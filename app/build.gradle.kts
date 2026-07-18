@@ -11,8 +11,8 @@ android {
         applicationId = "com.manufacttest.pebblereardisplay"
         minSdk = 28
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.2.2"
+        versionCode = 6
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
 

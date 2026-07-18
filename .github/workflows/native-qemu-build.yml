@@ -14,6 +14,10 @@ on:
       - ".github/workflows/native-qemu-build.yml"
   workflow_dispatch:
 
+concurrency:
+  group: native-pebble-qemu-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 

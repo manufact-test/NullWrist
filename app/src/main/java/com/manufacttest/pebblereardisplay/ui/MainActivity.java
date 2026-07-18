@@ -136,7 +136,11 @@ public final class MainActivity extends Activity {
 
         Button rearPreviewButton = button("Open rear-display preview");
         rearPreviewButton.setOnClickListener(view -> openRearPreview());
-        root.addView(rearPreviewButton, matchWidthWrapHeight(dp(18)));
+        root.addView(rearPreviewButton, matchWidthWrapHeight(dp(8)));
+
+        Button nativeProbeButton = button("Test native ARM64 framebuffer");
+        nativeProbeButton.setOnClickListener(view -> openNativeRuntimeProbe());
+        root.addView(nativeProbeButton, matchWidthWrapHeight(dp(18)));
 
         TextView listTitle = text("Watchfaces", 20, getColor(R.color.text_primary));
         listTitle.setTypeface(listTitle.getTypeface(), android.graphics.Typeface.BOLD);
@@ -159,6 +163,14 @@ public final class MainActivity extends Activity {
             startActivity(preview);
         } catch (RuntimeException exception) {
             showError("Cannot open rear preview: " + exception.getClass().getSimpleName());
+        }
+    }
+
+    private void openNativeRuntimeProbe() {
+        try {
+            startActivity(new Intent(this, NativeRuntimeProbeActivity.class));
+        } catch (RuntimeException exception) {
+            showError("Cannot open native runtime test: " + exception.getClass().getSimpleName());
         }
     }
 

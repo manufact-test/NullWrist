@@ -10,6 +10,7 @@ OSLIB_SOURCE = pathlib.Path("util/oslib-posix.c")
 
 DISPLAY_INCLUDE_MARKER = '#include "pebble_snowy_display_overlays.h"\n'
 DISPLAY_INCLUDE_BLOCK = r'''
+#include "qemu/error-report.h"
 
 #ifdef __ANDROID__
 #include <errno.h>

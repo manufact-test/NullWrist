@@ -12,7 +12,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "app" / "src" / "main" / "assets" / "pebble" / "basalt"
-SDK_VERSION = os.environ.get("PEBBLE_SDK_VERSION", "4.9.183")
+SDK_VERSION = os.environ.get("PEBBLE_SDK_VERSION", "latest")
 API_URL = f"https://sdk.repebble.com/v1/files/sdk-core/{SDK_VERSION}?channel="
 MAX_ARCHIVE_BYTES = 200 * 1024 * 1024
 MAX_IMAGE_BYTES = 16 * 1024 * 1024
@@ -43,8 +43,9 @@ def main() -> int:
     archive_url = sdk_info.get("url")
     if not resolved_version or not archive_url:
         raise RuntimeError(f"Unexpected SDK response: {sdk_info}")
-    if resolved_version != SDK_VERSION:
+    if SDK_VERSION != "latest" and resolved_version != SDK_VERSION:
         raise RuntimeError(f"Requested {SDK_VERSION}, server resolved {resolved_version}")
+    print(f"Resolved SDK version: {resolved_version}")
 
     print(f"Downloading SDK core: {archive_url}")
     archive = download(archive_url, MAX_ARCHIVE_BYTES)
@@ -74,6 +75,7 @@ def main() -> int:
             print(f"Wrote {destination.relative_to(ROOT)} ({len(data)} bytes, sha256={digest})")
 
     metadata = {
+        "requested_sdk_version": SDK_VERSION,
         "sdk_version": resolved_version,
         "sdk_api": API_URL,
         "sdk_archive_url": archive_url,

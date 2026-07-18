@@ -24,6 +24,8 @@ public final class PebbleProtocolLink implements Closeable {
     private static final int QEMU_PROTOCOL_SPP = 1;
     private static final int QEMU_PROTOCOL_BLUETOOTH = 3;
     private static final int MAX_QEMU_PAYLOAD = 2048;
+
+    private static final int ENDPOINT_WATCH_VERSION = 0x0010;
     private static final int ENDPOINT_PHONE_APP_VERSION = 0x0011;
 
     private final Socket socket;
@@ -37,6 +39,10 @@ public final class PebbleProtocolLink implements Closeable {
 
     private volatile boolean running = true;
     private volatile IOException readerFailure;
+    private volatile int qemuFramesReceived;
+    private volatile int sppFramesReceived;
+    private volatile int pebblePacketsReceived;
+    private volatile int lastEndpoint = -1;
 
     private PebbleProtocolLink(Socket socket) throws IOException {
         this.socket = socket;
@@ -52,14 +58,13 @@ public final class PebbleProtocolLink implements Closeable {
             throws IOException, InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
         IOException lastError = null;
-        while (System.nanoTime() < deadline) {
+        PebbleProtocolLink link = null;
+
+        while (System.nanoTime() < deadline && link == null) {
             Socket socket = new Socket();
             try {
                 socket.connect(new InetSocketAddress(host, port), 800);
-                PebbleProtocolLink link = new PebbleProtocolLink(socket);
-                link.setBluetoothConnected(true);
-                link.sendPhoneAppVersionResponse();
-                return link;
+                link = new PebbleProtocolLink(socket);
             } catch (IOException error) {
                 lastError = error;
                 try {
@@ -69,7 +74,20 @@ public final class PebbleProtocolLink implements Closeable {
                 Thread.sleep(120);
             }
         }
-        throw new IOException("Could not connect to Pebble QEMU protocol port", lastError);
+
+        if (link == null) {
+            throw new IOException("Could not connect to Pebble QEMU protocol port", lastError);
+        }
+
+        try {
+            long remaining = Math.max(2_000,
+                    TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime()));
+            link.initialise(remaining);
+            return link;
+        } catch (IOException | InterruptedException error) {
+            link.close();
+            throw error;
+        }
     }
 
     public void sendPebblePacket(int endpoint, byte[] payload) throws IOException {
@@ -102,14 +120,28 @@ public final class PebbleProtocolLink implements Closeable {
             ensureRunning();
             long remainingNanos = deadline - System.nanoTime();
             byte[] payload = queue.poll(
-                    Math.min(TimeUnit.NANOSECONDS.toMillis(remainingNanos), 250),
+                    Math.max(1, Math.min(TimeUnit.NANOSECONDS.toMillis(remainingNanos), 250)),
                     TimeUnit.MILLISECONDS
             );
             if (payload != null && (predicate == null || predicate.test(payload))) {
                 return payload;
             }
         }
-        throw new IOException(String.format("Timed out waiting for Pebble endpoint 0x%04X", endpoint));
+        throw new IOException(String.format(
+                "Timed out waiting for Pebble endpoint 0x%04X (%s)",
+                endpoint,
+                diagnostics()
+        ));
+    }
+
+    public String diagnostics() {
+        String endpoint = lastEndpoint < 0
+                ? "none"
+                : String.format("0x%04X", lastEndpoint);
+        return "qemuFrames=" + qemuFramesReceived
+                + ", sppFrames=" + sppFramesReceived
+                + ", pebblePackets=" + pebblePacketsReceived
+                + ", lastEndpoint=" + endpoint;
     }
 
     @Override
@@ -120,6 +152,39 @@ public final class PebbleProtocolLink implements Closeable {
         } catch (IOException ignored) {
         }
         readerThread.interrupt();
+    }
+
+    private void initialise(long timeoutMillis) throws IOException, InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        IOException lastTimeout = null;
+
+        while (System.nanoTime() < deadline) {
+            ensureRunning();
+            setBluetoothConnected(true);
+            Thread.sleep(180);
+
+            sendPebblePacket(ENDPOINT_WATCH_VERSION, new byte[]{0x00});
+            long remainingMillis = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+            try {
+                awaitEndpoint(
+                        ENDPOINT_WATCH_VERSION,
+                        payload -> payload.length > 0 && (payload[0] & 0xff) == 0x01,
+                        Math.max(500, Math.min(2_000, remainingMillis))
+                );
+                return;
+            } catch (IOException timeout) {
+                if (!timeout.getMessage().startsWith("Timed out waiting")) {
+                    throw timeout;
+                }
+                lastTimeout = timeout;
+                Thread.sleep(180);
+            }
+        }
+
+        throw new IOException(
+                "Pebble phone protocol did not initialise (" + diagnostics() + ")",
+                lastTimeout
+        );
     }
 
     private void setBluetoothConnected(boolean connected) throws IOException {
@@ -200,7 +265,9 @@ public final class PebbleProtocolLink implements Closeable {
             }
             byte[] payload = qemuBytes.copy(6, length);
             qemuBytes.discard(total);
+            qemuFramesReceived++;
             if (protocol == QEMU_PROTOCOL_SPP) {
+                sppFramesReceived++;
                 synchronized (pebbleBytes) {
                     pebbleBytes.append(payload, 0, payload.length);
                     parsePebbleFrames();
@@ -219,6 +286,8 @@ public final class PebbleProtocolLink implements Closeable {
             int endpoint = pebbleBytes.unsignedShort(2);
             byte[] payload = pebbleBytes.copy(4, length);
             pebbleBytes.discard(total);
+            pebblePacketsReceived++;
+            lastEndpoint = endpoint;
 
             if (endpoint == ENDPOINT_PHONE_APP_VERSION
                     && payload.length > 0

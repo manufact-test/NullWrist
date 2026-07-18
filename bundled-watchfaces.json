@@ -48,11 +48,11 @@
     "sha256": "70704f3e53265ebda5a78a4c7f9f98ee1d50521a9dde19731da7954c876038d4"
   },
   {
-    "file": "yweather-3.7.pbw",
-    "name": "YWeather",
-    "version": "3.7",
-    "page_url": "https://apps.repebble.com/yweather_52cc44e045ffdd31dd000180",
-    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/57f3f1a405e4b103e70000a9.pbw",
-    "sha256": "606dad45560f0371e503ce963fc61daba395c2d937020836840d7a8e5e5ca7ad"
+    "file": "polvtorogo.pbw",
+    "name": "polvtorogo",
+    "version": "latest",
+    "page_url": "https://apps.repebble.com/polvtorogo_52f62660ee349e43430002f1",
+    "download_url": "",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
   }
 ]

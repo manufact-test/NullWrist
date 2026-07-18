@@ -14,7 +14,7 @@
             android:configChanges="density|fontScale|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
             android:excludeFromRecents="true"
             android:exported="false"
-            android:launchMode="singleTask"
+            android:launchMode="standard"
             android:screenOrientation="unspecified"
             android:theme="@style/Theme.PebbleRearDisplay.Rear" />
 

@@ -10,6 +10,13 @@
         android:theme="@style/Theme.PebbleRearDisplay">
 
         <activity
+            android:name=".ui.NativeRuntimeProbeActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:screenOrientation="unspecified"
+            android:theme="@style/Theme.PebbleRearDisplay" />
+
+        <activity
             android:name=".ui.RearDisplayActivity"
             android:configChanges="density|fontScale|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
             android:excludeFromRecents="true"

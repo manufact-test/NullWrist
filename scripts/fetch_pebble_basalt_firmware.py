@@ -2,6 +2,7 @@
 """Fetch the official Pebble SDK Basalt QEMU images for Android packaging."""
 from __future__ import annotations
 
+import bz2
 import hashlib
 import io
 import json
@@ -15,11 +16,12 @@ OUTPUT = ROOT / "app" / "src" / "main" / "assets" / "pebble" / "basalt"
 SDK_VERSION = os.environ.get("PEBBLE_SDK_VERSION", "latest")
 API_URL = f"https://sdk.repebble.com/v1/files/sdk-core/{SDK_VERSION}?channel="
 MAX_ARCHIVE_BYTES = 200 * 1024 * 1024
-MAX_IMAGE_BYTES = 16 * 1024 * 1024
+MAX_MEMBER_BYTES = 16 * 1024 * 1024
+MAX_IMAGE_BYTES = 32 * 1024 * 1024
 
 FILES = {
-    "sdk-core/pebble/basalt/qemu/qemu_micro_flash.bin": "qemu_micro_flash.bin",
-    "sdk-core/pebble/basalt/qemu/qemu_spi_flash.bin": "qemu_spi_flash.bin",
+    "sdk-core/pebble/basalt/qemu/qemu_micro_flash.bin": ("qemu_micro_flash.bin", False),
+    "sdk-core/pebble/basalt/qemu/qemu_spi_flash.bin.bz2": ("qemu_spi_flash.bin", True),
 }
 
 
@@ -55,23 +57,32 @@ def main() -> int:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:*") as bundle:
         members = {member.name: member for member in bundle.getmembers()}
-        for source_name, output_name in FILES.items():
+        for source_name, (output_name, compressed) in FILES.items():
             member = members.get(source_name)
             if member is None or not member.isfile():
                 raise RuntimeError(f"SDK archive is missing {source_name}")
-            if member.size <= 0 or member.size > MAX_IMAGE_BYTES:
+            if member.size <= 0 or member.size > MAX_MEMBER_BYTES:
                 raise RuntimeError(f"Unexpected size for {source_name}: {member.size}")
             source = bundle.extractfile(member)
             if source is None:
                 raise RuntimeError(f"Could not extract {source_name}")
-            data = source.read(MAX_IMAGE_BYTES + 1)
-            if len(data) != member.size:
-                raise RuntimeError(f"Short read for {source_name}: {len(data)} != {member.size}")
+            packed = source.read(MAX_MEMBER_BYTES + 1)
+            if len(packed) != member.size:
+                raise RuntimeError(f"Short read for {source_name}: {len(packed)} != {member.size}")
+
+            data = bz2.decompress(packed) if compressed else packed
+            if len(data) <= 0 or len(data) > MAX_IMAGE_BYTES:
+                raise RuntimeError(f"Unexpected unpacked size for {source_name}: {len(data)}")
 
             destination = OUTPUT / output_name
             destination.write_bytes(data)
             digest = sha256(data)
-            extracted[output_name] = {"size": len(data), "sha256": digest}
+            extracted[output_name] = {
+                "size": len(data),
+                "sha256": digest,
+                "sdk_member": source_name,
+                "compressed_in_sdk": compressed,
+            }
             print(f"Wrote {destination.relative_to(ROOT)} ({len(data)} bytes, sha256={digest})")
 
     metadata = {

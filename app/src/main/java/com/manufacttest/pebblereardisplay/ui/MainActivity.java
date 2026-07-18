@@ -1,11 +1,19 @@
 package com.manufacttest.pebblereardisplay.ui;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.ActivityOptions;
+import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -19,6 +27,7 @@ import com.manufacttest.pebblereardisplay.R;
 import com.manufacttest.pebblereardisplay.data.AppPreferences;
 import com.manufacttest.pebblereardisplay.data.WatchfaceRepository;
 import com.manufacttest.pebblereardisplay.model.WatchfaceMetadata;
+import com.manufacttest.pebblereardisplay.runtime.PebbleRuntimeService;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -26,6 +35,9 @@ import java.util.List;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_IMPORT_PBW = 1001;
+    private static final int REQUEST_NOTIFICATIONS = 1002;
+    private static final String SETUP_PREFS = "background_setup";
+    private static final String KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown";
 
     private WatchfaceRepository repository;
     private AppPreferences preferences;
@@ -33,6 +45,7 @@ public final class MainActivity extends Activity {
     private TextView selectionLabel;
     private List<WatchfaceMetadata> watchfaces = new ArrayList<>();
     private boolean rearMode;
+    private boolean redirectingToRear;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +100,24 @@ public final class MainActivity extends Activity {
     }
 
     private void showRearSurface() {
+        if (!redirectingToRear) {
+            redirectingToRear = true;
+            Intent rear = new Intent(this, RearDisplayActivity.class)
+                    .putExtra(DisplayUtils.EXTRA_FORCE_REAR_MODE, true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            try {
+                ActivityOptions options = ActivityOptions.makeBasic();
+                if (getDisplay() != null) {
+                    options.setLaunchDisplayId(getDisplay().getDisplayId());
+                }
+                startActivity(rear, options.toBundle());
+                finish();
+                return;
+            } catch (RuntimeException ignored) {
+                redirectingToRear = false;
+            }
+        }
+
         rearMode = true;
         setContentView(new PebbleOsSurfaceView(this));
         getWindow().getDecorView().post(() -> RearUi.enterImmersive(this));
@@ -94,11 +125,14 @@ public final class MainActivity extends Activity {
 
     private void showMainSurface() {
         rearMode = false;
+        redirectingToRear = false;
         RearUi.leaveImmersive(this);
         repository = new WatchfaceRepository(this);
         preferences = new AppPreferences(this);
         setContentView(buildMainScreen());
         reloadCatalog();
+        PebbleRuntimeService.start(this);
+        maybeRequestBackgroundSetup();
         scheduleRearModeRecheck();
     }
 
@@ -129,7 +163,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "Choose a Pebble watchface here. Open the app from the Titan 2 rear display to show it. The rear surface ignores all touches.",
+                "Choose a Pebble watchface here. The runtime stays active in the background, while the rear display ignores all touches.",
                 15,
                 getColor(R.color.text_secondary)
         );
@@ -146,7 +180,19 @@ public final class MainActivity extends Activity {
 
         Button rearPreviewButton = button("Preview rear display");
         rearPreviewButton.setOnClickListener(view -> openRearPreview());
-        root.addView(rearPreviewButton, matchWidthWrapHeight(dp(18)));
+        root.addView(rearPreviewButton, matchWidthWrapHeight(dp(8)));
+
+        Button backgroundButton = button("Background reliability settings");
+        backgroundButton.setOnClickListener(view -> openBackgroundSettings());
+        root.addView(backgroundButton, matchWidthWrapHeight(dp(8)));
+
+        TextView backgroundHint = text(
+                "Titan 2: also allow this app in DuraSpeed, disable it in App blocker, and set Battery to Unrestricted / Don't optimize.",
+                13,
+                getColor(R.color.text_secondary)
+        );
+        backgroundHint.setPadding(dp(2), 0, dp(2), dp(18));
+        root.addView(backgroundHint);
 
         TextView listTitle = text("Watchfaces", 20, getColor(R.color.text_primary));
         listTitle.setTypeface(listTitle.getTypeface(), android.graphics.Typeface.BOLD);
@@ -254,6 +300,7 @@ public final class MainActivity extends Activity {
         card.setOnClickListener(view -> {
             preferences.setSelectedWatchfaceId(watchface.getStorageId());
             renderCatalog();
+            PebbleRuntimeService.restart(this);
         });
         return card;
     }
@@ -296,8 +343,96 @@ public final class MainActivity extends Activity {
             preferences.setSelectedWatchfaceId(imported.getStorageId());
             Toast.makeText(this, "Imported " + imported.getName(), Toast.LENGTH_SHORT).show();
             reloadCatalog();
+            PebbleRuntimeService.restart(this);
         } catch (IOException exception) {
             showError("Import failed: " + exception.getMessage());
+        }
+    }
+
+    private void maybeRequestBackgroundSetup() {
+        getWindow().getDecorView().post(() -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                    && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        REQUEST_NOTIFICATIONS
+                );
+                return;
+            }
+            maybeShowBatteryPrompt();
+        });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode,
+            String[] permissions,
+            int[] grantResults
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_NOTIFICATIONS) {
+            maybeShowBatteryPrompt();
+        }
+    }
+
+    private void maybeShowBatteryPrompt() {
+        if (isIgnoringBatteryOptimizations()) {
+            return;
+        }
+        SharedPreferences setup = getSharedPreferences(SETUP_PREFS, MODE_PRIVATE);
+        if (setup.getBoolean(KEY_BATTERY_PROMPT_SHOWN, false)) {
+            return;
+        }
+        setup.edit().putBoolean(KEY_BATTERY_PROMPT_SHOWN, true).apply();
+
+        new AlertDialog.Builder(this)
+                .setTitle("Keep the watchface running?")
+                .setMessage("Allow Pebble Rear Display to run without battery optimization. "
+                        + "This keeps the rear watchface alive after the main window is closed.")
+                .setPositiveButton("Allow", (dialog, which) -> requestBatteryExemption())
+                .setNegativeButton("Later", null)
+                .show();
+    }
+
+    private void openBackgroundSettings() {
+        if (!isIgnoringBatteryOptimizations()) {
+            requestBatteryExemption();
+            return;
+        }
+        Toast.makeText(
+                this,
+                "Also enable the app in DuraSpeed and disable it in App blocker.",
+                Toast.LENGTH_LONG
+        ).show();
+        openAppDetails();
+    }
+
+    private boolean isIgnoringBatteryOptimizations() {
+        PowerManager manager = getSystemService(PowerManager.class);
+        return manager != null && manager.isIgnoringBatteryOptimizations(getPackageName());
+    }
+
+    private void requestBatteryExemption() {
+        try {
+            Intent request = new Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + getPackageName())
+            );
+            startActivity(request);
+        } catch (RuntimeException error) {
+            openAppDetails();
+        }
+    }
+
+    private void openAppDetails() {
+        try {
+            startActivity(new Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + getPackageName())
+            ));
+        } catch (RuntimeException error) {
+            showError("Cannot open application settings");
         }
     }
 

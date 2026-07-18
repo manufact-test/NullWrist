@@ -21,8 +21,8 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Install Android SDK and NDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108" "cmake;3.22.1"
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -49,6 +49,10 @@ jobs:
 
       - name: Test and build debug APK
         run: gradle :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify native arm64 library
+        run: |
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep "lib/arm64-v8a/libpebble_runtime.so"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

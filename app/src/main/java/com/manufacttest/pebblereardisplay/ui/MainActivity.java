@@ -6,8 +6,8 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
-import android.view.Display;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -66,6 +66,18 @@ public final class MainActivity extends Activity {
         }
     }
 
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        return rearMode || super.dispatchTouchEvent(event);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (!rearMode) {
+            super.onBackPressed();
+        }
+    }
+
     private void renderForCurrentSurface() {
         if (DisplayUtils.shouldUseRearMode(this, getIntent())) {
             showRearSurface();
@@ -76,9 +88,7 @@ public final class MainActivity extends Activity {
 
     private void showRearSurface() {
         rearMode = true;
-        repository = new WatchfaceRepository(this);
-        preferences = new AppPreferences(this);
-        setContentView(new RearClockView(this, repository, preferences));
+        setContentView(new PebbleOsSurfaceView(this));
         getWindow().getDecorView().post(() -> RearUi.enterImmersive(this));
     }
 
@@ -119,7 +129,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView subtitle = text(
-                "Choose a Pebble watchface here. On the Titan 2 rear display the app shows only the selected face and ignores all touches.",
+                "Choose a Pebble watchface here. Open the app from the Titan 2 rear display to show it. The rear surface ignores all touches.",
                 15,
                 getColor(R.color.text_secondary)
         );
@@ -134,21 +144,9 @@ public final class MainActivity extends Activity {
         importButton.setOnClickListener(view -> openPbwPicker());
         root.addView(importButton, matchWidthWrapHeight(dp(8)));
 
-        Button rearPreviewButton = button("Open rear-display preview");
+        Button rearPreviewButton = button("Preview rear display");
         rearPreviewButton.setOnClickListener(view -> openRearPreview());
-        root.addView(rearPreviewButton, matchWidthWrapHeight(dp(8)));
-
-        Button nativeProbeButton = button("Test native ARM64 framebuffer");
-        nativeProbeButton.setOnClickListener(view -> openNativeRuntimeProbe());
-        root.addView(nativeProbeButton, matchWidthWrapHeight(dp(8)));
-
-        Button qemuProbeButton = button("Test native Pebble QEMU");
-        qemuProbeButton.setOnClickListener(view -> openQemuBinaryProbe());
-        root.addView(qemuProbeButton, matchWidthWrapHeight(dp(8)));
-
-        Button pebbleOsProbeButton = button("Run real PebbleOS Basalt");
-        pebbleOsProbeButton.setOnClickListener(view -> openPebbleOsProbe());
-        root.addView(pebbleOsProbeButton, matchWidthWrapHeight(dp(18)));
+        root.addView(rearPreviewButton, matchWidthWrapHeight(dp(18)));
 
         TextView listTitle = text("Watchfaces", 20, getColor(R.color.text_primary));
         listTitle.setTypeface(listTitle.getTypeface(), android.graphics.Typeface.BOLD);
@@ -158,8 +156,6 @@ public final class MainActivity extends Activity {
         catalogContainer = new LinearLayout(this);
         catalogContainer.setOrientation(LinearLayout.VERTICAL);
         root.addView(catalogContainer, matchWidthWrapHeight(0));
-
-        root.addView(buildDisplayInfo());
         return scroll;
     }
 
@@ -172,46 +168,6 @@ public final class MainActivity extends Activity {
         } catch (RuntimeException exception) {
             showError("Cannot open rear preview: " + exception.getClass().getSimpleName());
         }
-    }
-
-    private void openNativeRuntimeProbe() {
-        try {
-            startActivity(new Intent(this, NativeRuntimeProbeActivity.class));
-        } catch (RuntimeException exception) {
-            showError("Cannot open native runtime test: " + exception.getClass().getSimpleName());
-        }
-    }
-
-    private void openQemuBinaryProbe() {
-        try {
-            startActivity(new Intent(this, QemuBinaryProbeActivity.class));
-        } catch (RuntimeException exception) {
-            showError("Cannot open QEMU test: " + exception.getClass().getSimpleName());
-        }
-    }
-
-    private void openPebbleOsProbe() {
-        try {
-            startActivity(new Intent(this, PebbleOsProbeActivity.class));
-        } catch (RuntimeException exception) {
-            showError("Cannot start PebbleOS: " + exception.getClass().getSimpleName());
-        }
-    }
-
-    private View buildDisplayInfo() {
-        Display display = DisplayUtils.currentDisplay(this);
-        android.graphics.Point windowSize = DisplayUtils.currentWindowSize(this);
-        String details = display == null
-                ? "Display information unavailable"
-                : "Current display: ID " + display.getDisplayId()
-                + " · window " + windowSize.x + "×" + windowSize.y
-                + " · mode " + display.getMode().getPhysicalWidth()
-                + "×" + display.getMode().getPhysicalHeight()
-                + " · " + Math.round(display.getRefreshRate()) + " Hz";
-
-        TextView info = text(details, 12, getColor(R.color.text_secondary));
-        info.setPadding(0, dp(24), 0, 0);
-        return info;
     }
 
     private void reloadCatalog() {

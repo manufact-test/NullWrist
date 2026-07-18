@@ -152,7 +152,7 @@ build_glib() {
       -Dtests=false -Dinstalled_tests=false -Dintrospection=disabled \
       -Ddocumentation=false -Dman-pages=disabled -Dnls=disabled \
       -Dlibmount=disabled -Dselinux=disabled -Dsysprof=disabled \
-      -Ddtrace=false -Dsystemtap=false -Dxattr=false -Dpcre2=system
+      -Ddtrace=disabled -Dsystemtap=disabled -Dxattr=false
     meson compile -C "$build" -j "$JOBS"
     meson install -C "$build"
   fi

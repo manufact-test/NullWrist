@@ -10,6 +10,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
+import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -32,7 +33,10 @@ public final class PebbleQemuProcess {
     private final File spiFlash;
     private final File framebuffer;
     private final File logFile;
+
     private Process process;
+    private PebbleProtocolLink protocolLink;
+    private int protocolPort;
 
     public PebbleQemuProcess(Context context) {
         this.context = context.getApplicationContext();
@@ -48,6 +52,7 @@ public final class PebbleQemuProcess {
             return;
         }
         prepareFiles();
+        protocolPort = chooseUnusedPort();
 
         File qemu = new File(context.getApplicationInfo().nativeLibraryDir, "libpebble_qemu_exec.so");
         if (!qemu.isFile()) {
@@ -64,7 +69,7 @@ public final class PebbleQemuProcess {
         command.add("-serial");
         command.add("null");
         command.add("-serial");
-        command.add("null");
+        command.add("tcp::" + protocolPort + ",server=on,wait=off");
         command.add("-serial");
         command.add("null");
         command.add("-kernel");
@@ -92,6 +97,23 @@ public final class PebbleQemuProcess {
         process = builder.start();
     }
 
+    public void installWatchface(
+            File pbwFile,
+            PebbleAppInstaller.ProgressListener progressListener
+    ) throws IOException, InterruptedException {
+        if (pbwFile == null || !pbwFile.isFile()) {
+            throw new IOException("Selected PBW file is missing");
+        }
+        if (!isRunning()) {
+            throw new IOException("PebbleOS is not running");
+        }
+
+        PebbleProtocolLink link = protocolLink();
+        try (PebblePbwBundle bundle = new PebblePbwBundle(pbwFile)) {
+            new PebbleAppInstaller(link, progressListener).install(bundle);
+        }
+    }
+
     public synchronized boolean isRunning() {
         return process != null && process.isAlive();
     }
@@ -104,6 +126,12 @@ public final class PebbleQemuProcess {
     }
 
     public synchronized void stop() {
+        PebbleProtocolLink currentLink = protocolLink;
+        protocolLink = null;
+        if (currentLink != null) {
+            currentLink.close();
+        }
+
         Process current = process;
         process = null;
         if (current == null) {
@@ -203,6 +231,13 @@ public final class PebbleQemuProcess {
         return framebuffer;
     }
 
+    private synchronized PebbleProtocolLink protocolLink() throws IOException, InterruptedException {
+        if (protocolLink == null) {
+            protocolLink = PebbleProtocolLink.connect("127.0.0.1", protocolPort, 20_000);
+        }
+        return protocolLink;
+    }
+
     private void prepareFiles() throws IOException {
         if (!runtimeDirectory.isDirectory() && !runtimeDirectory.mkdirs()) {
             throw new IOException("Cannot create runtime directory: " + runtimeDirectory);
@@ -249,6 +284,13 @@ public final class PebbleQemuProcess {
             while ((read = input.read(buffer)) != -1) {
                 output.write(buffer, 0, read);
             }
+        }
+    }
+
+    private static int chooseUnusedPort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            socket.setReuseAddress(true);
+            return socket.getLocalPort();
         }
     }
 

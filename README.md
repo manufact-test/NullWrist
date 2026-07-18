@@ -5,9 +5,11 @@ Android application for showing Pebble watchfaces on the rear display of the Uni
 ## Product behavior
 
 - The main display contains the watchface library and `.pbw` import.
-- When the same launcher activity is opened on a secondary display, it routes to a passive rear-display activity.
+- When the app opens in the Titan 2 compact rear window, the launcher activity renders the passive rear surface directly.
+- Rear-mode detection uses both Android `displayId` and actual window pixel bounds because Titan firmware can expose the rear screen as display 0.
 - The rear surface consumes touches and shows no controls.
 - The selected watchface is persisted between launches.
+- The preview button opens the same passive renderer on the main display and allows Back to return.
 
 ## Current state
 
@@ -17,8 +19,8 @@ The first scaffold is in place:
 - safe `.pbw` metadata parser for `appinfo.json`;
 - seven bundled watchfaces plus manual `.pbw` import;
 - persistent selection;
-- secondary-display detection;
-- fullscreen, non-interactive rear activity;
+- Titan 2 compact-window rear detection;
+- fullscreen, non-interactive rear surface;
 - temporary clock renderer while PebbleOS/QEMU integration is developed.
 
 The rear display does **not** execute Pebble binaries yet. The next engineering milestone is replacing `RearClockView` with a framebuffer supplied by the Pebble runtime.

@@ -1,0 +1,46 @@
+name: Pin verified QEMU artifact
+
+on:
+  push:
+    branches: ["feature/native-qemu-runtime"]
+    paths:
+      - ".github/workflows/pin-qemu-artifact.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  pin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download verified native QEMU artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p native-qemu-output
+          gh run download 29651230130 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name pebble-qemu-android-arm64 \
+            --dir native-qemu-output
+          test -s native-qemu-output/libpebble_qemu_exec.so
+          file native-qemu-output/libpebble_qemu_exec.so
+          sha256sum -c native-qemu-output/libpebble_qemu_exec.so.sha256
+
+      - name: Commit QEMU executable into Android jniLibs
+        run: |
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          cp native-qemu-output/libpebble_qemu_exec.so \
+            app/src/main/jniLibs/arm64-v8a/libpebble_qemu_exec.so
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/jniLibs/arm64-v8a/libpebble_qemu_exec.so
+          if git diff --cached --quiet; then
+            echo "Pinned QEMU binary is already current."
+            exit 0
+          fi
+          git commit -m "Bundle verified native Pebble QEMU"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

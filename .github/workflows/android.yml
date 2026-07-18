@@ -55,7 +55,7 @@ jobs:
         id: fetch-firmware
         continue-on-error: true
         env:
-          PEBBLE_SDK_VERSION: "latest"
+          PEBBLE_SDK_VERSION: "4.17"
         run: |
           set -o pipefail
           python3 scripts/fetch_pebble_basalt_firmware.py 2>&1 | tee basalt-firmware-fetch.log

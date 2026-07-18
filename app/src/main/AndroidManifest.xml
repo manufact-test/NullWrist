@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:allowBackup="true"
@@ -11,13 +15,24 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PebbleRearDisplay">
 
+        <service
+            android:name=".runtime.PebbleRuntimeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Runs the user-selected Pebble watchface continuously on the Titan 2 rear display" />
+        </service>
+
         <activity
             android:name=".ui.RearDisplayActivity"
             android:configChanges="density|fontScale|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
             android:excludeFromRecents="true"
             android:exported="false"
-            android:launchMode="standard"
+            android:launchMode="singleTop"
             android:screenOrientation="unspecified"
+            android:taskAffinity="${applicationId}.rear"
             android:theme="@style/Theme.PebbleRearDisplay.Rear" />
 
         <activity

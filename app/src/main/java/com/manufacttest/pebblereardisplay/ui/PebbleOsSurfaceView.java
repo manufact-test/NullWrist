@@ -7,25 +7,38 @@ import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
-import com.manufacttest.pebblereardisplay.data.AppPreferences;
-import com.manufacttest.pebblereardisplay.data.WatchfaceRepository;
-import com.manufacttest.pebblereardisplay.model.WatchfaceMetadata;
 import com.manufacttest.pebblereardisplay.runtime.PebbleQemuProcess;
+import com.manufacttest.pebblereardisplay.runtime.PebbleRuntimeService;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-/** Passive, full-surface PebbleOS renderer used by the rear display and preview. */
+/** Passive PebbleOS renderer. The runtime itself is owned by PebbleRuntimeService. */
 public final class PebbleOsSurfaceView extends FrameLayout {
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final PebbleFramebufferView framebufferView;
     private final TextView statusView;
+    private PebbleQemuProcess attachedRuntime;
+    private boolean listening;
 
-    private volatile PebbleQemuProcess runtime;
-    private volatile boolean started;
-    private volatile boolean released;
+    private final PebbleRuntimeService.Listener runtimeListener = (runtime, status, failure) -> post(() -> {
+        if (!listening) {
+            return;
+        }
+        if (runtime != attachedRuntime) {
+            framebufferView.detach();
+            attachedRuntime = runtime;
+            if (runtime != null) {
+                framebufferView.attach(runtime);
+            }
+        }
+
+        if (failure != null) {
+            statusView.setText("Could not start selected watchface\n" + failure);
+            statusView.setVisibility(View.VISIBLE);
+        } else if (status != null && !status.isEmpty()) {
+            statusView.setText(status);
+            statusView.setVisibility(View.VISIBLE);
+        } else {
+            statusView.setVisibility(View.GONE);
+        }
+    });
 
     public PebbleOsSurfaceView(Context context) {
         super(context);
@@ -55,7 +68,11 @@ public final class PebbleOsSurfaceView extends FrameLayout {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        startRuntime();
+        if (!listening) {
+            listening = true;
+            PebbleRuntimeService.addListener(runtimeListener);
+        }
+        PebbleRuntimeService.start(getContext());
     }
 
     @Override
@@ -65,136 +82,15 @@ public final class PebbleOsSurfaceView extends FrameLayout {
     }
 
     public void release() {
-        if (released) {
-            return;
+        if (listening) {
+            listening = false;
+            PebbleRuntimeService.removeListener(runtimeListener);
         }
-        released = true;
         framebufferView.detach();
-        PebbleQemuProcess current = runtime;
-        runtime = null;
-        if (current != null) {
-            current.stop();
-        }
-        executor.shutdownNow();
-    }
-
-    private synchronized void startRuntime() {
-        if (started || released) {
-            return;
-        }
-        started = true;
-        executor.execute(this::runPebbleOs);
-    }
-
-    private void runPebbleOs() {
-        PebbleQemuProcess current = new PebbleQemuProcess(getContext());
-        runtime = current;
-        try {
-            SelectedWatchface selected = selectedWatchface();
-            showStatus("Starting PebbleOS…");
-            current.start();
-            if (released) {
-                current.stop();
-                return;
-            }
-
-            postToUi(() -> framebufferView.attach(current));
-            showStatus("Waiting for PebbleOS…");
-            current.waitForFirmwareReady(35_000);
-            if (released) {
-                current.stop();
-                return;
-            }
-
-            boolean receivedFrame = current.waitForFirstFrame(10_000);
-            if (released) {
-                current.stop();
-                return;
-            }
-            if (!receivedFrame) {
-                Integer exitCode = current.exitCode();
-                String message = exitCode == null
-                        ? "PebbleOS did not produce a framebuffer"
-                        : "PebbleOS stopped with code " + exitCode;
-                String log = current.readLogTail(4 * 1024);
-                if (!log.isEmpty()) {
-                    message += "\n\n" + log;
-                }
-                showFailure(message);
-                return;
-            }
-
-            showStatus("Connecting to PebbleOS…");
-            current.installWatchface(
-                    selected.file,
-                    (message, sentBytes, totalBytes) -> showStatus(message)
-            );
-            if (released) {
-                current.stop();
-                return;
-            }
-
-            Thread.sleep(700);
-            postToUi(() -> statusView.setVisibility(View.GONE));
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        } catch (Throwable error) {
-            String message = "Could not start selected watchface\n"
-                    + error.getClass().getSimpleName() + ": " + error.getMessage();
-            String log = current.readLogTail(4 * 1024);
-            if (!log.isEmpty()) {
-                message += "\n\n" + log;
-            }
-            showFailure(message);
-        }
-    }
-
-    private SelectedWatchface selectedWatchface() throws IOException {
-        WatchfaceRepository repository = new WatchfaceRepository(getContext());
-        AppPreferences preferences = new AppPreferences(getContext());
-        String selectedId = preferences.getSelectedWatchfaceId();
-        WatchfaceMetadata metadata = repository.findByStorageId(selectedId);
-        if (metadata == null) {
-            throw new IOException("No watchface is selected");
-        }
-        File file = repository.fileFor(metadata);
-        if (!file.isFile()) {
-            throw new IOException("Selected PBW file is missing: " + metadata.getName());
-        }
-        return new SelectedWatchface(metadata, file);
-    }
-
-    private void showStatus(String message) {
-        postToUi(() -> {
-            statusView.setText(message);
-            statusView.setVisibility(View.VISIBLE);
-        });
-    }
-
-    private void showFailure(String message) {
-        postToUi(() -> {
-            statusView.setText(message);
-            statusView.setVisibility(View.VISIBLE);
-        });
-    }
-
-    private void postToUi(Runnable action) {
-        if (!released) {
-            post(action);
-        }
+        attachedRuntime = null;
     }
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
-    }
-
-    private static final class SelectedWatchface {
-        final WatchfaceMetadata metadata;
-        final File file;
-
-        SelectedWatchface(WatchfaceMetadata metadata, File file) {
-            this.metadata = metadata;
-            this.file = file;
-        }
     }
 }

@@ -13,8 +13,8 @@
       "size": 16777216
     }
   },
-  "requested_sdk_version": "latest",
-  "sdk_api": "https://sdk.repebble.com/v1/files/sdk-core/latest?channel=",
+  "requested_sdk_version": "4.17",
+  "sdk_api": "https://sdk.repebble.com/v1/files/sdk-core/4.17?channel=",
   "sdk_archive_sha256": "01000c623f8766ad362fa588823ac1e7d5017c7b8537d20d9bba8d5afea8d273",
   "sdk_archive_url": "https://sdk.repebble.com/releases/4.17/sdk-core.tar.gz",
   "sdk_version": "4.17"

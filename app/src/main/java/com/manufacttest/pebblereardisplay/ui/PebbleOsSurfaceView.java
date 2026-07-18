@@ -99,7 +99,14 @@ public final class PebbleOsSurfaceView extends FrameLayout {
             }
 
             postToUi(() -> framebufferView.attach(current));
-            boolean receivedFrame = current.waitForFirstFrame(30_000);
+            showStatus("Waiting for PebbleOS…");
+            current.waitForFirmwareReady(35_000);
+            if (released) {
+                current.stop();
+                return;
+            }
+
+            boolean receivedFrame = current.waitForFirstFrame(10_000);
             if (released) {
                 current.stop();
                 return;
@@ -107,7 +114,7 @@ public final class PebbleOsSurfaceView extends FrameLayout {
             if (!receivedFrame) {
                 Integer exitCode = current.exitCode();
                 String message = exitCode == null
-                        ? "PebbleOS did not start within 30 seconds"
+                        ? "PebbleOS did not produce a framebuffer"
                         : "PebbleOS stopped with code " + exitCode;
                 String log = current.readLogTail(4 * 1024);
                 if (!log.isEmpty()) {
@@ -117,7 +124,7 @@ public final class PebbleOsSurfaceView extends FrameLayout {
                 return;
             }
 
-            showStatus("Installing " + selected.metadata.getName() + "…");
+            showStatus("Connecting to PebbleOS…");
             current.installWatchface(
                     selected.file,
                     (message, sentBytes, totalBytes) -> showStatus(message)

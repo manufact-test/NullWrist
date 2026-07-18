@@ -1,6 +1,5 @@
 package com.manufacttest.pebblereardisplay.runtime;
 
-import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -29,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Owns the native PebbleOS/QEMU process independently from any Activity or display surface. */
 public final class PebbleRuntimeService extends Service {
     private static final String ACTION_START = "com.manufacttest.pebblereardisplay.action.START_RUNTIME";
+    private static final String ACTION_SELECT = "com.manufacttest.pebblereardisplay.action.SELECT_WATCHFACE";
     private static final String ACTION_RESTART = "com.manufacttest.pebblereardisplay.action.RESTART_RUNTIME";
     private static final String ACTION_STOP = "com.manufacttest.pebblereardisplay.action.STOP_RUNTIME";
     private static final String CHANNEL_ID = "pebble_runtime";
@@ -44,9 +44,15 @@ public final class PebbleRuntimeService extends Service {
     private volatile String status = "Starting PebbleOS…";
     private volatile String failure;
     private volatile boolean starting;
+    private volatile String activeStorageId;
 
     public static void start(Context context) {
         send(context, ACTION_START);
+    }
+
+    /** Applies the selected PBW to the already-running PebbleOS whenever possible. */
+    public static void select(Context context) {
+        send(context, ACTION_SELECT);
     }
 
     public static void restart(Context context) {
@@ -98,12 +104,17 @@ public final class PebbleRuntimeService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? ACTION_START : intent.getAction();
         if (ACTION_STOP.equals(action)) {
+            generation.incrementAndGet();
             stopRuntime();
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
         }
-        scheduleRuntime(ACTION_RESTART.equals(action));
+        if (ACTION_SELECT.equals(action)) {
+            scheduleSelection();
+        } else {
+            scheduleRuntime(ACTION_RESTART.equals(action));
+        }
         return START_STICKY;
     }
 
@@ -134,6 +145,25 @@ public final class PebbleRuntimeService extends Service {
         executor.execute(() -> runRuntime(requestedGeneration, forceRestart));
     }
 
+    private void scheduleSelection() {
+        executor.execute(() -> {
+            PebbleQemuProcess current = runtime;
+            if (current == null || !current.isRunning()) {
+                scheduleRuntime(false);
+                return;
+            }
+            try {
+                SelectedWatchface selected = selectedWatchface();
+                if (selected.metadata.getStorageId().equals(activeStorageId)) {
+                    return;
+                }
+                activateSelected(current, selected);
+            } catch (Throwable error) {
+                reportFailure(error);
+            }
+        });
+    }
+
     private void runRuntime(int requestedGeneration, boolean forceRestart) {
         if (forceRestart) {
             stopRuntime();
@@ -144,9 +174,9 @@ public final class PebbleRuntimeService extends Service {
 
         PebbleQemuProcess current = new PebbleQemuProcess(this);
         runtime = current;
+        activeStorageId = null;
         notifyListeners();
         try {
-            SelectedWatchface selected = selectedWatchface();
             current.start();
             notifyListeners();
 
@@ -162,28 +192,32 @@ public final class PebbleRuntimeService extends Service {
             }
             ensureCurrent(requestedGeneration);
 
-            setStatus("Connecting to PebbleOS…");
-            current.installWatchface(
-                    selected.file,
-                    (message, sentBytes, totalBytes) -> setStatus(message)
-            );
+            activateSelected(current, selectedWatchface());
             ensureCurrent(requestedGeneration);
-
-            Thread.sleep(700);
             starting = false;
-            status = null;
-            failure = null;
-            updateNotification("Running " + selected.metadata.getName());
-            notifyListeners();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         } catch (Throwable error) {
             starting = false;
-            failure = error.getClass().getSimpleName() + ": " + error.getMessage();
-            status = "Could not start selected watchface";
-            updateNotification("Pebble runtime needs attention");
-            notifyListeners();
+            reportFailure(error);
         }
+    }
+
+    private void activateSelected(PebbleQemuProcess current, SelectedWatchface selected)
+            throws IOException, InterruptedException {
+        setStatus("Connecting to PebbleOS…");
+        boolean installed = current.activateWatchface(
+                selected.file,
+                new InstalledWatchfaceRegistry(this),
+                (message, sentBytes, totalBytes) -> setStatus(message)
+        );
+        Thread.sleep(installed ? 700 : 300);
+        activeStorageId = selected.metadata.getStorageId();
+        starting = false;
+        status = null;
+        failure = null;
+        updateNotification("Running " + selected.metadata.getName());
+        notifyListeners();
     }
 
     private void ensureCurrent(int requestedGeneration) throws InterruptedException {
@@ -195,6 +229,7 @@ public final class PebbleRuntimeService extends Service {
     private synchronized void stopRuntime() {
         PebbleQemuProcess current = runtime;
         runtime = null;
+        activeStorageId = null;
         starting = false;
         if (current != null) {
             current.stop();
@@ -215,6 +250,13 @@ public final class PebbleRuntimeService extends Service {
             throw new IOException("Selected PBW file is missing: " + metadata.getName());
         }
         return new SelectedWatchface(metadata, file);
+    }
+
+    private void reportFailure(Throwable error) {
+        failure = error.getClass().getSimpleName() + ": " + error.getMessage();
+        status = "Could not start selected watchface";
+        updateNotification("Pebble runtime needs attention");
+        notifyListeners();
     }
 
     private void setStatus(String value) {

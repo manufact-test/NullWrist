@@ -51,6 +51,27 @@ jobs:
         if: steps.fetch-watchfaces.outcome != 'success'
         run: exit 1
 
+      - name: Fetch official Pebble Basalt firmware
+        id: fetch-firmware
+        continue-on-error: true
+        env:
+          PEBBLE_SDK_VERSION: "4.9.183"
+        run: |
+          set -o pipefail
+          python3 scripts/fetch_pebble_basalt_firmware.py 2>&1 | tee basalt-firmware-fetch.log
+
+      - name: Upload Basalt firmware fetch log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: basalt-firmware-fetch-log
+          path: basalt-firmware-fetch.log
+          if-no-files-found: warn
+
+      - name: Stop after firmware fetch failure
+        if: steps.fetch-firmware.outcome != 'success'
+        run: exit 1
+
       - name: Test and build debug APK
         id: android-build
         continue-on-error: true
@@ -70,10 +91,12 @@ jobs:
         if: steps.android-build.outcome != 'success'
         run: exit 1
 
-      - name: Verify native arm64 libraries
+      - name: Verify native runtime and firmware assets
         run: |
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep "lib/arm64-v8a/libpebble_runtime.so"
           unzip -l app/build/outputs/apk/debug/app-debug.apk | grep "lib/arm64-v8a/libpebble_qemu_exec.so"
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep "assets/pebble/basalt/qemu_micro_flash.bin"
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep "assets/pebble/basalt/qemu_spi_flash.bin"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -82,15 +105,15 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Commit pinned PBW assets
+      - name: Commit pinned runtime assets
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/')
         run: |
-          if [ -z "$(git status --porcelain -- app/src/main/assets/watchfaces)" ]; then
-            echo "Bundled PBW assets are already committed."
+          if [ -z "$(git status --porcelain -- app/src/main/assets/watchfaces app/src/main/assets/pebble)" ]; then
+            echo "Bundled PBW and Pebble firmware assets are already committed."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/src/main/assets/watchfaces
-          git commit -m "Bundle seven Pebble watchfaces"
+          git add app/src/main/assets/watchfaces app/src/main/assets/pebble
+          git commit -m "Bundle watchfaces and Basalt emulator firmware"
           git push origin "HEAD:${GITHUB_REF_NAME}"

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Patch Core Devices QEMU to export Pebble frames to an mmap file on Android."""
+"""Patch Core Devices QEMU for Android execution and framebuffer export."""
 from __future__ import annotations
 
 import pathlib
 import sys
 
-SOURCE = pathlib.Path("hw/display/pebble_snowy_display.c")
+DISPLAY_SOURCE = pathlib.Path("hw/display/pebble_snowy_display.c")
+OSLIB_SOURCE = pathlib.Path("util/oslib-posix.c")
 
-INCLUDE_MARKER = '#include "pebble_snowy_display_overlays.h"\n'
-INCLUDE_BLOCK = r'''
+DISPLAY_INCLUDE_MARKER = '#include "pebble_snowy_display_overlays.h"\n'
+DISPLAY_INCLUDE_BLOCK = r'''
 
 #ifdef __ANDROID__
 #include <errno.h>
@@ -153,16 +154,68 @@ REDRAW_NEW = '''static void ps_set_redraw(PSDisplayGlobals *s) {
 }
 '''
 
+OSLIB_INCLUDE_MARKER = "#include <termios.h>\n"
+OSLIB_ANDROID_SHM = r'''
 
-def main() -> int:
-    root = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else pathlib.Path.cwd()
-    source_path = root / SOURCE
+#ifdef __ANDROID__
+/* Android's bionic libc does not expose POSIX shm_open()/shm_unlink().
+ * QEMU only needs an anonymous shared file descriptor here, so back it with
+ * an unlinked temporary file in the app-provided TMPDIR. */
+static int shm_open(const char *name, int oflag, mode_t mode)
+{
+    (void)name;
+    (void)oflag;
+    const char *tmpdir = getenv("TMPDIR");
+    if (!tmpdir || !tmpdir[0]) {
+        tmpdir = "/data/local/tmp";
+    }
+
+    char path[512];
+    int written = snprintf(path, sizeof(path), "%s/qemu-shm-XXXXXX", tmpdir);
+    if (written < 0 || (size_t)written >= sizeof(path)) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    int fd = mkstemp(path);
+    if (fd < 0) {
+        return -1;
+    }
+    unlink(path);
+    if (fchmod(fd, mode) != 0) {
+        int saved_errno = errno;
+        close(fd);
+        errno = saved_errno;
+        return -1;
+    }
+    int descriptor_flags = fcntl(fd, F_GETFD);
+    if (descriptor_flags >= 0) {
+        fcntl(fd, F_SETFD, descriptor_flags | FD_CLOEXEC);
+    }
+    return fd;
+}
+
+static int shm_unlink(const char *name)
+{
+    (void)name;
+    return 0;
+}
+#endif
+'''
+
+
+def patch_display(root: pathlib.Path) -> None:
+    source_path = root / DISPLAY_SOURCE
     text = source_path.read_text(encoding="utf-8")
 
     if "PEBBLE_ANDROID_FB_MAGIC" not in text:
-        if INCLUDE_MARKER not in text:
+        if DISPLAY_INCLUDE_MARKER not in text:
             raise SystemExit(f"include marker not found in {source_path}")
-        text = text.replace(INCLUDE_MARKER, INCLUDE_MARKER + INCLUDE_BLOCK, 1)
+        text = text.replace(
+            DISPLAY_INCLUDE_MARKER,
+            DISPLAY_INCLUDE_MARKER + DISPLAY_INCLUDE_BLOCK,
+            1,
+        )
 
     if "pebble_android_fb_publish(" not in text[text.find("static void ps_set_redraw"):]:
         if REDRAW_OLD not in text:
@@ -171,6 +224,27 @@ def main() -> int:
 
     source_path.write_text(text, encoding="utf-8")
     print(f"Patched {source_path}")
+
+
+def patch_android_shm(root: pathlib.Path) -> None:
+    source_path = root / OSLIB_SOURCE
+    text = source_path.read_text(encoding="utf-8")
+    if "Android's bionic libc does not expose POSIX shm_open" not in text:
+        if OSLIB_INCLUDE_MARKER not in text:
+            raise SystemExit(f"termios include marker not found in {source_path}")
+        text = text.replace(
+            OSLIB_INCLUDE_MARKER,
+            OSLIB_INCLUDE_MARKER + OSLIB_ANDROID_SHM,
+            1,
+        )
+        source_path.write_text(text, encoding="utf-8")
+        print(f"Patched {source_path}")
+
+
+def main() -> int:
+    root = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else pathlib.Path.cwd()
+    patch_display(root)
+    patch_android_shm(root)
     return 0
 
 

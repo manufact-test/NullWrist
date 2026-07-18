@@ -4,16 +4,21 @@ import android.content.Context;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -37,6 +42,9 @@ public final class PebbleQemuProcess {
     private Process process;
     private PebbleProtocolLink protocolLink;
     private int protocolPort;
+    private int consolePort;
+    private volatile boolean firmwareReady;
+    private volatile String consoleTail = "";
 
     public PebbleQemuProcess(Context context) {
         this.context = context.getApplicationContext();
@@ -53,6 +61,9 @@ public final class PebbleQemuProcess {
         }
         prepareFiles();
         protocolPort = chooseUnusedPort();
+        consolePort = chooseUnusedPort();
+        firmwareReady = false;
+        consoleTail = "";
 
         File qemu = new File(context.getApplicationInfo().nativeLibraryDir, "libpebble_qemu_exec.so");
         if (!qemu.isFile()) {
@@ -69,9 +80,9 @@ public final class PebbleQemuProcess {
         command.add("-serial");
         command.add("null");
         command.add("-serial");
-        command.add("tcp::" + protocolPort + ",server=on,wait=off");
+        command.add("tcp::" + protocolPort + ",server=on,wait=off,nodelay=on");
         command.add("-serial");
-        command.add("null");
+        command.add("tcp::" + consolePort + ",server=on,wait=on,nodelay=on");
         command.add("-kernel");
         command.add(microFlash.getAbsolutePath());
         command.add("-monitor");
@@ -97,6 +108,73 @@ public final class PebbleQemuProcess {
         process = builder.start();
     }
 
+    public boolean waitForFirmwareReady(long timeoutMillis) throws IOException, InterruptedException {
+        if (firmwareReady) {
+            return true;
+        }
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        IOException lastConnectionError = null;
+        Socket console = null;
+
+        while (System.nanoTime() < deadline && console == null) {
+            if (!isRunning()) {
+                throw new IOException("QEMU stopped before PebbleOS became ready");
+            }
+            Socket candidate = new Socket();
+            try {
+                candidate.connect(new InetSocketAddress("127.0.0.1", consolePort), 500);
+                candidate.setSoTimeout(750);
+                candidate.setTcpNoDelay(true);
+                console = candidate;
+            } catch (IOException error) {
+                lastConnectionError = error;
+                try {
+                    candidate.close();
+                } catch (IOException ignored) {
+                }
+                Thread.sleep(80);
+            }
+        }
+
+        if (console == null) {
+            throw new IOException("Could not connect to PebbleOS console", lastConnectionError);
+        }
+
+        ByteArrayOutputStream received = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        try (Socket socket = console; InputStream input = socket.getInputStream()) {
+            while (System.nanoTime() < deadline) {
+                if (!isRunning()) {
+                    throw new IOException("QEMU stopped while PebbleOS was booting");
+                }
+                try {
+                    int read = input.read(buffer);
+                    if (read < 0) {
+                        break;
+                    }
+                    if (read == 0) {
+                        continue;
+                    }
+                    received.write(buffer, 0, read);
+                    trimConsoleBuffer(received, 64 * 1024);
+                    String text = received.toString(StandardCharsets.UTF_8.name());
+                    consoleTail = tail(text, 8 * 1024);
+                    if (text.contains("Ready for communication")
+                            || text.contains("<Launcher>")
+                            || text.contains("<SDK Home>")) {
+                        firmwareReady = true;
+                        return true;
+                    }
+                } catch (SocketTimeoutException ignored) {
+                    // Continue until the absolute deadline so slow first boots remain valid.
+                }
+            }
+        }
+
+        String detail = consoleTail.isEmpty() ? "" : "\n\nConsole:\n" + consoleTail;
+        throw new IOException("PebbleOS did not report communication readiness" + detail);
+    }
+
     public void installWatchface(
             File pbwFile,
             PebbleAppInstaller.ProgressListener progressListener
@@ -106,6 +184,9 @@ public final class PebbleQemuProcess {
         }
         if (!isRunning()) {
             throw new IOException("PebbleOS is not running");
+        }
+        if (!firmwareReady) {
+            waitForFirmwareReady(30_000);
         }
 
         PebbleProtocolLink link = protocolLink();
@@ -221,7 +302,7 @@ public final class PebbleQemuProcess {
             file.seek(start);
             byte[] bytes = new byte[(int) (file.length() - start)];
             file.readFully(bytes);
-            return new String(bytes, java.nio.charset.StandardCharsets.UTF_8).trim();
+            return new String(bytes, StandardCharsets.UTF_8).trim();
         } catch (IOException error) {
             return "Cannot read QEMU log: " + error.getMessage();
         }
@@ -292,6 +373,19 @@ public final class PebbleQemuProcess {
             socket.setReuseAddress(true);
             return socket.getLocalPort();
         }
+    }
+
+    private static void trimConsoleBuffer(ByteArrayOutputStream output, int maxBytes) throws IOException {
+        if (output.size() <= maxBytes) {
+            return;
+        }
+        byte[] bytes = output.toByteArray();
+        output.reset();
+        output.write(bytes, bytes.length - maxBytes, maxBytes);
+    }
+
+    private static String tail(String value, int maxChars) {
+        return value.length() <= maxChars ? value : value.substring(value.length() - maxChars);
     }
 
     private boolean hasValidFrame() {

@@ -14,31 +14,9 @@ import com.manufacttest.pebblereardisplay.runtime.PebbleRuntimeService;
 public final class PebbleOsSurfaceView extends FrameLayout {
     private final PebbleFramebufferView framebufferView;
     private final TextView statusView;
+    private final PebbleRuntimeService.Listener runtimeListener;
     private PebbleQemuProcess attachedRuntime;
     private boolean listening;
-
-    private final PebbleRuntimeService.Listener runtimeListener = (runtime, status, failure) -> post(() -> {
-        if (!listening) {
-            return;
-        }
-        if (runtime != attachedRuntime) {
-            framebufferView.detach();
-            attachedRuntime = runtime;
-            if (runtime != null) {
-                framebufferView.attach(runtime);
-            }
-        }
-
-        if (failure != null) {
-            statusView.setText("Could not start selected watchface\n" + failure);
-            statusView.setVisibility(View.VISIBLE);
-        } else if (status != null && !status.isEmpty()) {
-            statusView.setText(status);
-            statusView.setVisibility(View.VISIBLE);
-        } else {
-            statusView.setVisibility(View.GONE);
-        }
-    });
 
     public PebbleOsSurfaceView(Context context) {
         super(context);
@@ -63,6 +41,29 @@ public final class PebbleOsSurfaceView extends FrameLayout {
                 LayoutParams.MATCH_PARENT,
                 LayoutParams.MATCH_PARENT
         ));
+
+        runtimeListener = (runtime, status, failure) -> post(() -> {
+            if (!listening) {
+                return;
+            }
+            if (runtime != attachedRuntime) {
+                framebufferView.detach();
+                attachedRuntime = runtime;
+                if (runtime != null) {
+                    framebufferView.attach(runtime);
+                }
+            }
+
+            if (failure != null) {
+                statusView.setText("Could not start selected watchface\n" + failure);
+                statusView.setVisibility(View.VISIBLE);
+            } else if (status != null && !status.isEmpty()) {
+                statusView.setText(status);
+                statusView.setVisibility(View.VISIBLE);
+            } else {
+                statusView.setVisibility(View.GONE);
+            }
+        });
     }
 
     @Override

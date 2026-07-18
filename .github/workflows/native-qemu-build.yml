@@ -1,0 +1,62 @@
+name: Native Pebble QEMU build
+
+on:
+  push:
+    branches: ["feature/native-qemu-runtime"]
+    paths:
+      - "scripts/build_pebble_qemu_android.sh"
+      - "scripts/patch_qemu_framebuffer.py"
+      - ".github/workflows/native-qemu-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-qemu-arm64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK and host build tools
+        run: |
+          sdkmanager "ndk;28.0.13004108"
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake libtool pkg-config ninja-build cmake \
+            gettext bison flex gperf make git curl xz-utils file
+          python -m pip install --upgrade "meson==1.7.0" ninja
+
+      - name: Build Pebble QEMU for Android arm64
+        env:
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}/ndk/28.0.13004108
+          QEMU_ANDROID_WORK_DIR: ${{ github.workspace }}/.native-qemu-build
+          QEMU_ANDROID_OUTPUT_DIR: ${{ github.workspace }}/native-qemu-output
+          JOBS: "4"
+        run: |
+          set -o pipefail
+          bash scripts/build_pebble_qemu_android.sh 2>&1 | tee native-qemu-build.log
+
+      - name: Upload native QEMU build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-qemu-build-log
+          path: native-qemu-build.log
+          if-no-files-found: warn
+
+      - name: Upload Android arm64 Pebble QEMU
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pebble-qemu-android-arm64
+          path: native-qemu-output/
+          if-no-files-found: error

@@ -55,8 +55,9 @@ public final class PebbleRuntimeService extends Service {
         send(context, ACTION_SELECT);
     }
 
+    /** Kept for existing callers; selection no longer restarts the emulator. */
     public static void restart(Context context) {
-        send(context, ACTION_RESTART);
+        select(context);
     }
 
     public static void stop(Context context) {

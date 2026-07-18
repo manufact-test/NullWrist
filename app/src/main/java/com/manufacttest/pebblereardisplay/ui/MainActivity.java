@@ -17,6 +17,7 @@ import android.widget.Toast;
 
 import com.manufacttest.pebblereardisplay.R;
 import com.manufacttest.pebblereardisplay.data.AppPreferences;
+import com.manufacttest.pebblereardisplay.data.RuntimePreferences;
 import com.manufacttest.pebblereardisplay.data.WatchfaceRepository;
 import com.manufacttest.pebblereardisplay.model.WatchfaceMetadata;
 
@@ -29,6 +30,7 @@ public final class MainActivity extends Activity {
 
     private WatchfaceRepository repository;
     private AppPreferences preferences;
+    private RuntimePreferences runtimePreferences;
     private LinearLayout catalogContainer;
     private TextView selectionLabel;
     private List<WatchfaceMetadata> watchfaces = new ArrayList<>();
@@ -78,7 +80,15 @@ public final class MainActivity extends Activity {
         rearMode = true;
         repository = new WatchfaceRepository(this);
         preferences = new AppPreferences(this);
-        setContentView(new RearClockView(this, repository, preferences));
+        runtimePreferences = new RuntimePreferences(this);
+
+        View rearView;
+        if (runtimePreferences.isWebRuntimeEnabled()) {
+            rearView = new PebbleEmulatorWebView(this, null);
+        } else {
+            rearView = new RearClockView(this, repository, preferences);
+        }
+        setContentView(rearView);
         getWindow().getDecorView().post(() -> RearUi.enterImmersive(this));
     }
 
@@ -87,6 +97,7 @@ public final class MainActivity extends Activity {
         RearUi.leaveImmersive(this);
         repository = new WatchfaceRepository(this);
         preferences = new AppPreferences(this);
+        runtimePreferences = new RuntimePreferences(this);
         setContentView(buildMainScreen());
         reloadCatalog();
         scheduleRearModeRecheck();
@@ -136,7 +147,36 @@ public final class MainActivity extends Activity {
 
         Button rearPreviewButton = button("Open rear-display preview");
         rearPreviewButton.setOnClickListener(view -> openRearPreview());
-        root.addView(rearPreviewButton, matchWidthWrapHeight(dp(18)));
+        root.addView(rearPreviewButton, matchWidthWrapHeight(dp(8)));
+
+        Button runtimeProbeButton = button("Test real PebbleOS emulator");
+        runtimeProbeButton.setOnClickListener(view -> startActivity(
+                new Intent(this, PebbleRuntimeProbeActivity.class)
+        ));
+        root.addView(runtimeProbeButton, matchWidthWrapHeight(dp(8)));
+
+        Button runtimeToggleButton = button(runtimeToggleLabel());
+        runtimeToggleButton.setOnClickListener(view -> {
+            boolean enabled = !runtimePreferences.isWebRuntimeEnabled();
+            runtimePreferences.setWebRuntimeEnabled(enabled);
+            runtimeToggleButton.setText(runtimeToggleLabel());
+            Toast.makeText(
+                    this,
+                    enabled
+                            ? "Experimental PebbleOS runtime enabled for the rear display"
+                            : "Stable placeholder renderer restored",
+                    Toast.LENGTH_LONG
+            ).show();
+        });
+        root.addView(runtimeToggleButton, matchWidthWrapHeight(dp(8)));
+
+        TextView runtimeNote = text(
+                "Runtime probe: boots real PebbleOS and QEMU from the public emulator page. It currently shows the firmware's stock face, not the selected .pbw. Keep the stable renderer enabled until the probe successfully boots on this phone.",
+                12,
+                getColor(R.color.text_secondary)
+        );
+        runtimeNote.setPadding(dp(2), 0, dp(2), dp(18));
+        root.addView(runtimeNote);
 
         TextView listTitle = text("Watchfaces", 20, getColor(R.color.text_primary));
         listTitle.setTypeface(listTitle.getTypeface(), android.graphics.Typeface.BOLD);
@@ -149,6 +189,12 @@ public final class MainActivity extends Activity {
 
         root.addView(buildDisplayInfo());
         return scroll;
+    }
+
+    private String runtimeToggleLabel() {
+        return runtimePreferences.isWebRuntimeEnabled()
+                ? "Disable experimental rear runtime"
+                : "Enable real PebbleOS on rear (experimental)";
     }
 
     private void openRearPreview() {

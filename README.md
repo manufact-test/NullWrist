@@ -23,11 +23,12 @@ The Android application boundary is working on physical Titan 2 hardware:
 - Android NDK arm64 library and JNI bridge;
 - direct `144×168` RGBA framebuffer transfer from C++ to Android;
 - native framebuffer animation verified on the physical Titan 2;
-- reproducible cross-build pipeline for Core Devices Pebble QEMU;
-- on-device QEMU executable probe for version and Pebble machine discovery;
+- reproducible Core Devices Pebble QEMU cross-build for Android arm64;
+- verified QEMU executable bundled inside the APK;
+- on-device QEMU probe for version and Pebble machine discovery;
 - automatic Pebble Basalt QEMU firmware pinning from the latest SDK.
 
-Version 0.1.1 fixed the first physical-device routing issues. Version 0.1.2 proved that an arm64 native library can generate and update a Pebble-sized framebuffer through JNI on the real device.
+Version 0.1.1 fixed the first physical-device routing issues. Version 0.1.2 proved that an arm64 native library can generate and update a Pebble-sized framebuffer through JNI on the real device. Version 0.2.2 adds the first native QEMU executable probe.
 
 The WebView/WebAssembly route was tested and rejected because Titan 2 WebView reported `crossOriginIsolated=false`, preventing the pthread-enabled QEMU build from obtaining `SharedArrayBuffer`. Development therefore continues with a native Android QEMU process and an mmap framebuffer.
 
@@ -63,7 +64,7 @@ The QEMU cross-build is kept reproducible rather than committing an opaque host 
 bash scripts/build_pebble_qemu_android.sh
 ```
 
-The build pins Core Devices QEMU, cross-builds its static GLib/Pixman dependencies for Android arm64, exports Pebble display frames to an mmap file, and produces `libpebble_qemu_exec.so`. A successful CI run pins that executable under `app/src/main/jniLibs/arm64-v8a/` so Android extracts it into the app-native library directory.
+The build pins Core Devices QEMU, cross-builds its static GLib/Pixman dependencies for Android arm64, exports Pebble display frames to an mmap file, and produces `libpebble_qemu_exec.so`. The verified executable is bundled under `app/src/main/jniLibs/arm64-v8a/` and extracted by Android at installation time.
 
 The newest installed Pebble SDK firmware can be pinned with:
 
@@ -99,7 +100,7 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ## Roadmap
 
-1. Finish the native Android QEMU build and verify `pebble-snowy-bb` on the Titan 2.
+1. Verify the bundled `qemu-system-arm` executable and Pebble machine list on the Titan 2.
 2. Boot the pinned Basalt PebbleOS firmware and render its stock framebuffer.
 3. Seed one native, offline PBW into the SPI flash and launch it automatically.
 4. Replace the temporary rear clock with the selected emulator framebuffer.

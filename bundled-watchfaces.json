@@ -52,7 +52,7 @@
     "name": "polvtorogo",
     "version": "latest",
     "page_url": "https://apps.repebble.com/polvtorogo_52f62660ee349e43430002f1",
-    "download_url": "",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/52f7bda8a374baf649000391.pbw",
+    "sha256": "057e78b8b29e15a5186d16db8c84c5125d353271030c66c909aa18cffa82c0c8"
   }
 ]

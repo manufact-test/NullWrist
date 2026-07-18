@@ -23,6 +23,8 @@ The first scaffold is in place:
 - fullscreen, non-interactive rear surface;
 - temporary clock renderer while PebbleOS/QEMU integration is developed.
 
+Version 0.1.1 fixes the first physical-device test issues: the preview activity no longer relies on vendor-sensitive single-task behavior, and rear routing falls back to the actual compact window size when Titan firmware reports display ID 0.
+
 The rear display does **not** execute Pebble binaries yet. The next engineering milestone is replacing `RearClockView` with a framebuffer supplied by the Pebble runtime.
 
 ## Bundled watchfaces

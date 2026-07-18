@@ -25,6 +25,7 @@ public final class PebbleAppInstaller {
     private static final int PART_WORKER = 7;
     private static final int APP_INSTALL_FLAG = 0x80;
     private static final int TRANSFER_CHUNK_BYTES = 1000;
+    private static final long PUT_BYTES_TIMEOUT_MILLIS = 30_000;
 
     private static final AtomicInteger NEXT_TOKEN = new AtomicInteger(0x4100);
 
@@ -65,7 +66,7 @@ public final class PebbleAppInstaller {
             int token = nextToken();
             ByteBuffer payload = ByteBuffer.allocate(1 + 2 + 1 + 1 + 16 + 2 + metadata.length)
                     .order(ByteOrder.LITTLE_ENDIAN);
-            payload.put((byte) 0x01); // insert
+            payload.put((byte) 0x01);
             payload.putShort((short) token);
             payload.put((byte) BLOB_DATABASE_APP);
             payload.put((byte) uuid.length);
@@ -103,10 +104,7 @@ public final class PebbleAppInstaller {
                 ENDPOINT_APP_FETCH,
                 value -> value.length >= 21
                         && (value[0] & 0xff) == 0x01
-                        && Arrays.equals(
-                        Arrays.copyOfRange(value, 1, 17),
-                        uuidBytes
-                ),
+                        && Arrays.equals(Arrays.copyOfRange(value, 1, 17), uuidBytes),
                 15_000
         );
         return ByteBuffer.wrap(fetch, 17, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
@@ -119,7 +117,7 @@ public final class PebbleAppInstaller {
         init.putInt(object.length);
         init.put((byte) (partType | APP_INSTALL_FLAG));
         init.putInt(installId);
-        PutBytesResponse initResponse = sendPutBytes(init.array(), null);
+        PutBytesResponse initResponse = sendPutBytes(init.array());
         int cookie = initResponse.cookie;
 
         for (int offset = 0; offset < object.length; offset += TRANSFER_CHUNK_BYTES) {
@@ -129,7 +127,7 @@ public final class PebbleAppInstaller {
             put.putInt(cookie);
             put.putInt(length);
             put.put(object, offset, length);
-            sendPutBytes(put.array(), cookie);
+            sendPutBytes(put.array());
             totalSent += length;
             publishProgress();
             Thread.sleep(4);
@@ -139,29 +137,28 @@ public final class PebbleAppInstaller {
         commit.put((byte) 0x03);
         commit.putInt(cookie);
         commit.putInt(stm32Crc32(object));
-        sendPutBytes(commit.array(), cookie);
+        sendPutBytes(commit.array());
 
         ByteBuffer install = ByteBuffer.allocate(5).order(ByteOrder.BIG_ENDIAN);
         install.put((byte) 0x05);
         install.putInt(cookie);
-        sendPutBytes(install.array(), cookie);
+        sendPutBytes(install.array());
     }
 
-    private PutBytesResponse sendPutBytes(byte[] payload, Integer expectedCookie)
+    private PutBytesResponse sendPutBytes(byte[] payload)
             throws IOException, InterruptedException {
         link.sendPebblePacket(ENDPOINT_PUT_BYTES, payload);
         byte[] response = link.awaitEndpoint(
                 ENDPOINT_PUT_BYTES,
-                value -> value.length >= 5
-                        && (expectedCookie == null
-                        || ByteBuffer.wrap(value, 1, 4).order(ByteOrder.BIG_ENDIAN).getInt()
-                        == expectedCookie),
-                12_000
+                value -> value.length >= 5,
+                PUT_BYTES_TIMEOUT_MILLIS
         );
         int result = response[0] & 0xff;
         int cookie = ByteBuffer.wrap(response, 1, 4).order(ByteOrder.BIG_ENDIAN).getInt();
         if (result != PUT_BYTES_ACK) {
-            throw new IOException("Pebble NACKed PutBytes for cookie " + Integer.toUnsignedString(cookie));
+            throw new IOException(
+                    "Pebble NACKed PutBytes for token " + Integer.toUnsignedString(cookie)
+            );
         }
         return new PutBytesResponse(cookie);
     }
@@ -189,8 +186,8 @@ public final class PebbleAppInstaller {
         metadata.put((byte) header.getAppVersionMinor());
         metadata.put((byte) header.getSdkVersionMajor());
         metadata.put((byte) header.getSdkVersionMinor());
-        metadata.put((byte) 0); // app face background colour
-        metadata.put((byte) 0); // app face template id
+        metadata.put((byte) 0);
+        metadata.put((byte) 0);
 
         byte[] name = header.getAppName().getBytes(StandardCharsets.UTF_8);
         metadata.put(name, 0, Math.min(name.length, 96));

@@ -210,7 +210,7 @@ build_qemu() {
     --disable-libusb --disable-usb-redir --disable-zstd --disable-lzo \
     --disable-snappy --disable-bzip2 --disable-seccomp --disable-kvm \
     --disable-xen --disable-hvf --disable-whpx --disable-linux-aio \
-    --disable-linux-io-uring --disable-vhost-user \
+    --disable-linux-io-uring --disable-virtfs --disable-vhost-user \
     --disable-vhost-user-blk-server --disable-vhost-vdpa \
     --extra-cflags="$CFLAGS $CPPFLAGS" \
     --extra-ldflags="$LDFLAGS"

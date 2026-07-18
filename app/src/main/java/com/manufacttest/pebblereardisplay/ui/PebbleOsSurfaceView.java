@@ -7,8 +7,13 @@ import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
+import com.manufacttest.pebblereardisplay.data.AppPreferences;
+import com.manufacttest.pebblereardisplay.data.WatchfaceRepository;
+import com.manufacttest.pebblereardisplay.model.WatchfaceMetadata;
 import com.manufacttest.pebblereardisplay.runtime.PebbleQemuProcess;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -36,7 +41,8 @@ public final class PebbleOsSurfaceView extends FrameLayout {
 
         statusView = new TextView(context);
         statusView.setText("Starting PebbleOS…");
-        statusView.setTextColor(Color.LTGRAY);
+        statusView.setTextColor(Color.WHITE);
+        statusView.setShadowLayer(5f, 0f, 1f, Color.BLACK);
         statusView.setTextSize(14);
         statusView.setGravity(Gravity.CENTER);
         statusView.setPadding(dp(24), dp(24), dp(24), dp(24));
@@ -84,6 +90,8 @@ public final class PebbleOsSurfaceView extends FrameLayout {
         PebbleQemuProcess current = new PebbleQemuProcess(getContext());
         runtime = current;
         try {
+            SelectedWatchface selected = selectedWatchface();
+            showStatus("Starting PebbleOS…");
             current.start();
             if (released) {
                 current.stop();
@@ -96,25 +104,35 @@ public final class PebbleOsSurfaceView extends FrameLayout {
                 current.stop();
                 return;
             }
-
-            if (receivedFrame) {
-                postToUi(() -> statusView.setVisibility(View.GONE));
+            if (!receivedFrame) {
+                Integer exitCode = current.exitCode();
+                String message = exitCode == null
+                        ? "PebbleOS did not start within 30 seconds"
+                        : "PebbleOS stopped with code " + exitCode;
+                String log = current.readLogTail(4 * 1024);
+                if (!log.isEmpty()) {
+                    message += "\n\n" + log;
+                }
+                showFailure(message);
                 return;
             }
 
-            Integer exitCode = current.exitCode();
-            String message = exitCode == null
-                    ? "PebbleOS did not start within 30 seconds"
-                    : "PebbleOS stopped with code " + exitCode;
-            String log = current.readLogTail(4 * 1024);
-            if (!log.isEmpty()) {
-                message += "\n\n" + log;
+            showStatus("Installing " + selected.metadata.getName() + "…");
+            current.installWatchface(
+                    selected.file,
+                    (message, sentBytes, totalBytes) -> showStatus(message)
+            );
+            if (released) {
+                current.stop();
+                return;
             }
-            showFailure(message);
+
+            Thread.sleep(700);
+            postToUi(() -> statusView.setVisibility(View.GONE));
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         } catch (Throwable error) {
-            String message = "Could not start PebbleOS\n"
+            String message = "Could not start selected watchface\n"
                     + error.getClass().getSimpleName() + ": " + error.getMessage();
             String log = current.readLogTail(4 * 1024);
             if (!log.isEmpty()) {
@@ -122,6 +140,28 @@ public final class PebbleOsSurfaceView extends FrameLayout {
             }
             showFailure(message);
         }
+    }
+
+    private SelectedWatchface selectedWatchface() throws IOException {
+        WatchfaceRepository repository = new WatchfaceRepository(getContext());
+        AppPreferences preferences = new AppPreferences(getContext());
+        String selectedId = preferences.getSelectedWatchfaceId();
+        WatchfaceMetadata metadata = repository.findByStorageId(selectedId);
+        if (metadata == null) {
+            throw new IOException("No watchface is selected");
+        }
+        File file = repository.fileFor(metadata);
+        if (!file.isFile()) {
+            throw new IOException("Selected PBW file is missing: " + metadata.getName());
+        }
+        return new SelectedWatchface(metadata, file);
+    }
+
+    private void showStatus(String message) {
+        postToUi(() -> {
+            statusView.setText(message);
+            statusView.setVisibility(View.VISIBLE);
+        });
     }
 
     private void showFailure(String message) {
@@ -139,5 +179,15 @@ public final class PebbleOsSurfaceView extends FrameLayout {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private static final class SelectedWatchface {
+        final WatchfaceMetadata metadata;
+        final File file;
+
+        SelectedWatchface(WatchfaceMetadata metadata, File file) {
+            this.metadata = metadata;
+            this.file = file;
+        }
     }
 }

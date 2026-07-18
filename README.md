@@ -35,9 +35,9 @@ The application ships with these pinned PBW packages:
 - 91 Dub 4.0 version 4.21
 - YWeather 3.7
 
-Source pages, download endpoints and SHA-256 hashes are recorded in [`bundled-watchfaces.json`](bundled-watchfaces.json) and [`THIRD_PARTY_WATCHFACES.md`](THIRD_PARTY_WATCHFACES.md).
+Source pages and SHA-256 hashes are recorded in [`bundled-watchfaces.json`](bundled-watchfaces.json) and [`THIRD_PARTY_WATCHFACES.md`](THIRD_PARTY_WATCHFACES.md).
 
-The PBW files live in `app/src/main/assets/watchfaces/` and therefore appear in the app library immediately after installation. Run the verified fetcher before a local build when the assets are not present:
+The PBW files live in `app/src/main/assets/watchfaces/` and therefore appear in the app library immediately after installation. The verified fetcher can recreate the asset directory from the recorded public Appstore listings:
 
 ```bash
 python3 scripts/fetch_bundled_watchfaces.py

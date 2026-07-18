@@ -8,7 +8,7 @@ import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Installs one modern Pebble app using BlobDB, AppFetch and PutBytes. */
+/** Installs and launches modern Pebble apps using BlobDB, AppFetch and PutBytes. */
 public final class PebbleAppInstaller {
     private static final int ENDPOINT_APP_RUN_STATE = 0x0034;
     private static final int ENDPOINT_APP_FETCH = 0x1771;
@@ -55,6 +55,15 @@ public final class PebbleAppInstaller {
             sendPart(PART_WORKER, bundle.getWorker(), installId);
         }
         publish("Launching " + header.getAppName());
+    }
+
+    /** Launches an app already present in Pebble AppDB/SPI flash. */
+    public void launch(UUID uuid, String appName) throws IOException {
+        publish("Launching " + appName);
+        ByteBuffer start = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN);
+        start.put((byte) 0x01);
+        start.put(uuidBytes(uuid));
+        link.sendPebblePacket(ENDPOINT_APP_RUN_STATE, start.array());
     }
 
     private void insertAppMetadata(PebblePbwBundle.AppHeader header)

@@ -1,0 +1,75 @@
+name: Pin Pebble Basalt firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feature/native-qemu-runtime"]
+    paths:
+      - "scripts/pin_pebble_sdk_firmware.py"
+      - ".github/workflows/pebble-firmware.yml"
+
+concurrency:
+  group: pebble-firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  pin-firmware:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore Pebble SDK cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pebble-sdk/SDKs
+          key: pebble-sdk-latest-v1-${{ runner.os }}
+
+      - name: Install Pebble SDK prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            nodejs npm libsdl2-2.0-0 libglib2.0-0 libpixman-1-0 \
+            zlib1g libsndio7.0 bzip2
+          python -m pip install --upgrade uv
+          uv tool install --force pebble-tool
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install latest Pebble SDK
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          pebble sdk install latest
+          pebble sdk list
+
+      - name: Pin Basalt QEMU firmware
+        run: |
+          python scripts/pin_pebble_sdk_firmware.py . | tee pebble-firmware.log
+
+      - name: Upload firmware metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pebble-firmware-log
+          path: pebble-firmware.log
+          if-no-files-found: warn
+
+      - name: Commit pinned firmware
+        if: success() && github.event_name == 'push'
+        run: |
+          if git diff --quiet -- app/src/main/assets/pebble/basalt; then
+            echo "Pebble firmware is unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/pebble/basalt
+          git commit -m "Bundle Pebble Basalt QEMU firmware"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

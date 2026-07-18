@@ -93,7 +93,7 @@ EOF
 }
 
 build_zlib() {
-  fetch_tar "https://zlib.net/fossils/zlib-1.3.1.tar.gz" "zlib-1.3.1.tar.gz" "zlib-1.3.1"
+  fetch_tar "https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz" "zlib-1.3.1.tar.gz" "zlib-1.3.1"
   local build="$BUILDS/zlib"
   if [[ ! -f "$PREFIX/lib/libz.a" ]]; then
     rm -rf "$build"

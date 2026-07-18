@@ -38,9 +38,14 @@ public final class PebbleQemuProcess {
     private final File spiFlash;
     private final File framebuffer;
     private final File logFile;
+    private final ByteBuffer frameData = ByteBuffer
+            .allocate(HEADER_BYTES + FRAME_BYTES)
+            .order(ByteOrder.LITTLE_ENDIAN);
 
     private Process process;
     private PebbleProtocolLink protocolLink;
+    private RandomAccessFile framebufferReader;
+    private FileChannel framebufferChannel;
     private int protocolPort;
     private int consolePort;
     private volatile boolean firmwareReady;
@@ -175,8 +180,15 @@ public final class PebbleQemuProcess {
         throw new IOException("PebbleOS did not report communication readiness" + detail);
     }
 
-    public void installWatchface(
+    /**
+     * Installs a PBW only when its UUID/SHA fingerprint is not already present in persistent SPI flash,
+     * otherwise it only sends the AppRunState launch command.
+     *
+     * @return true when bytes were installed, false when the existing app was launched directly.
+     */
+    public boolean activateWatchface(
             File pbwFile,
+            InstalledWatchfaceRegistry registry,
             PebbleAppInstaller.ProgressListener progressListener
     ) throws IOException, InterruptedException {
         if (pbwFile == null || !pbwFile.isFile()) {
@@ -189,10 +201,27 @@ public final class PebbleQemuProcess {
             waitForFirmwareReady(30_000);
         }
 
+        String fingerprint = InstalledWatchfaceRegistry.sha256(pbwFile);
         PebbleProtocolLink link = protocolLink();
         try (PebblePbwBundle bundle = new PebblePbwBundle(pbwFile)) {
-            new PebbleAppInstaller(link, progressListener).install(bundle);
+            PebblePbwBundle.AppHeader header = bundle.getHeader();
+            PebbleAppInstaller installer = new PebbleAppInstaller(link, progressListener);
+            if (registry.isInstalled(header.getUuid(), fingerprint)) {
+                installer.launch(header.getUuid(), header.getAppName());
+                return false;
+            }
+            installer.install(bundle);
+            registry.markInstalled(header.getUuid(), fingerprint);
+            return true;
         }
+    }
+
+    /** Compatibility wrapper retained for older probe code. */
+    public void installWatchface(
+            File pbwFile,
+            PebbleAppInstaller.ProgressListener progressListener
+    ) throws IOException, InterruptedException {
+        activateWatchface(pbwFile, new InstalledWatchfaceRegistry(context), progressListener);
     }
 
     public synchronized boolean isRunning() {
@@ -212,6 +241,7 @@ public final class PebbleQemuProcess {
         if (currentLink != null) {
             currentLink.close();
         }
+        closeFramebufferReader();
 
         Process current = process;
         process = null;
@@ -245,45 +275,46 @@ public final class PebbleQemuProcess {
         return hasValidFrame();
     }
 
-    public boolean readFrame(int[] argbPixels) {
+    public synchronized boolean readFrame(int[] argbPixels) {
         if (argbPixels == null || argbPixels.length < FRAME_BYTES || !framebuffer.isFile()) {
             return false;
         }
 
-        ByteBuffer data = ByteBuffer.allocate(HEADER_BYTES + FRAME_BYTES).order(ByteOrder.LITTLE_ENDIAN);
-        try (RandomAccessFile file = new RandomAccessFile(framebuffer, "r");
-             FileChannel channel = file.getChannel()) {
-            if (channel.size() < HEADER_BYTES + FRAME_BYTES) {
+        try {
+            ensureFramebufferReader();
+            if (framebufferChannel.size() < HEADER_BYTES + FRAME_BYTES) {
                 return false;
             }
+            frameData.clear();
             int total = 0;
-            while (data.hasRemaining()) {
-                int read = channel.read(data, total);
+            while (frameData.hasRemaining()) {
+                int read = framebufferChannel.read(frameData, total);
                 if (read <= 0) {
                     return false;
                 }
                 total += read;
             }
-        } catch (IOException ignored) {
+        } catch (IOException error) {
+            closeFramebufferReader();
             return false;
         }
 
-        data.flip();
-        int magic = data.getInt();
-        int version = data.getInt();
-        int width = data.getInt();
-        int height = data.getInt();
-        int stride = data.getInt();
-        int format = data.getInt();
-        int sequence = data.getInt();
-        data.position(HEADER_BYTES);
+        frameData.flip();
+        int magic = frameData.getInt();
+        int version = frameData.getInt();
+        int width = frameData.getInt();
+        int height = frameData.getInt();
+        int stride = frameData.getInt();
+        int format = frameData.getInt();
+        int sequence = frameData.getInt();
+        frameData.position(HEADER_BYTES);
         if (magic != MAGIC || version != 1 || width != WIDTH || height != HEIGHT
                 || stride != WIDTH || format != 1 || sequence <= 0) {
             return false;
         }
 
         for (int index = 0; index < FRAME_BYTES; index++) {
-            int pebblePixel = data.get() & 0xff;
+            int pebblePixel = frameData.get() & 0xff;
             int red = ((pebblePixel >> 6) & 0x03) * 85;
             int green = ((pebblePixel >> 4) & 0x03) * 85;
             int blue = ((pebblePixel >> 2) & 0x03) * 85;
@@ -323,8 +354,13 @@ public final class PebbleQemuProcess {
         if (!runtimeDirectory.isDirectory() && !runtimeDirectory.mkdirs()) {
             throw new IOException("Cannot create runtime directory: " + runtimeDirectory);
         }
+        boolean existingSpiFlash = spiFlash.isFile() && spiFlash.length() > 0;
         copyAsset(ASSET_ROOT + "qemu_micro_flash.bin", microFlash, true);
         copyAsset(ASSET_ROOT + "qemu_spi_flash.bin", spiFlash, false);
+        if (!existingSpiFlash) {
+            new InstalledWatchfaceRegistry(context).clear();
+        }
+        closeFramebufferReader();
         if (framebuffer.exists() && !framebuffer.delete()) {
             throw new IOException("Cannot reset framebuffer: " + framebuffer);
         }
@@ -354,6 +390,30 @@ public final class PebbleQemuProcess {
             if (!temporary.delete()) {
                 temporary.deleteOnExit();
             }
+        }
+    }
+
+    private void ensureFramebufferReader() throws IOException {
+        if (framebufferReader == null) {
+            framebufferReader = new RandomAccessFile(framebuffer, "r");
+            framebufferChannel = framebufferReader.getChannel();
+        }
+    }
+
+    private void closeFramebufferReader() {
+        if (framebufferChannel != null) {
+            try {
+                framebufferChannel.close();
+            } catch (IOException ignored) {
+            }
+            framebufferChannel = null;
+        }
+        if (framebufferReader != null) {
+            try {
+                framebufferReader.close();
+            } catch (IOException ignored) {
+            }
+            framebufferReader = null;
         }
     }
 

@@ -10,6 +10,13 @@
         android:theme="@style/Theme.PebbleRearDisplay">
 
         <activity
+            android:name=".ui.PebbleOsProbeActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:screenOrientation="unspecified"
+            android:theme="@style/Theme.PebbleRearDisplay" />
+
+        <activity
             android:name=".ui.QemuBinaryProbeActivity"
             android:excludeFromRecents="true"
             android:exported="false"

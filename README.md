@@ -13,19 +13,24 @@ Android application for showing Pebble watchfaces on the rear display of the Uni
 
 ## Current state
 
-The first scaffold is in place:
+The Android shell is working on physical Titan 2 hardware:
 
-- Android app shell without AndroidX or third-party runtime dependencies;
 - safe `.pbw` metadata parser for `appinfo.json`;
 - seven bundled watchfaces plus manual `.pbw` import;
 - persistent selection;
 - Titan 2 compact-window rear detection;
 - fullscreen, non-interactive rear surface;
-- temporary clock renderer while PebbleOS/QEMU integration is developed.
+- Android NDK/CMake module restricted to `arm64-v8a`;
+- JNI bridge with a direct 144×168 RGBA framebuffer;
+- native framebuffer probe that generates animated pixels in C++ and renders them in Android.
 
-Version 0.1.1 fixes the first physical-device test issues: the preview activity no longer relies on vendor-sensitive single-task behavior, and rear routing falls back to the actual compact window size when Titan firmware reports display ID 0.
+Version 0.1.1 fixed the first physical-device routing issues. Version 0.1.2 establishes the native rendering boundary that will host QEMU.
 
-The rear display does **not** execute Pebble binaries yet. The next engineering milestone is replacing `RearClockView` with a framebuffer supplied by the Pebble runtime.
+The rear display does **not** execute Pebble binaries yet. The next milestone is replacing the native test-pattern generator with the Pebble QEMU machine and its display framebuffer.
+
+## Runtime decision
+
+A QEMU/WebAssembly proof was tested on the Titan 2. Android WebView reported `crossOriginIsolated=false`, so the pthread-enabled QEMU build could not use `SharedArrayBuffer`. The WebView path was abandoned in favor of native QEMU through the Android NDK.
 
 ## Bundled watchfaces
 
@@ -47,15 +52,16 @@ The PBW files live in `app/src/main/assets/watchfaces/` and therefore appear in 
 python3 scripts/fetch_bundled_watchfaces.py
 ```
 
-GitHub Actions runs this command automatically and refuses to build when a downloaded package does not match its pinned SHA-256 hash.
-
 ## Development stack
 
 - Android Gradle Plugin 9.3.0
 - Gradle 9.5.0
 - JDK 17
+- Android NDK 28.0.13004108
+- CMake 3.22.1
 - compile/target SDK 36
 - minimum SDK 28
+- initial native ABI: arm64-v8a
 
 Build locally with:
 
@@ -72,9 +78,10 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ## Roadmap
 
-1. Verify rear-display dimensions, lifecycle and launcher behavior on physical Titan 2 hardware.
-2. Add native Pebble runtime module and framebuffer bridge.
-3. Boot one Basalt-compatible face without PebbleKit JS.
-4. Suspend/resume the runtime with rear-display visibility.
-5. Add platform selection and circular Chalk masking.
-6. Add PebbleKit JS only after native watchfaces are stable.
+1. Verify rear-display dimensions, lifecycle and launcher behavior on physical Titan 2 hardware. ✅
+2. Verify native ARM64 library loading and direct framebuffer transfer on the Titan 2.
+3. Build the Pebble QEMU machine as an Android shared library.
+4. Boot one Basalt-compatible face without PebbleKit JS.
+5. Suspend/resume the runtime with rear-display visibility.
+6. Add platform selection and circular Chalk masking.
+7. Add PebbleKit JS only after native watchfaces are stable.

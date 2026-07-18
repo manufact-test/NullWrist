@@ -7,11 +7,6 @@ on:
       - "scripts/build_pebble_qemu_android.sh"
       - "scripts/patch_qemu_framebuffer.py"
       - ".github/workflows/native-qemu-build.yml"
-  pull_request:
-    paths:
-      - "scripts/build_pebble_qemu_android.sh"
-      - "scripts/patch_qemu_framebuffer.py"
-      - ".github/workflows/native-qemu-build.yml"
   workflow_dispatch:
 
 concurrency:

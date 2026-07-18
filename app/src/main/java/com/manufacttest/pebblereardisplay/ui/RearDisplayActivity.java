@@ -8,6 +8,7 @@ import android.view.View;
 import android.widget.TextView;
 
 import com.manufacttest.pebblereardisplay.data.AppPreferences;
+import com.manufacttest.pebblereardisplay.data.RuntimePreferences;
 import com.manufacttest.pebblereardisplay.data.WatchfaceRepository;
 
 public final class RearDisplayActivity extends Activity {
@@ -19,17 +20,22 @@ public final class RearDisplayActivity extends Activity {
         previewMode = getIntent().getBooleanExtra(DisplayUtils.EXTRA_PREVIEW_MODE, false);
 
         try {
-            setContentView(new RearClockView(
-                    this,
-                    new WatchfaceRepository(this),
-                    new AppPreferences(this)
-            ));
+            RuntimePreferences runtimePreferences = new RuntimePreferences(this);
+            View rearView = runtimePreferences.isWebRuntimeEnabled()
+                    ? new PebbleEmulatorWebView(this, null)
+                    : new RearClockView(
+                            this,
+                            new WatchfaceRepository(this),
+                            new AppPreferences(this)
+                    );
+            setContentView(rearView);
         } catch (RuntimeException exception) {
             TextView fallback = new TextView(this);
             fallback.setBackgroundColor(Color.BLACK);
             fallback.setTextColor(Color.WHITE);
             fallback.setGravity(android.view.Gravity.CENTER);
-            fallback.setText("Rear display could not be initialized\n" + exception.getClass().getSimpleName());
+            fallback.setText("Rear display could not be initialized\n"
+                    + exception.getClass().getSimpleName());
             setContentView(fallback);
         }
 

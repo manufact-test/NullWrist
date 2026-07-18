@@ -29,7 +29,23 @@ jobs:
           gradle-version: "9.5.0"
 
       - name: Fetch bundled watchfaces
-        run: python3 scripts/fetch_bundled_watchfaces.py
+        id: fetch-watchfaces
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 scripts/fetch_bundled_watchfaces.py 2>&1 | tee watchface-fetch.log
+
+      - name: Upload watchface fetch log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: watchface-fetch-log
+          path: watchface-fetch.log
+          if-no-files-found: warn
+
+      - name: Stop after watchface fetch failure
+        if: steps.fetch-watchfaces.outcome != 'success'
+        run: exit 1
 
       - name: Test and build debug APK
         run: gradle :app:testDebugUnitTest :app:assembleDebug

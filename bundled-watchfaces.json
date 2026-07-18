@@ -1,0 +1,58 @@
+[
+  {
+    "file": "big-shadow-2.00.5.pbw",
+    "name": "Big Shadow",
+    "version": "2.00.5",
+    "page_url": "https://apps.repebble.com/big-shadow_54fc76072bf1bfe03500002a",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/4bb252af-5eb5-4759-b84d-ca4674d93673.pbw",
+    "sha256": "55e8930ea87be349c1b78f56a5f1e634ad837f405374db488a762795093cfbaf"
+  },
+  {
+    "file": "nyan-cat-8.9.pbw",
+    "name": "Nyan Cat",
+    "version": "8.9",
+    "page_url": "https://apps.repebble.com/nyan-cat_54f972b93dd477b391000017",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/5838c92200355abe66000550.pbw",
+    "sha256": "fc0d9717c7691b7d389c930af569cf5e0481ea8cac9c80219e0823992d248588"
+  },
+  {
+    "file": "pip-boy-100-5.4.pbw",
+    "name": "Pip Boy 100",
+    "version": "5.4",
+    "page_url": "https://apps.repebble.com/pip-boy-100_529efe551a66383057000051",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/56372a994096612b5c000044.pbw",
+    "sha256": "2421ac2ae2554cab2e473be199f8b727c67474fb7618709d6dd3cadcaaf55e63"
+  },
+  {
+    "file": "modern-3.1.1.pbw",
+    "name": "Modern Watchface",
+    "version": "3.1.1",
+    "page_url": "https://apps.repebble.com/modern_52bb213af9846878c200015b",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/539d23e7138d66c704000077.pbw",
+    "sha256": "ed128c7af8b6710adf0acbfdc7da4cb9b85a98d64dc26cf57ae289e86df5ff5c"
+  },
+  {
+    "file": "mario-time-3.41.pbw",
+    "name": "Mario Time",
+    "version": "3.41",
+    "page_url": "https://apps.repebble.com/mario-time-watchface_55431083b7d4a71c0000003b",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/3.41.pbw",
+    "sha256": "d3855f1a6eaa32f3d72a8e0580438699b737b42d2ffab17b81922b77827a179d"
+  },
+  {
+    "file": "91-dub-4.21.pbw",
+    "name": "91 Dub 4.0",
+    "version": "4.21",
+    "page_url": "https://apps.repebble.com/91-dub-v4-0_52b231c2b70e1c159500009b",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/57c6c67e5e3c3d64fe000600.pbw",
+    "sha256": "70704f3e53265ebda5a78a4c7f9f98ee1d50521a9dde19731da7954c876038d4"
+  },
+  {
+    "file": "yweather-3.7.pbw",
+    "name": "YWeather",
+    "version": "3.7",
+    "page_url": "https://apps.repebble.com/yweather_52cc44e045ffdd31dd000180",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/57f3f1a405e4b103e70000a9.pbw",
+    "sha256": "606dad45560f0371e503ce963fc61daba395c2d937020836840d7a8e5e5ca7ad"
+  }
+]

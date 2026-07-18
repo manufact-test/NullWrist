@@ -23,6 +23,9 @@ import java.util.UUID;
 public final class WatchfaceRepository {
     private static final long MAX_PBW_BYTES = 20L * 1024L * 1024L;
     private static final String ASSET_DIRECTORY = "watchfaces";
+    private static final String[] RETIRED_BUNDLED_FILES = {
+            "yweather-3.7.pbw"
+    };
 
     private final Context context;
     private final File watchfaceDirectory;
@@ -34,6 +37,7 @@ public final class WatchfaceRepository {
 
     public List<WatchfaceMetadata> loadAll() throws IOException {
         ensureDirectory();
+        removeRetiredBundledFiles();
         List<WatchfaceMetadata> result = new ArrayList<>();
         Set<String> seenStorageIds = new HashSet<>();
 
@@ -150,6 +154,15 @@ public final class WatchfaceRepository {
                 output.add(PbwParser.parse(input, file.getName(), false));
             } catch (IOException ignored) {
                 // Invalid files stay out of the catalog; an import error is shown at import time.
+            }
+        }
+    }
+
+    private void removeRetiredBundledFiles() {
+        for (String name : RETIRED_BUNDLED_FILES) {
+            File retired = new File(watchfaceDirectory, name);
+            if (retired.isFile()) {
+                retired.delete();
             }
         }
     }

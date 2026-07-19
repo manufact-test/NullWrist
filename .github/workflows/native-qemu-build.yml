@@ -4,6 +4,7 @@ on:
   push:
     branches: ["feature/native-qemu-runtime"]
     paths:
+      - ".github/workflows/native-qemu-build.yml"
       - "scripts/build_pebble_qemu_android.sh"
       - "scripts/patch_qemu_framebuffer.py"
       - "scripts/patch_qemu_basalt_only.py"
@@ -25,6 +26,20 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Record native QEMU run id
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${GITHUB_REF_NAME}"
+          git rebase "origin/${GITHUB_REF_NAME}"
+          mkdir -p ci
+          printf 'run_id=%s\nhead_sha=%s\nartifact=pebble-qemu-android-arm64\n' \
+            "${GITHUB_RUN_ID}" "${GITHUB_SHA}" > ci/latest-native-qemu-run.txt
+          git add ci/latest-native-qemu-run.txt
+          git commit -m "Record native QEMU build run [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - uses: actions/setup-python@v5
         with:
@@ -82,8 +97,11 @@ jobs:
       - name: Pin native QEMU in Android app
         if: success()
         run: |
+          cp native-qemu-output/libpebble_qemu_exec.so /tmp/libpebble_qemu_exec.so
+          git fetch origin "${GITHUB_REF_NAME}"
+          git rebase "origin/${GITHUB_REF_NAME}"
           mkdir -p app/src/main/jniLibs/arm64-v8a
-          cp native-qemu-output/libpebble_qemu_exec.so \
+          cp /tmp/libpebble_qemu_exec.so \
             app/src/main/jniLibs/arm64-v8a/libpebble_qemu_exec.so
           if git diff --quiet -- app/src/main/jniLibs/arm64-v8a/libpebble_qemu_exec.so; then
             echo "Pinned QEMU binary is unchanged."
@@ -92,5 +110,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/src/main/jniLibs/arm64-v8a/libpebble_qemu_exec.so
-          git commit -m "Bundle Basalt-only native Pebble QEMU for arm64"
+          git commit -m "Bundle native-TCG Basalt QEMU for arm64 [skip ci]"
           git push origin "HEAD:${GITHUB_REF_NAME}"

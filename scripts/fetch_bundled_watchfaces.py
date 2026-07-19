@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
 import sys
 import urllib.request
 import zipfile
@@ -52,6 +53,11 @@ def validate_pbw(path: Path, expected_name: str) -> None:
     if not appinfo.get("watchapp", {}).get("watchface", False):
         raise RuntimeError(f"{expected_name}: PBW is not marked as a watchface")
 
+    with zipfile.ZipFile(path) as archive:
+        names = set(archive.namelist())
+    if "basalt/manifest.json" not in names and "manifest.json" not in names:
+        raise RuntimeError(f"{expected_name}: PBW has no Pebble Time/Basalt build")
+
 
 def with_developer_links(page_url: str) -> str:
     parts = urlsplit(page_url)
@@ -61,8 +67,12 @@ def with_developer_links(page_url: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
 
 
-def resolve_download_url(entry: dict[str, str]) -> str:
-    page_url = with_developer_links(entry["page_url"])
+def resolve_download_url(entry: dict[str, object]) -> str:
+    fallback = str(entry.get("download_url", ""))
+    if entry.get("prefer_download_url") and fallback:
+        return fallback
+
+    page_url = with_developer_links(str(entry["page_url"]))
     request = urllib.request.Request(page_url, headers={"User-Agent": USER_AGENT})
 
     with urllib.request.urlopen(request, timeout=120) as response:
@@ -73,7 +83,6 @@ def resolve_download_url(entry: dict[str, str]) -> str:
     parser = PbwLinkParser()
     parser.feed(page.decode("utf-8", errors="replace"))
     if not parser.links:
-        fallback = entry.get("download_url")
         if fallback:
             print(f"No PBW link found on listing; trying recorded fallback for {entry['name']}")
             return fallback
@@ -82,16 +91,62 @@ def resolve_download_url(entry: dict[str, str]) -> str:
     return urljoin(page_url, parser.links[0])
 
 
-def download(entry: dict[str, str]) -> None:
-    destination = OUTPUT_DIRECTORY / entry["file"]
-    expected_hash = entry["sha256"].lower()
+def repair_crc_archive(source: Path, destination: Path) -> None:
+    """Repack an upstream ZIP whose central-directory CRC is wrong but payload is intact."""
+    with zipfile.ZipFile(source) as archive:
+        entries = archive.infolist()
+
+    with zipfile.ZipFile(
+        destination,
+        "w",
+        compression=zipfile.ZIP_DEFLATED,
+        compresslevel=9,
+    ) as output:
+        for info in entries:
+            if info.is_dir():
+                repaired = zipfile.ZipInfo(info.filename, info.date_time)
+                repaired.external_attr = info.external_attr
+                output.writestr(repaired, b"")
+                continue
+
+            extracted = subprocess.run(
+                ["unzip", "-p", str(source), info.filename],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            if extracted.returncode not in (0, 2) or len(extracted.stdout) != info.file_size:
+                diagnostic = extracted.stderr.decode("utf-8", errors="replace").strip()
+                raise RuntimeError(
+                    f"Could not normalize {info.filename} in {source.name}: {diagnostic}"
+                )
+
+            repaired = zipfile.ZipInfo(info.filename, info.date_time)
+            repaired.compress_type = zipfile.ZIP_DEFLATED
+            repaired.external_attr = info.external_attr
+            repaired.create_system = info.create_system
+            output.writestr(
+                repaired,
+                extracted.stdout,
+                compress_type=zipfile.ZIP_DEFLATED,
+                compresslevel=9,
+            )
+
+
+def download(entry: dict[str, object]) -> None:
+    destination = OUTPUT_DIRECTORY / str(entry["file"])
+    expected_hash = str(entry["sha256"]).lower()
+    expected_source_hash = str(entry.get("source_sha256", expected_hash)).lower()
 
     if destination.exists() and sha256(destination) == expected_hash:
+        validate_pbw(destination, str(entry["name"]))
         print(f"Using cached {entry['name']} {entry['version']}")
         return
 
     temporary = destination.with_suffix(destination.suffix + ".part")
+    repaired = destination.with_suffix(destination.suffix + ".repaired")
     temporary.unlink(missing_ok=True)
+    repaired.unlink(missing_ok=True)
 
     download_url = resolve_download_url(entry)
     request = urllib.request.Request(download_url, headers={"User-Agent": USER_AGENT})
@@ -109,16 +164,29 @@ def download(entry: dict[str, str]) -> None:
                     raise RuntimeError(f"{entry['name']}: PBW exceeds {MAX_BYTES} bytes")
                 output.write(chunk)
 
-        actual_hash = sha256(temporary)
+        actual_source_hash = sha256(temporary)
+        if actual_source_hash != expected_source_hash:
+            raise RuntimeError(
+                f"{entry['name']}: source SHA-256 mismatch; expected "
+                f"{expected_source_hash}, got {actual_source_hash}"
+            )
+
+        candidate = temporary
+        if entry.get("repair_crc"):
+            repair_crc_archive(temporary, repaired)
+            candidate = repaired
+
+        actual_hash = sha256(candidate)
         if actual_hash != expected_hash:
             raise RuntimeError(
                 f"{entry['name']}: SHA-256 mismatch; expected {expected_hash}, got {actual_hash}"
             )
 
-        validate_pbw(temporary, entry["name"])
-        shutil.move(str(temporary), str(destination))
+        validate_pbw(candidate, str(entry["name"]))
+        shutil.move(str(candidate), str(destination))
     finally:
         temporary.unlink(missing_ok=True)
+        repaired.unlink(missing_ok=True)
 
 
 def main() -> int:

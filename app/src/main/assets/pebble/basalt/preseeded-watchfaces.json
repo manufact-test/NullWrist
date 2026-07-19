@@ -2,7 +2,7 @@
   "base_spi_sha256": "1b054f95b68ca55428be15ad70590c1b099dd5723235e47807f8c2ce8cd119dd",
   "format": 1,
   "platform": "basalt",
-  "seeded_spi_sha256": "0404ed3942cc88d0f5424b36bb5d782faa5cafd0ea39867770d61a6f68b705cf",
+  "seeded_spi_sha256": "b79f33fd748c0d237602f4103ddb339f145ad501e0537d437738ce0c86b29c9d",
   "watchfaces": [
     {
       "file": "91-dub-4.21.pbw",
@@ -19,11 +19,46 @@
       "version": "2.0"
     },
     {
+      "file": "code-cmd-1.0.pbw",
+      "name": "Cyrption Code",
+      "sha256": "a7b06f5341f24d36724bcfd9f2bfee5ed6d9e911b3799cc4c5412deb109e77e1",
+      "uuid": "13371337-6896-46c3-ab9c-0f4d5a2c421d",
+      "version": "1.0"
+    },
+    {
+      "file": "darth-time-4.0.pbw",
+      "name": "Darth Time",
+      "sha256": "851aecf86caee72499de819782d96b32ce1568541359a2890c95300869ce08cd",
+      "uuid": "7f3cdac1-bb49-4db6-bf62-f7399d944b23",
+      "version": "4.0"
+    },
+    {
+      "file": "electronika-5-1.0.pbw",
+      "name": "electronika5",
+      "sha256": "0794900890abfabfca59c51a47145fd763a6c8549774696d6e014d9a8d1cb186",
+      "uuid": "13371337-0ebc-456b-a94f-6d07f39de93d",
+      "version": "1.0"
+    },
+    {
+      "file": "enigma-1.1.pbw",
+      "name": "Enigma",
+      "sha256": "da99f076b039ec444d9d5cf1616bbff8a089cd1d8f1cba1276555f672abdad95",
+      "uuid": "551515f6-2cfd-403e-b723-93bb33ade6b3",
+      "version": "1.1"
+    },
+    {
       "file": "mario-time-3.41.pbw",
       "name": "Mario Time",
       "sha256": "d3855f1a6eaa32f3d72a8e0580438699b737b42d2ffab17b81922b77827a179d",
       "uuid": "43caa750-2896-4f46-94dc-1adbd4bc1ff3",
       "version": "3.41"
+    },
+    {
+      "file": "metro-watch-1.1.pbw",
+      "name": "MetroWatch",
+      "sha256": "a617124a051d9afaf5304c2c63569290da79dd2016c97cd7b756942993db31e7",
+      "uuid": "7d04cb24-4988-42b8-bba0-1535baf29043",
+      "version": "1.1"
     },
     {
       "file": "modern-3.1.1.pbw",
@@ -40,6 +75,13 @@
       "version": "8.9"
     },
     {
+      "file": "omega-seamaster-007-1.1.pbw",
+      "name": "Omega Seamaster 007",
+      "sha256": "a60e3a1bcb1359399afcaadad409fe689a497b694ef937f62d153214c80b5967",
+      "uuid": "13371337-d689-4a2b-a2fb-f602b46959a7",
+      "version": "1.0"
+    },
+    {
       "file": "pip-boy-100-5.4.pbw",
       "name": "Pip Boy 100",
       "sha256": "2421ac2ae2554cab2e473be199f8b727c67474fb7618709d6dd3cadcaaf55e63",
@@ -52,6 +94,27 @@
       "sha256": "057e78b8b29e15a5186d16db8c84c5125d353271030c66c909aa18cffa82c0c8",
       "uuid": "65c08138-7700-4c31-8ddf-3c56b67159e8",
       "version": "0.1"
+    },
+    {
+      "file": "rosewright-a-5.1.0.pbw",
+      "name": "Rosewright A",
+      "sha256": "5310ed3837eedeb87d1a6a20e14a44f6ed40aac879e28870182c1f57fd8892c0",
+      "uuid": "a49c82fd-830e-48b4-a82e-9cf8da77f4c5",
+      "version": "5.1"
+    },
+    {
+      "file": "starfield-smooth-1.0.0.pbw",
+      "name": "Starfield Smooth",
+      "sha256": "90e269e42ae03236c405d5176d9690a7defc4441ea52ae0f300646ab8ec350e5",
+      "uuid": "cf45f80c-f3a2-46a5-8ff6-5eb09e63b26e",
+      "version": "1.0"
+    },
+    {
+      "file": "studio-clock-6.03.pbw",
+      "name": "Studio Clock",
+      "sha256": "d4e21c2f2a4efef3aa62d604364d46724403314da4072fb68f5681d2e4f8657f",
+      "uuid": "84678888-13d8-41dc-ba56-47f88724dea5",
+      "version": "6.3"
     }
   ]
 }

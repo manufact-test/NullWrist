@@ -45,8 +45,14 @@ public final class InstalledWatchfaceRegistry {
         preferences.edit().remove(key(uuid)).apply();
     }
 
+    /** Called only when a brand-new bundled SPI image is copied into app storage. */
     public void clear() {
-        preferences.edit().clear().apply();
+        preferences.edit().clear().commit();
+        try {
+            seedFromBundledFlash();
+        } catch (IOException ignored) {
+            // Older development APKs may not contain a preseed manifest; they install on demand.
+        }
     }
 
     /** Replaces the registry with the exact UUID/SHA set baked into a fresh SPI image. */

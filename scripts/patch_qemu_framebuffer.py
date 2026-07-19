@@ -12,7 +12,7 @@ DISPLAY_INCLUDE_MARKER = '#include "pebble_snowy_display_overlays.h"\n'
 DISPLAY_INCLUDE_BLOCK = r'''
 #include "qemu/error-report.h"
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(PEBBLE_REAR_FB_EXPORT)
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -141,7 +141,7 @@ REDRAW_OLD = '''static void ps_set_redraw(PSDisplayGlobals *s) {
 REDRAW_NEW = '''static void ps_set_redraw(PSDisplayGlobals *s) {
     s->redraw = true;
     memmove(s->framebuffer_copy, s->framebuffer, s->bytes_per_frame);
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(PEBBLE_REAR_FB_EXPORT)
     const uint32_t visible_width = s->num_cols - 2 * s->num_border_cols;
     const uint32_t visible_height = s->num_rows - 2 * s->num_border_rows;
     pebble_android_fb_publish(

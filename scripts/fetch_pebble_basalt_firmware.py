@@ -14,6 +14,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "app" / "src" / "main" / "assets" / "pebble" / "basalt"
+BUILD_CACHE = ROOT / ".pebble-firmware-cache" / "basalt"
 SDK_VERSION = os.environ.get("PEBBLE_SDK_VERSION", "4.17")
 API_URL = f"https://sdk.repebble.com/v1/files/sdk-core/{SDK_VERSION}?channel="
 MAX_ARCHIVE_BYTES = 200 * 1024 * 1024
@@ -21,8 +22,8 @@ MAX_MEMBER_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 
 FILES = {
-    "sdk-core/pebble/basalt/qemu/qemu_micro_flash.bin": ("qemu_micro_flash.bin", False),
-    "sdk-core/pebble/basalt/qemu/qemu_spi_flash.bin.bz2": ("qemu_spi_flash_base.bin", True),
+    "sdk-core/pebble/basalt/qemu/qemu_micro_flash.bin": (OUTPUT / "qemu_micro_flash.bin", False),
+    "sdk-core/pebble/basalt/qemu/qemu_spi_flash.bin.bz2": (BUILD_CACHE / "qemu_spi_flash_base.bin", True),
 }
 
 
@@ -56,9 +57,10 @@ def main() -> int:
 
     extracted: dict[str, dict[str, object]] = {}
     OUTPUT.mkdir(parents=True, exist_ok=True)
+    BUILD_CACHE.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:*") as bundle:
         members = {member.name: member for member in bundle.getmembers()}
-        for source_name, (output_name, compressed) in FILES.items():
+        for source_name, (destination, compressed) in FILES.items():
             member = members.get(source_name)
             if member is None or not member.isfile():
                 raise RuntimeError(f"SDK archive is missing {source_name}")
@@ -75,18 +77,19 @@ def main() -> int:
             if len(data) <= 0 or len(data) > MAX_IMAGE_BYTES:
                 raise RuntimeError(f"Unexpected unpacked size for {source_name}: {len(data)}")
 
-            destination = OUTPUT / output_name
+            destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(data)
             digest = sha256(data)
-            extracted[output_name] = {
+            extracted[destination.name] = {
                 "size": len(data),
                 "sha256": digest,
                 "sdk_member": source_name,
                 "compressed_in_sdk": compressed,
+                "packaged": destination.is_relative_to(OUTPUT),
             }
             print(f"Wrote {destination.relative_to(ROOT)} ({len(data)} bytes, sha256={digest})")
 
-    base_spi = OUTPUT / "qemu_spi_flash_base.bin"
+    base_spi = BUILD_CACHE / "qemu_spi_flash_base.bin"
     runtime_spi = OUTPUT / "qemu_spi_flash.bin"
     preseed_manifest = OUTPUT / "preseeded-watchfaces.json"
     if not runtime_spi.is_file():
@@ -108,6 +111,7 @@ def main() -> int:
         "size": runtime_spi.stat().st_size,
         "sha256": sha256(runtime_spi.read_bytes()),
         "preseeded": preseed_manifest.is_file(),
+        "packaged": True,
     }
 
     metadata = {

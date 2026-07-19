@@ -2,6 +2,17 @@ plugins {
     id("com.android.application")
 }
 
+val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val releaseSigningAvailable = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.manufacttest.pebblereardisplay"
     compileSdk = 36
@@ -11,8 +22,8 @@ android {
         applicationId = "com.manufacttest.pebblereardisplay"
         minSdk = 28
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.6.0"
+        versionCode = 13
+        versionName = "0.7.0"
 
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
 
@@ -27,6 +38,21 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (releaseSigningAvailable) {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -34,6 +60,9 @@ android {
         }
         release {
             isMinifyEnabled = false
+            if (releaseSigningAvailable) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

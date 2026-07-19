@@ -5,11 +5,15 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 
 import com.manufacttest.pebblereardisplay.R;
 import com.manufacttest.pebblereardisplay.data.AppPreferences;
@@ -38,36 +42,101 @@ public final class PebbleRuntimeService extends Service {
             "com.manufacttest.pebblereardisplay.action.RESTART_RUNTIME";
     private static final String ACTION_STOP =
             "com.manufacttest.pebblereardisplay.action.STOP_RUNTIME";
+    private static final String ACTION_REFRESH_POWER =
+            "com.manufacttest.pebblereardisplay.action.REFRESH_POWER_POLICY";
+
+    public static final String ACTION_SELECTION_FAILED =
+            "com.manufacttest.pebblereardisplay.action.SELECTION_FAILED";
+    public static final String EXTRA_SELECTION_FAILURE = "selection_failure";
+
     private static final String CHANNEL_ID = "pebble_runtime";
     private static final int NOTIFICATION_ID = 4102;
     private static final long THUMBNAIL_MIN_SETTLE_MILLIS = 4_500L;
     private static final long THUMBNAIL_MAX_SETTLE_MILLIS = 8_000L;
     private static final long THUMBNAIL_QUIET_MILLIS = 650L;
+    private static final long LOW_BATTERY_AWAKE_MILLIS = 3_500L;
 
     private static final Set<Listener> LISTENERS = new CopyOnWriteArraySet<>();
     private static volatile PebbleRuntimeService instance;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final ExecutorService thumbnailExecutor = Executors.newSingleThreadExecutor();
     private final AtomicInteger generation = new AtomicInteger();
+    private final AtomicInteger thumbnailGeneration = new AtomicInteger();
+    private final Handler policyHandler = new Handler(Looper.getMainLooper());
 
     private volatile PebbleQemuProcess runtime;
     private volatile String status = "Starting PebbleOS…";
     private volatile String failure;
     private volatile boolean starting;
+    private volatile boolean runtimeBusy;
     private volatile String activeStorageId;
+    private volatile RuntimePowerPolicy.Mode powerMode = RuntimePowerPolicy.Mode.RUNNING;
+
+    private final Runnable policyTick = new Runnable() {
+        @Override
+        public void run() {
+            applyPowerPolicy();
+            policyHandler.postDelayed(this, 60_000L);
+        }
+    };
+
+    private final Runnable lowBatteryPause = () -> {
+        if (powerMode != RuntimePowerPolicy.Mode.LOW_BATTERY_PULSE || runtimeBusy) {
+            return;
+        }
+        PebbleQemuProcess current = runtime;
+        if (current != null && current.isRunning()) {
+            try {
+                current.pause();
+                updateNotification("Battery saver · updates each minute");
+                notifyListeners();
+            } catch (IOException error) {
+                reportFailure(error);
+            }
+        }
+    };
+
+    private final Runnable lowBatteryPulse = () -> {
+        if (powerMode != RuntimePowerPolicy.Mode.LOW_BATTERY_PULSE || runtimeBusy) {
+            return;
+        }
+        PebbleQemuProcess current = runtime;
+        if (current == null || !current.isRunning()) {
+            return;
+        }
+        try {
+            current.resume();
+            policyHandler.removeCallbacks(lowBatteryPause);
+            policyHandler.postDelayed(lowBatteryPause, LOW_BATTERY_AWAKE_MILLIS);
+        } catch (IOException error) {
+            reportFailure(error);
+        }
+        scheduleNextLowBatteryPulse();
+    };
+
+    private final BroadcastReceiver powerReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            policyHandler.removeCallbacks(policyTick);
+            policyHandler.post(policyTick);
+        }
+    };
 
     public static void start(Context context) {
         send(context, ACTION_START);
     }
 
-    /** Applies the selected PBW to the already-running PebbleOS whenever possible. */
     public static void select(Context context) {
         send(context, ACTION_SELECT);
     }
 
-    /** Explicitly replaces the emulator process while retaining persistent SPI flash. */
     public static void restart(Context context) {
         send(context, ACTION_RESTART);
+    }
+
+    public static void refreshPowerPolicy(Context context) {
+        send(context, ACTION_REFRESH_POWER);
     }
 
     public static void stop(Context context) {
@@ -80,10 +149,23 @@ public final class PebbleRuntimeService extends Service {
         return current != null && (current.starting || current.runtime != null);
     }
 
-    /** Returns the face acknowledged by the runtime, not merely the face selected in the UI. */
     public static String getActiveStorageId() {
         PebbleRuntimeService current = instance;
         return current == null ? null : current.activeStorageId;
+    }
+
+    public static String getPowerModeLabel() {
+        PebbleRuntimeService current = instance;
+        if (current == null) {
+            return null;
+        }
+        if (current.powerMode == RuntimePowerPolicy.Mode.SCHEDULED_FREEZE) {
+            return "SCHEDULE SLEEP";
+        }
+        if (current.powerMode == RuntimePowerPolicy.Mode.LOW_BATTERY_PULSE) {
+            return "BATTERY SAVER";
+        }
+        return null;
     }
 
     public static void addListener(Listener listener) {
@@ -115,6 +197,19 @@ public final class PebbleRuntimeService extends Service {
         instance = this;
         createNotificationChannel();
         promoteToForeground(buildNotification("Pebble Time is starting"));
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_BATTERY_CHANGED);
+        filter.addAction(Intent.ACTION_POWER_CONNECTED);
+        filter.addAction(Intent.ACTION_POWER_DISCONNECTED);
+        filter.addAction(Intent.ACTION_TIME_TICK);
+        filter.addAction(Intent.ACTION_TIME_CHANGED);
+        filter.addAction(Intent.ACTION_TIMEZONE_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(powerReceiver, filter, RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(powerReceiver, filter);
+        }
+        policyHandler.post(policyTick);
     }
 
     @Override
@@ -129,6 +224,8 @@ public final class PebbleRuntimeService extends Service {
         }
         if (ACTION_SELECT.equals(action)) {
             scheduleSelection();
+        } else if (ACTION_REFRESH_POWER.equals(action)) {
+            applyPowerPolicy();
         } else {
             scheduleRuntime(ACTION_RESTART.equals(action));
         }
@@ -143,8 +240,15 @@ public final class PebbleRuntimeService extends Service {
     @Override
     public void onDestroy() {
         generation.incrementAndGet();
+        thumbnailGeneration.incrementAndGet();
+        policyHandler.removeCallbacksAndMessages(null);
+        try {
+            unregisterReceiver(powerReceiver);
+        } catch (IllegalArgumentException ignored) {
+        }
         stopRuntime();
         executor.shutdownNow();
+        thumbnailExecutor.shutdownNow();
         instance = null;
         notifyListeners();
         super.onDestroy();
@@ -161,6 +265,7 @@ public final class PebbleRuntimeService extends Service {
             return;
         }
         if (!forceRestart && healthyRuntime) {
+            applyPowerPolicy();
             notifyListeners();
             return;
         }
@@ -168,6 +273,7 @@ public final class PebbleRuntimeService extends Service {
         int requestedGeneration = generation.incrementAndGet();
         boolean replaceExisting = forceRestart || current != null;
         starting = true;
+        runtimeBusy = true;
         failure = null;
         activeStorageId = null;
         setStatus("Starting PebbleOS…");
@@ -190,17 +296,31 @@ public final class PebbleRuntimeService extends Service {
             return;
         }
 
+        runtimeBusy = true;
+        SelectedWatchface previous = null;
+        String previousId = activeStorageId;
         try {
+            if (previousId != null) {
+                previous = watchfaceByStorageId(previousId);
+            }
             SelectedWatchface selected = selectedWatchface();
             if (selected.metadata.getStorageId().equals(activeStorageId)) {
                 return;
             }
+            current.resume();
             activateSelected(current, selected);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            failAndDiscardRuntime(current, interrupted);
+            if (!restorePrevious(current, previous, interrupted)) {
+                failAndDiscardRuntime(current, interrupted);
+            }
         } catch (Throwable error) {
-            failAndDiscardRuntime(current, error);
+            if (!restorePrevious(current, previous, error)) {
+                failAndDiscardRuntime(current, error);
+            }
+        } finally {
+            runtimeBusy = false;
+            policyHandler.post(this::applyPowerPolicy);
         }
     }
 
@@ -255,22 +375,31 @@ public final class PebbleRuntimeService extends Service {
                 starting = false;
                 reportFailure(error);
             }
+        } finally {
+            runtimeBusy = false;
+            policyHandler.post(this::applyPowerPolicy);
         }
     }
 
     private void activateSelected(PebbleQemuProcess current, SelectedWatchface selected)
             throws IOException, InterruptedException {
-        setStatus("Launching " + selected.metadata.getName() + "…");
+        status = null;
+        failure = null;
+        notifyListeners();
+
         int frameBeforeLaunch = current.readFrameSequence();
         boolean installed = current.activateWatchface(
                 selected.file,
                 new InstalledWatchfaceRegistry(this),
-                (message, sentBytes, totalBytes) -> setStatus(message)
+                null
         );
-
-        setStatus("Waiting for watchface frame…");
-        waitForFrameAdvance(current, frameBeforeLaunch, installed ? 6_000 : 4_000);
-        captureThumbnailIfNeeded(current, selected.metadata);
+        if (!waitForFrameAdvance(
+                current,
+                frameBeforeLaunch,
+                installed ? 8_000 : 5_000
+        )) {
+            throw new IOException("Selected watchface did not produce a new frame");
+        }
 
         activeStorageId = selected.metadata.getStorageId();
         starting = false;
@@ -278,9 +407,39 @@ public final class PebbleRuntimeService extends Service {
         failure = null;
         updateNotification("Running " + selected.metadata.getName());
         notifyListeners();
+        scheduleThumbnailCapture(current, selected.metadata);
     }
 
-    private static void waitForFrameAdvance(
+    private boolean restorePrevious(
+            PebbleQemuProcess current,
+            SelectedWatchface previous,
+            Throwable originalError
+    ) {
+        if (previous == null || current == null || !current.isRunning()) {
+            return false;
+        }
+        try {
+            current.resume();
+            activateSelected(current, previous);
+            new AppPreferences(this).setSelectedWatchfaceId(
+                    previous.metadata.getStorageId()
+            );
+            sendBroadcast(new Intent(ACTION_SELECTION_FAILED)
+                    .setPackage(getPackageName())
+                    .putExtra(
+                            EXTRA_SELECTION_FAILURE,
+                            "Could not apply the selected PBW. Restored "
+                                    + previous.metadata.getName()
+                                    + ". "
+                                    + safeMessage(originalError)
+                    ));
+            return true;
+        } catch (Throwable restoreError) {
+            return false;
+        }
+    }
+
+    private static boolean waitForFrameAdvance(
             PebbleQemuProcess current,
             int previousSequence,
             long timeoutMillis
@@ -289,36 +448,62 @@ public final class PebbleRuntimeService extends Service {
         while (System.nanoTime() < deadline) {
             int sequence = current.readFrameSequence();
             if (sequence > 0 && sequence != previousSequence) {
-                return;
+                return true;
             }
             if (!current.isRunning()) {
-                return;
+                return false;
             }
             Thread.sleep(80);
         }
+        return false;
     }
 
-    private void captureThumbnailIfNeeded(
+    private void scheduleThumbnailCapture(
             PebbleQemuProcess current,
             WatchfaceMetadata metadata
-    ) throws InterruptedException {
+    ) {
         WatchfaceThumbnailRepository thumbnails = new WatchfaceThumbnailRepository(this);
         if (thumbnails.hasCurrentThumbnail(metadata)) {
             return;
         }
-        waitForThumbnailReady(current);
-        if (!current.isRunning() || !thumbnails.capture(current, metadata)) {
-            return;
-        }
-        sendBroadcast(new Intent(WatchfaceThumbnailRepository.ACTION_THUMBNAIL_UPDATED)
-                .setPackage(getPackageName())
-                .putExtra(
-                        WatchfaceThumbnailRepository.EXTRA_STORAGE_ID,
-                        metadata.getStorageId()
-                ));
+        int token = thumbnailGeneration.incrementAndGet();
+        thumbnailExecutor.execute(() -> captureThumbnailWhenReady(
+                current,
+                metadata,
+                token
+        ));
     }
 
-    private static void waitForThumbnailReady(PebbleQemuProcess current)
+    private void captureThumbnailWhenReady(
+            PebbleQemuProcess current,
+            WatchfaceMetadata metadata,
+            int token
+    ) {
+        try {
+            if (!waitForThumbnailReady(current, token)) {
+                return;
+            }
+            if (token != thumbnailGeneration.get()
+                    || current != runtime
+                    || !metadata.getStorageId().equals(activeStorageId)) {
+                return;
+            }
+            WatchfaceThumbnailRepository thumbnails = new WatchfaceThumbnailRepository(this);
+            if (!current.isRunning() || !thumbnails.capture(current, metadata)) {
+                return;
+            }
+            sendBroadcast(new Intent(WatchfaceThumbnailRepository.ACTION_THUMBNAIL_UPDATED)
+                    .setPackage(getPackageName())
+                    .putExtra(
+                            WatchfaceThumbnailRepository.EXTRA_STORAGE_ID,
+                            metadata.getStorageId()
+                    ));
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private boolean waitForThumbnailReady(PebbleQemuProcess current, int token)
             throws InterruptedException {
         long started = System.nanoTime();
         long minimumDeadline = started + TimeUnit.MILLISECONDS.toNanos(
@@ -327,27 +512,89 @@ public final class PebbleRuntimeService extends Service {
         long maximumDeadline = started + TimeUnit.MILLISECONDS.toNanos(
                 THUMBNAIL_MAX_SETTLE_MILLIS
         );
-        while (current.isRunning() && System.nanoTime() < minimumDeadline) {
-            long remaining = TimeUnit.NANOSECONDS.toMillis(
-                    minimumDeadline - System.nanoTime()
-            );
-            Thread.sleep(Math.max(1L, Math.min(100L, remaining)));
+        while (thumbnailIsCurrent(current, token) && System.nanoTime() < minimumDeadline) {
+            Thread.sleep(100L);
+        }
+        if (!thumbnailIsCurrent(current, token)) {
+            return false;
         }
 
         int lastSequence = current.readFrameSequence();
         long lastFrameChange = System.nanoTime();
         long quietNanos = TimeUnit.MILLISECONDS.toNanos(THUMBNAIL_QUIET_MILLIS);
-        while (current.isRunning() && System.nanoTime() < maximumDeadline) {
+        while (thumbnailIsCurrent(current, token) && System.nanoTime() < maximumDeadline) {
             int sequence = current.readFrameSequence();
             long now = System.nanoTime();
             if (sequence != lastSequence) {
                 lastSequence = sequence;
                 lastFrameChange = now;
             } else if (now - lastFrameChange >= quietNanos) {
-                return;
+                return true;
             }
             Thread.sleep(80L);
         }
+        return thumbnailIsCurrent(current, token);
+    }
+
+    private boolean thumbnailIsCurrent(PebbleQemuProcess current, int token) {
+        return token == thumbnailGeneration.get()
+                && current == runtime
+                && current.isRunning();
+    }
+
+    private void applyPowerPolicy() {
+        RuntimePowerPolicy.Snapshot snapshot = RuntimePowerPolicy.evaluate(
+                this,
+                new AppPreferences(this)
+        );
+        RuntimePowerPolicy.Mode previousMode = powerMode;
+        powerMode = snapshot.mode;
+        policyHandler.removeCallbacks(lowBatteryPause);
+        policyHandler.removeCallbacks(lowBatteryPulse);
+
+        PebbleQemuProcess current = runtime;
+        if (runtimeBusy || current == null || !current.isRunning()) {
+            notifyListeners();
+            return;
+        }
+
+        try {
+            if (snapshot.mode == RuntimePowerPolicy.Mode.RUNNING) {
+                current.resume();
+                if (previousMode != snapshot.mode) {
+                    updateNotification(activeStorageId == null
+                            ? "Pebble Time is running"
+                            : "Running selected watchface");
+                }
+            } else if (snapshot.mode == RuntimePowerPolicy.Mode.SCHEDULED_FREEZE) {
+                current.pause();
+                AppPreferences preferences = new AppPreferences(this);
+                updateNotification(
+                        "Sleeping until "
+                                + AppPreferences.formatMinutes(
+                                preferences.getSleepEndMinutes()
+                        )
+                );
+            } else {
+                current.resume();
+                policyHandler.postDelayed(lowBatteryPause, LOW_BATTERY_AWAKE_MILLIS);
+                scheduleNextLowBatteryPulse();
+                updateNotification("Battery saver · updates each minute");
+            }
+            status = null;
+            failure = null;
+            notifyListeners();
+        } catch (IOException error) {
+            reportFailure(error);
+        }
+    }
+
+    private void scheduleNextLowBatteryPulse() {
+        long now = System.currentTimeMillis();
+        long nextMinute = 60_000L - (now % 60_000L);
+        long delay = Math.max(1_000L, nextMinute - 1_000L);
+        policyHandler.removeCallbacks(lowBatteryPulse);
+        policyHandler.postDelayed(lowBatteryPulse, delay);
     }
 
     private void ensureCurrent(int requestedGeneration) {
@@ -362,10 +609,6 @@ public final class PebbleRuntimeService extends Service {
         reportFailure(error);
     }
 
-    /**
-     * Stops the supplied runtime. When expected is null, whichever runtime is currently attached is
-     * discarded. A newer runtime is never cleared by an older failing task.
-     */
     private void discardRuntime(PebbleQemuProcess expected) {
         PebbleQemuProcess toStop;
         synchronized (this) {
@@ -388,6 +631,7 @@ public final class PebbleRuntimeService extends Service {
         runtime = null;
         activeStorageId = null;
         starting = false;
+        runtimeBusy = false;
         if (current != null) {
             current.stop();
         }
@@ -395,10 +639,13 @@ public final class PebbleRuntimeService extends Service {
     }
 
     private SelectedWatchface selectedWatchface() throws IOException {
-        WatchfaceRepository repository = new WatchfaceRepository(this);
         AppPreferences preferences = new AppPreferences(this);
-        String selectedId = preferences.getSelectedWatchfaceId();
-        WatchfaceMetadata metadata = repository.findByStorageId(selectedId);
+        return watchfaceByStorageId(preferences.getSelectedWatchfaceId());
+    }
+
+    private SelectedWatchface watchfaceByStorageId(String storageId) throws IOException {
+        WatchfaceRepository repository = new WatchfaceRepository(this);
+        WatchfaceMetadata metadata = repository.findByStorageId(storageId);
         if (metadata == null) {
             throw new IOException("No watchface is selected");
         }
@@ -410,11 +657,7 @@ public final class PebbleRuntimeService extends Service {
     }
 
     private void reportFailure(Throwable error) {
-        String message = error.getMessage();
-        if (message == null || message.isBlank()) {
-            message = error.getClass().getSimpleName();
-        }
-        failure = error.getClass().getSimpleName() + ": " + message;
+        failure = error.getClass().getSimpleName() + ": " + safeMessage(error);
         status = "Could not start selected watchface";
         updateNotification("Pebble Time needs attention");
         notifyListeners();
@@ -498,6 +741,13 @@ public final class PebbleRuntimeService extends Service {
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }
+    }
+
+    private static String safeMessage(Throwable error) {
+        String message = error.getMessage();
+        return message == null || message.isBlank()
+                ? error.getClass().getSimpleName()
+                : message;
     }
 
     public interface Listener {

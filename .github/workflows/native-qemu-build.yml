@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/build_pebble_qemu_android.sh"
       - "scripts/patch_qemu_framebuffer.py"
+      - "scripts/patch_qemu_basalt_only.py"
       - ".github/workflows/native-qemu-build.yml"
   workflow_dispatch:
 
@@ -90,5 +91,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/src/main/jniLibs/arm64-v8a/libpebble_qemu_exec.so
-          git commit -m "Bundle native Pebble QEMU for arm64"
+          git commit -m "Bundle Basalt-only native Pebble QEMU for arm64"
           git push origin "HEAD:${GITHUB_REF_NAME}"

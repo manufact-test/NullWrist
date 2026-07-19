@@ -1,38 +1,38 @@
-# Pebble Rear Display
+# Pebblehertz
 
-Android application for showing Pebble watchfaces on the rear display of the Unihertz Titan 2.
+Pebble Time watchfaces running natively on the rear display of the Unihertz Titan 2.
 
 ## Product behavior
 
-- The main display contains the watchface library, `.pbw` import, selection and rear-display preview.
-- When the app opens in the Titan 2 compact rear window, the launcher activity switches directly to the PebbleOS framebuffer.
+- The main display is a pixel-art watchface locker with real previews, `.pbw` import, selection and rear-display preview.
+- The selected Pebble Time face runs inside native ARM64 QEMU and switches without rebooting the emulator.
+- Bundled watchfaces are preinstalled in persistent Basalt SPI flash; imported PBWs are installed once and retained.
+- A foreground service keeps PebbleOS alive independently from the main Activity.
+- When the app opens in the Titan 2 compact rear window, it routes directly to the fullscreen Pebble framebuffer.
+- Rear mode consumes touch and generic motion input, blocks Back/predictive Back and requests full-window system-gesture exclusion.
 - Rear-mode detection uses both Android `displayId` and actual window pixel bounds because Titan firmware can expose the rear screen as display 0.
-- The rear surface consumes touches, ignores Back and shows no controls or diagnostic labels.
-- The selected watchface is persisted between launches.
-- The preview button opens the same passive PebbleOS renderer on the main display and allows Back to return.
 
 ## Current state
 
-The native PebbleOS runtime is working on physical Titan 2 hardware:
+Validated on physical Titan 2 hardware:
 
-- safe `.pbw` metadata parser for `appinfo.json`;
-- seven bundled watchfaces plus manual `.pbw` import;
-- persistent selection;
-- Titan 2 compact-window rear detection;
-- fullscreen, non-interactive rear surface;
-- native ARM64 Core Devices Pebble QEMU bundled inside the APK;
-- official Pebble SDK 4.17 Basalt firmware pinned with SHA-256 metadata;
+- native ARM64 Core Devices Pebble QEMU execution;
+- Pebble Time/Basalt-only machine registration;
+- official Pebble SDK 4.17 Basalt firmware;
 - persistent 16 MB SPI flash and 704 KB micro-flash;
 - real `144×168` PebbleOS framebuffer rendered directly on Android;
-- native QEMU, Pebble machine discovery and real PebbleOS framebuffer verified on the physical Titan 2.
+- automatic PBW installation through BlobDB/AppFetch/PutBytes;
+- instant AppRunState switching for installed faces;
+- always-on foreground runtime lifecycle;
+- adaptive framebuffer polling that copies pixels only after the QEMU frame sequence changes;
+- pixel-art Pebblehertz control interface;
+- real QEMU-rendered thumbnails for bundled faces and on-device thumbnail capture for imported PBWs.
 
-The WebView/WebAssembly route was tested and rejected because Titan 2 WebView reported `crossOriginIsolated=false`, preventing the pthread-enabled QEMU build from obtaining `SharedArrayBuffer`. The application therefore uses a native Android QEMU process and a file-backed framebuffer.
-
-The current PebbleOS image boots successfully and displays the stock “Install an app to continue” screen. The active milestone is installing the selected bundled or imported PBW into the persistent Basalt SPI flash and launching it automatically.
+The WebView/WebAssembly route was tested and rejected because Titan 2 WebView reported `crossOriginIsolated=false`, preventing the pthread-enabled QEMU build from obtaining `SharedArrayBuffer`. Pebblehertz therefore uses a native Android QEMU process and a file-backed framebuffer.
 
 ## Bundled watchfaces
 
-The application ships with these pinned PBW packages:
+The application ships with these pinned PBW packages, preinstalled in the packaged SPI image:
 
 - Big Shadow 2.00.5
 - Nyan Cat 8.9
@@ -40,35 +40,39 @@ The application ships with these pinned PBW packages:
 - Modern Watchface 3.1.1
 - Mario Time 3.41
 - 91 Dub 4.0 version 4.21
-- YWeather 3.7
+- polvtorogo 0.1.1
 
 Source pages and SHA-256 hashes are recorded in [`bundled-watchfaces.json`](bundled-watchfaces.json) and [`THIRD_PARTY_WATCHFACES.md`](THIRD_PARTY_WATCHFACES.md).
 
-The PBW files live in `app/src/main/assets/watchfaces/` and therefore appear in the app library immediately after installation. The verified fetcher can recreate the asset directory from the recorded public Appstore listings:
+## Reproducible assets
+
+Fetch pinned PBWs:
 
 ```bash
 python3 scripts/fetch_bundled_watchfaces.py
 ```
 
-GitHub Actions runs this command automatically and refuses to build when a downloaded package does not match its pinned SHA-256 hash.
-
-## Native runtime pipeline
-
-The QEMU cross-build is reproducible:
-
-```bash
-bash scripts/build_pebble_qemu_android.sh
-```
-
-The build pins Core Devices QEMU, cross-builds its static GLib/Pixman dependencies for Android arm64, exports Pebble display frames to a file-backed buffer, and produces `libpebble_qemu_exec.so`. The verified executable is bundled under `app/src/main/jniLibs/arm64-v8a/` and extracted by Android at installation time.
-
-Pebble SDK 4.17 Basalt firmware can be recreated with:
+Fetch official Basalt firmware:
 
 ```bash
 PEBBLE_SDK_VERSION=4.17 python3 scripts/fetch_pebble_basalt_firmware.py
 ```
 
-This copies the Basalt micro-flash and a decompressed writable SPI-flash image to `app/src/main/assets/pebble/basalt/` and writes SHA-256 metadata.
+Build Basalt-only Android QEMU:
+
+```bash
+bash scripts/build_pebble_qemu_android.sh
+```
+
+Build host QEMU, preinstall all bundled faces and render real preview PNGs:
+
+```bash
+bash scripts/build_pebble_qemu_host.sh
+python3 scripts/preseed_basalt_flash.py --help
+python3 scripts/generate_watchface_thumbnails.py --help
+```
+
+Generated previews live in `app/src/main/assets/watchface-thumbnails/` and use the watchface UUID as the filename.
 
 ## Development stack
 
@@ -79,7 +83,7 @@ This copies the Basalt micro-flash and a decompressed writable SPI-flash image t
 - CMake 3.22.1
 - compile/target SDK 36
 - minimum SDK 28
-- arm64-v8a native runtime target
+- arm64-v8a runtime target
 
 Build locally with:
 
@@ -95,11 +99,9 @@ The APK is generated at:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Roadmap
+## Next milestones
 
-1. Install the selected native, offline PBW into the persistent Basalt SPI flash.
-2. Launch the selected watchface automatically when PebbleOS boots.
-3. Reinstall only when the selected PBW changes.
-4. Suspend and resume QEMU with rear-display visibility.
-5. Add Aplite, Chalk and Emery platform images.
-6. Add PebbleKit JS only after native watchfaces are stable.
+1. Physical-device polish of the Pebblehertz locker and real thumbnails.
+2. Stable signed release APK and upgrade testing without clearing SPI flash.
+3. Optional PebbleKit JS support for configurable and connected watchfaces.
+4. Optional Device Owner/kiosk deployment for system-level rear-screen locking.

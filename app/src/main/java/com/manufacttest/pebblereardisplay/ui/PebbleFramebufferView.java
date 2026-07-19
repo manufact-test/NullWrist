@@ -17,6 +17,7 @@ import android.view.View;
 import com.manufacttest.pebblereardisplay.runtime.PebbleQemuProcess;
 
 import java.io.FileDescriptor;
+import java.io.InterruptedIOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class PebbleFramebufferView extends View {
@@ -150,6 +151,8 @@ public final class PebbleFramebufferView extends View {
                 if (read <= 0 || read < buffer.length) {
                     return;
                 }
+            } catch (InterruptedIOException interrupted) {
+                return;
             } catch (ErrnoException error) {
                 if (error.errno == OsConstants.EAGAIN) {
                     return;

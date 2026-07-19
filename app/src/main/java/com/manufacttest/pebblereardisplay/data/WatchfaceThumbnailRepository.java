@@ -23,6 +23,8 @@ public final class WatchfaceThumbnailRepository {
 
     private static final String ASSET_DIRECTORY = "watchface-thumbnails";
     private static final String FILE_DIRECTORY = "watchface-thumbnails";
+    private static final String CAPTURE_PREFERENCES = "watchface_thumbnail_captures";
+    private static final int CAPTURE_SCHEMA_VERSION = 2;
 
     private final Context context;
     private final File directory;
@@ -42,6 +44,18 @@ public final class WatchfaceThumbnailRepository {
         } catch (IOException ignored) {
             return false;
         }
+    }
+
+    public boolean hasCurrentThumbnail(WatchfaceMetadata metadata) {
+        if (metadata.isBundled()) {
+            return hasThumbnail(metadata);
+        }
+        File captured = new File(directory, fileName(metadata));
+        int version = context.getSharedPreferences(
+                CAPTURE_PREFERENCES,
+                Context.MODE_PRIVATE
+        ).getInt(captureKey(metadata), 0);
+        return captured.isFile() && version >= CAPTURE_SCHEMA_VERSION;
     }
 
     public Bitmap load(WatchfaceMetadata metadata) {
@@ -99,7 +113,22 @@ public final class WatchfaceThumbnailRepository {
             temporary.delete();
             return false;
         }
+        context.getSharedPreferences(CAPTURE_PREFERENCES, Context.MODE_PRIVATE)
+                .edit()
+                .putInt(captureKey(metadata), CAPTURE_SCHEMA_VERSION)
+                .apply();
         return true;
+    }
+
+    public void delete(WatchfaceMetadata metadata) {
+        File captured = new File(directory, fileName(metadata));
+        if (captured.isFile()) {
+            captured.delete();
+        }
+        context.getSharedPreferences(CAPTURE_PREFERENCES, Context.MODE_PRIVATE)
+                .edit()
+                .remove(captureKey(metadata))
+                .apply();
     }
 
     private Bitmap decodeFile(File file) {
@@ -115,6 +144,10 @@ public final class WatchfaceThumbnailRepository {
         options.inScaled = false;
         options.inPreferredConfig = Bitmap.Config.ARGB_8888;
         return BitmapFactory.decodeStream(input, null, options);
+    }
+
+    private static String captureKey(WatchfaceMetadata metadata) {
+        return "capture:" + fileName(metadata);
     }
 
     private static String fileName(WatchfaceMetadata metadata) {

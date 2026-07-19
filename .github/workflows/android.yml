@@ -32,26 +32,6 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
-      - name: Apply pending Pebblehertz library update
-        id: migration
-        if: hashFiles('scripts/apply_library_update.py') != ''
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          python3 scripts/apply_library_update.py 2>&1 | tee migration.log
-
-      - name: Upload library migration log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: library-migration-log
-          path: migration.log
-          if-no-files-found: warn
-
-      - name: Stop after library migration failure
-        if: steps.migration.outcome == 'failure'
-        run: exit 1
-
       - name: Fetch bundled watchfaces
         id: fetch-watchfaces
         continue-on-error: true
@@ -125,40 +105,15 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Commit pinned runtime assets and library update
+      - name: Commit pinned runtime assets
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/')
         run: |
-          paths=(
-            bundled-watchfaces.json
-            app/src/main/assets/watchfaces
-            app/src/main/assets/pebble
-            app/src/main/java/com/manufacttest/pebblereardisplay/data/AppPreferences.java
-            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java
-            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceThumbnailRepository.java
-            app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java
-            app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java
-            .github/workflows/android.yml
-            .github/workflows/apply-library-update.yml
-            scripts/apply_library_update.py
-          )
-          if [ -z "$(git status --porcelain -- "${paths[@]}")" ]; then
-            echo "Bundled assets and application sources are already current."
+          if [ -z "$(git status --porcelain -- app/src/main/assets/watchfaces app/src/main/assets/pebble)" ]; then
+            echo "Bundled PBW and Pebble firmware assets are already committed."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            bundled-watchfaces.json \
-            app/src/main/assets/watchfaces \
-            app/src/main/assets/pebble \
-            app/src/main/java/com/manufacttest/pebblereardisplay/data/AppPreferences.java \
-            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java \
-            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceThumbnailRepository.java \
-            app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java \
-            app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java \
-            .github/workflows/android.yml
-          git add -u -- \
-            .github/workflows/apply-library-update.yml \
-            scripts/apply_library_update.py
-          git commit -m "Add removable watchface library and settled previews"
+          git add app/src/main/assets/watchfaces app/src/main/assets/pebble
+          git commit -m "Bundle watchfaces and Basalt emulator firmware"
           git push origin "HEAD:${GITHUB_REF_NAME}"

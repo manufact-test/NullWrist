@@ -118,13 +118,15 @@
     "name": "Code CMD",
     "version": "1.0",
     "page_url": "https://apps.repebble.com/code-cmd_55de277531f4896b4b00007c",
-    "sha256": "a7b06f5341f24d36724bcfd9f2bfee5ed6d9e911b3799cc4c5412deb109e77e1"
+    "sha256": "a7b06f5341f24d36724bcfd9f2bfee5ed6d9e911b3799cc4c5412deb109e77e1",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/55de277d785abd44a4000073.pbw"
   },
   {
     "file": "studio-clock-6.03.pbw",
     "name": "Studio Clock",
     "version": "6.03",
     "page_url": "https://apps.repebble.com/studio-clock_5299db40129af76761000087",
-    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    "sha256": "d4e21c2f2a4efef3aa62d604364d46724403314da4072fb68f5681d2e4f8657f",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/57164f77cd92a350c000000e.pbw"
   }
 ]

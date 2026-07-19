@@ -424,10 +424,17 @@ public final class MainActivity extends Activity {
     }
 
     private void ensureSelection() {
-        String selectedId = preferences.getSelectedWatchfaceId();
-        if (selectedId == null && !watchfaces.isEmpty()) {
-            preferences.setSelectedWatchfaceId(watchfaces.get(0).getStorageId());
+        if (watchfaces.isEmpty()) {
+            preferences.clearSelectedWatchfaceId();
+            return;
         }
+        String selectedId = preferences.getSelectedWatchfaceId();
+        for (WatchfaceMetadata watchface : watchfaces) {
+            if (watchface.getStorageId().equals(selectedId)) {
+                return;
+            }
+        }
+        preferences.setSelectedWatchfaceId(watchfaces.get(0).getStorageId());
     }
 
     private void renderCatalog() {
@@ -573,6 +580,11 @@ public final class MainActivity extends Activity {
         }
         copy.addView(badges);
 
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.HORIZONTAL);
+        controls.setGravity(Gravity.CENTER_VERTICAL);
+        controls.setPadding(0, dp(8), 0, 0);
+
         TextView action = pixelText(
                 active ? "ON AIR" : selected ? "APPLYING..." : "TAP TO APPLY >",
                 11,
@@ -582,8 +594,31 @@ public final class MainActivity extends Activity {
                         ? getColor(R.color.accent_yellow)
                         : getColor(R.color.text_muted)
         );
-        action.setPadding(0, dp(8), 0, 0);
-        copy.addView(action);
+        controls.addView(action, new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+        ));
+
+        TextView delete = pixelText("DELETE", 10, getColor(R.color.error));
+        delete.setGravity(Gravity.CENTER);
+        delete.setPadding(dp(9), 0, dp(9), 0);
+        delete.setMinHeight(dp(34));
+        delete.setClickable(true);
+        delete.setFocusable(true);
+        delete.setBackground(interactivePanelBackground(
+                getColor(R.color.surface_warm),
+                getColor(R.color.surface_pressed),
+                getColor(R.color.error)
+        ));
+        delete.setOnClickListener(view -> confirmDeleteWatchface(watchface));
+        LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                dp(34)
+        );
+        deleteParams.leftMargin = dp(8);
+        controls.addView(delete, deleteParams);
+        copy.addView(controls);
 
         card.setOnClickListener(view -> applyWatchface(watchface));
         return card;
@@ -613,6 +648,56 @@ public final class MainActivity extends Activity {
         renderCatalog();
         updateRuntimeStatus("Launching " + watchface.getName(), null);
         PebbleRuntimeService.select(this);
+    }
+
+    private void confirmDeleteWatchface(WatchfaceMetadata watchface) {
+        String message = watchface.isBundled()
+                ? "Remove this preinstalled watchface from your locker? "
+                + "It can be restored by clearing Pebblehertz app data or reinstalling the app."
+                : "Permanently remove this imported PBW from Pebblehertz?";
+        new AlertDialog.Builder(this)
+                .setTitle("Delete " + watchface.getName() + "?")
+                .setMessage(message)
+                .setPositiveButton("Delete", (dialog, which) -> deleteWatchface(watchface))
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void deleteWatchface(WatchfaceMetadata watchface) {
+        boolean wasSelected = sameStorageId(
+                preferences.getSelectedWatchfaceId(),
+                watchface.getStorageId()
+        );
+        boolean wasActive = sameStorageId(
+                PebbleRuntimeService.getActiveStorageId(),
+                watchface.getStorageId()
+        );
+        try {
+            repository.delete(watchface);
+            thumbnails.delete(watchface);
+            reloadCatalog();
+            Toast.makeText(
+                    this,
+                    "Deleted " + watchface.getName(),
+                    Toast.LENGTH_SHORT
+            ).show();
+            if (watchfaces.isEmpty()) {
+                PebbleRuntimeService.stop(this);
+            } else if (wasSelected || wasActive) {
+                WatchfaceMetadata replacement = watchfaces.get(0);
+                String selectedId = preferences.getSelectedWatchfaceId();
+                for (WatchfaceMetadata candidate : watchfaces) {
+                    if (candidate.getStorageId().equals(selectedId)) {
+                        replacement = candidate;
+                        break;
+                    }
+                }
+                updateRuntimeStatus("Launching " + replacement.getName(), null);
+                PebbleRuntimeService.select(this);
+            }
+        } catch (IOException exception) {
+            showError("Delete failed: " + exception.getMessage());
+        }
     }
 
     private void updateRuntimeStatus(String status, String failure) {

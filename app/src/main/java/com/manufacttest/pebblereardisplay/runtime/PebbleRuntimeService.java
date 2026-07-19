@@ -40,7 +40,9 @@ public final class PebbleRuntimeService extends Service {
             "com.manufacttest.pebblereardisplay.action.STOP_RUNTIME";
     private static final String CHANNEL_ID = "pebble_runtime";
     private static final int NOTIFICATION_ID = 4102;
-    private static final long THUMBNAIL_SETTLE_MILLIS = 2_500L;
+    private static final long THUMBNAIL_MIN_SETTLE_MILLIS = 4_500L;
+    private static final long THUMBNAIL_MAX_SETTLE_MILLIS = 8_000L;
+    private static final long THUMBNAIL_QUIET_MILLIS = 650L;
 
     private static final Set<Listener> LISTENERS = new CopyOnWriteArraySet<>();
     private static volatile PebbleRuntimeService instance;
@@ -301,10 +303,10 @@ public final class PebbleRuntimeService extends Service {
             WatchfaceMetadata metadata
     ) throws InterruptedException {
         WatchfaceThumbnailRepository thumbnails = new WatchfaceThumbnailRepository(this);
-        if (thumbnails.hasThumbnail(metadata)) {
+        if (thumbnails.hasCurrentThumbnail(metadata)) {
             return;
         }
-        waitForThumbnailSettle(current, THUMBNAIL_SETTLE_MILLIS);
+        waitForThumbnailReady(current);
         if (!current.isRunning() || !thumbnails.capture(current, metadata)) {
             return;
         }
@@ -316,14 +318,35 @@ public final class PebbleRuntimeService extends Service {
                 ));
     }
 
-    private static void waitForThumbnailSettle(
-            PebbleQemuProcess current,
-            long settleMillis
-    ) throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(settleMillis);
-        while (current.isRunning() && System.nanoTime() < deadline) {
-            long remaining = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+    private static void waitForThumbnailReady(PebbleQemuProcess current)
+            throws InterruptedException {
+        long started = System.nanoTime();
+        long minimumDeadline = started + TimeUnit.MILLISECONDS.toNanos(
+                THUMBNAIL_MIN_SETTLE_MILLIS
+        );
+        long maximumDeadline = started + TimeUnit.MILLISECONDS.toNanos(
+                THUMBNAIL_MAX_SETTLE_MILLIS
+        );
+        while (current.isRunning() && System.nanoTime() < minimumDeadline) {
+            long remaining = TimeUnit.NANOSECONDS.toMillis(
+                    minimumDeadline - System.nanoTime()
+            );
             Thread.sleep(Math.max(1L, Math.min(100L, remaining)));
+        }
+
+        int lastSequence = current.readFrameSequence();
+        long lastFrameChange = System.nanoTime();
+        long quietNanos = TimeUnit.MILLISECONDS.toNanos(THUMBNAIL_QUIET_MILLIS);
+        while (current.isRunning() && System.nanoTime() < maximumDeadline) {
+            int sequence = current.readFrameSequence();
+            long now = System.nanoTime();
+            if (sequence != lastSequence) {
+                lastSequence = sequence;
+                lastFrameChange = now;
+            } else if (now - lastFrameChange >= quietNanos) {
+                return;
+            }
+            Thread.sleep(80L);
         }
     }
 

@@ -2,6 +2,7 @@ package com.manufacttest.pebblereardisplay.data;
 
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.res.AssetManager;
 import android.net.Uri;
 
@@ -23,6 +24,8 @@ import java.util.UUID;
 public final class WatchfaceRepository {
     private static final long MAX_PBW_BYTES = 20L * 1024L * 1024L;
     private static final String ASSET_DIRECTORY = "watchfaces";
+    private static final String LIBRARY_PREFERENCES = "watchface_library";
+    private static final String KEY_HIDDEN_BUNDLED = "hidden_bundled";
     private static final String[] RETIRED_BUNDLED_FILES = {
             "yweather-3.7.pbw"
     };
@@ -108,6 +111,25 @@ public final class WatchfaceRepository {
         return new File(watchfaceDirectory, metadata.getStorageId());
     }
 
+    public void delete(WatchfaceMetadata metadata) throws IOException {
+        if (metadata == null) {
+            throw new IOException("No watchface was selected for deletion");
+        }
+        ensureDirectory();
+        File stored = fileFor(metadata);
+        if (stored.isFile() && !stored.delete()) {
+            throw new IOException("Cannot delete " + metadata.getName());
+        }
+        if (metadata.isBundled()) {
+            Set<String> hidden = hiddenBundledStorageIds();
+            hidden.add(metadata.getStorageId());
+            context.getSharedPreferences(LIBRARY_PREFERENCES, Context.MODE_PRIVATE)
+                    .edit()
+                    .putStringSet(KEY_HIDDEN_BUNDLED, hidden)
+                    .apply();
+        }
+    }
+
     private void copyAndReadBundled(
             List<WatchfaceMetadata> output,
             Set<String> seenStorageIds
@@ -117,9 +139,11 @@ public final class WatchfaceRepository {
         if (names == null) {
             return;
         }
+        Set<String> hiddenBundled = hiddenBundledStorageIds();
 
         for (String name : names) {
-            if (!name.toLowerCase(Locale.ROOT).endsWith(".pbw")) {
+            if (!name.toLowerCase(Locale.ROOT).endsWith(".pbw")
+                    || hiddenBundled.contains(name)) {
                 continue;
             }
             File destination = new File(watchfaceDirectory, name);
@@ -144,10 +168,12 @@ public final class WatchfaceRepository {
         if (files == null) {
             return;
         }
+        Set<String> hiddenBundled = hiddenBundledStorageIds();
         for (File file : files) {
             if (!file.isFile()
                     || !file.getName().toLowerCase(Locale.ROOT).endsWith(".pbw")
-                    || seenStorageIds.contains(file.getName())) {
+                    || seenStorageIds.contains(file.getName())
+                    || hiddenBundled.contains(file.getName())) {
                 continue;
             }
             try (FileInputStream input = new FileInputStream(file)) {
@@ -156,6 +182,15 @@ public final class WatchfaceRepository {
                 // Invalid files stay out of the catalog; an import error is shown at import time.
             }
         }
+    }
+
+    private Set<String> hiddenBundledStorageIds() {
+        SharedPreferences preferences = context.getSharedPreferences(
+                LIBRARY_PREFERENCES,
+                Context.MODE_PRIVATE
+        );
+        Set<String> stored = preferences.getStringSet(KEY_HIDDEN_BUNDLED, null);
+        return stored == null ? new HashSet<>() : new HashSet<>(stored);
     }
 
     private void removeRetiredBundledFiles() {

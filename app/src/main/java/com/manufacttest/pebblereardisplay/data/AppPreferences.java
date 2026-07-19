@@ -20,4 +20,9 @@ public final class AppPreferences {
     public void setSelectedWatchfaceId(String storageId) {
         preferences.edit().putString(KEY_SELECTED_WATCHFACE, storageId).apply();
     }
+
+    public void clearSelectedWatchfaceId() {
+        preferences.edit().remove(KEY_SELECTED_WATCHFACE).apply();
+    }
+
 }

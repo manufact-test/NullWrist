@@ -33,9 +33,12 @@ jobs:
           gradle-version: "9.5.0"
 
       - name: Apply pending Pebblehertz library update
+        id: migration
         if: hashFiles('.github/workflows/apply-library-update.yml') != ''
+        continue-on-error: true
         run: |
-          python3 - <<'PY'
+          set -o pipefail
+          python3 - <<'PY' 2>&1 | tee migration.log
           from pathlib import Path
 
           migration = Path(".github/workflows/apply-library-update.yml")
@@ -64,6 +67,18 @@ jobs:
           )
           migration.unlink()
           PY
+
+      - name: Upload library migration log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library-migration-log
+          path: migration.log
+          if-no-files-found: warn
+
+      - name: Stop after library migration failure
+        if: steps.migration.outcome == 'failure'
+        run: exit 1
 
       - name: Fetch bundled watchfaces
         id: fetch-watchfaces

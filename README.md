@@ -26,7 +26,7 @@ Validated on physical Titan 2 hardware:
 - always-on foreground runtime lifecycle;
 - adaptive framebuffer polling that copies pixels only after the QEMU frame sequence changes;
 - pixel-art Pebblehertz control interface;
-- real QEMU-rendered thumbnails for bundled faces and on-device thumbnail capture for imported PBWs.
+- seven real QEMU-rendered bundled previews and on-device thumbnail capture for imported PBWs.
 
 The WebView/WebAssembly route was tested and rejected because Titan 2 WebView reported `crossOriginIsolated=false`, preventing the pthread-enabled QEMU build from obtaining `SharedArrayBuffer`. Pebblehertz therefore uses a native Android QEMU process and a file-backed framebuffer.
 
@@ -101,7 +101,7 @@ app/build/outputs/apk/debug/app-debug.apk
 
 ## Next milestones
 
-1. Physical-device polish of the Pebblehertz locker and real thumbnails.
+1. Physical-device validation and polish of the Pebblehertz 0.8.0 locker.
 2. Stable signed release APK and upgrade testing without clearing SPI flash.
 3. Optional PebbleKit JS support for configurable and connected watchfaces.
 4. Optional Device Owner/kiosk deployment for system-level rear-screen locking.

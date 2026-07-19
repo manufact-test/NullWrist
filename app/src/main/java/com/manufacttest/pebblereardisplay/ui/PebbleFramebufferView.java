@@ -8,68 +8,36 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
+import android.system.StructPollfd;
 import android.view.View;
 
 import com.manufacttest.pebblereardisplay.runtime.PebbleQemuProcess;
 
-public final class PebbleFramebufferView extends View {
-    private static final long ACTIVE_POLL_MILLIS = 50;
-    private static final long IDLE_POLL_MILLIS = 250;
-    private static final int IDLE_AFTER_UNCHANGED_POLLS = 12;
+import java.io.FileDescriptor;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-    private final Handler handler = new Handler(Looper.getMainLooper());
+public final class PebbleFramebufferView extends View {
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Paint paint = new Paint();
     private final Bitmap bitmap = Bitmap.createBitmap(
             PebbleQemuProcess.WIDTH,
             PebbleQemuProcess.HEIGHT,
             Bitmap.Config.ARGB_8888
     );
-    private final int[] pixels = new int[PebbleQemuProcess.WIDTH * PebbleQemuProcess.HEIGHT];
-    private PebbleQemuProcess runtime;
-    private boolean polling;
+    private final int[] readPixels = new int[PebbleQemuProcess.WIDTH * PebbleQemuProcess.HEIGHT];
+    private final int[] pendingPixels = new int[PebbleQemuProcess.WIDTH * PebbleQemuProcess.HEIGHT];
+    private final Object pixelLock = new Object();
+    private final AtomicBoolean uiUpdateScheduled = new AtomicBoolean();
+
+    private volatile PebbleQemuProcess runtime;
+    private volatile boolean listening;
+    private volatile FileDescriptor eventDescriptor;
+    private Thread eventThread;
     private int lastSequence = -1;
-    private int unchangedPolls;
-
-    private final Runnable framePoll = new Runnable() {
-        @Override
-        public void run() {
-            if (!polling) {
-                return;
-            }
-
-            long nextDelay = IDLE_POLL_MILLIS;
-            PebbleQemuProcess current = runtime;
-            if (current != null) {
-                int sequence = current.readFrameSequence();
-                if (sequence > 0 && sequence != lastSequence) {
-                    if (current.readFrame(pixels)) {
-                        bitmap.setPixels(
-                                pixels,
-                                0,
-                                PebbleQemuProcess.WIDTH,
-                                0,
-                                0,
-                                PebbleQemuProcess.WIDTH,
-                                PebbleQemuProcess.HEIGHT
-                        );
-                        lastSequence = sequence;
-                        unchangedPolls = 0;
-                        invalidate();
-                    }
-                    nextDelay = ACTIVE_POLL_MILLIS;
-                } else if (sequence > 0) {
-                    unchangedPolls++;
-                    nextDelay = unchangedPolls < IDLE_AFTER_UNCHANGED_POLLS
-                            ? ACTIVE_POLL_MILLIS
-                            : IDLE_POLL_MILLIS;
-                } else {
-                    unchangedPolls = 0;
-                    nextDelay = ACTIVE_POLL_MILLIS;
-                }
-            }
-            handler.postDelayed(this, nextDelay);
-        }
-    };
+    private int pendingGeneration;
 
     public PebbleFramebufferView(Context context) {
         super(context);
@@ -80,27 +48,160 @@ public final class PebbleFramebufferView extends View {
     }
 
     public void attach(PebbleQemuProcess runtime) {
+        detach();
         this.runtime = runtime;
         lastSequence = -1;
-        unchangedPolls = 0;
-        if (!polling) {
-            polling = true;
-            handler.post(framePoll);
-        }
+        listening = true;
+        Thread thread = new Thread(
+                () -> runEventLoop(runtime),
+                "PebbleFramebufferEvents"
+        );
+        thread.setDaemon(true);
+        eventThread = thread;
+        thread.start();
     }
 
     public void detach() {
-        polling = false;
-        handler.removeCallbacks(framePoll);
+        listening = false;
         runtime = null;
+        FileDescriptor descriptor = eventDescriptor;
+        eventDescriptor = null;
+        if (descriptor != null && descriptor.valid()) {
+            try {
+                Os.close(descriptor);
+            } catch (ErrnoException ignored) {
+            }
+        }
+        Thread thread = eventThread;
+        eventThread = null;
+        if (thread != null) {
+            thread.interrupt();
+        }
         lastSequence = -1;
-        unchangedPolls = 0;
     }
 
     @Override
     protected void onDetachedFromWindow() {
         detach();
         super.onDetachedFromWindow();
+    }
+
+    private void runEventLoop(PebbleQemuProcess attached) {
+        publishLatestFrame(attached);
+        FileDescriptor descriptor = null;
+        try {
+            descriptor = Os.open(
+                    attached.getFrameEventFile().getAbsolutePath(),
+                    OsConstants.O_RDWR | OsConstants.O_NONBLOCK,
+                    0
+            );
+            eventDescriptor = descriptor;
+
+            StructPollfd pollfd = new StructPollfd();
+            pollfd.fd = descriptor;
+            pollfd.events = (short) (OsConstants.POLLIN | OsConstants.POLLERR);
+            StructPollfd[] pollfds = new StructPollfd[]{pollfd};
+            byte[] signals = new byte[64];
+
+            while (listening && runtime == attached && attached.isRunning()) {
+                int ready = Os.poll(pollfds, 1_000);
+                if (!listening || runtime != attached) {
+                    break;
+                }
+                if (ready > 0 && (pollfd.revents & OsConstants.POLLIN) != 0) {
+                    drainSignals(descriptor, signals);
+                    publishLatestFrame(attached);
+                } else if (ready == 0) {
+                    publishLatestFrame(attached);
+                }
+            }
+        } catch (ErrnoException error) {
+            fallbackLoop(attached);
+        } finally {
+            if (eventDescriptor == descriptor) {
+                eventDescriptor = null;
+            }
+            if (descriptor != null && descriptor.valid()) {
+                try {
+                    Os.close(descriptor);
+                } catch (ErrnoException ignored) {
+                }
+            }
+        }
+    }
+
+    private void fallbackLoop(PebbleQemuProcess attached) {
+        while (listening && runtime == attached && attached.isRunning()) {
+            publishLatestFrame(attached);
+            try {
+                Thread.sleep(1_000L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private static void drainSignals(FileDescriptor descriptor, byte[] buffer)
+            throws ErrnoException {
+        while (true) {
+            try {
+                int read = Os.read(descriptor, buffer, 0, buffer.length);
+                if (read <= 0 || read < buffer.length) {
+                    return;
+                }
+            } catch (ErrnoException error) {
+                if (error.errno == OsConstants.EAGAIN) {
+                    return;
+                }
+                throw error;
+            }
+        }
+    }
+
+    private void publishLatestFrame(PebbleQemuProcess attached) {
+        int sequence = attached.readFrameSequence();
+        if (sequence <= 0 || sequence == lastSequence) {
+            return;
+        }
+        if (!attached.readFrame(readPixels)) {
+            return;
+        }
+        lastSequence = sequence;
+        synchronized (pixelLock) {
+            System.arraycopy(readPixels, 0, pendingPixels, 0, readPixels.length);
+            pendingGeneration++;
+        }
+        scheduleUiUpdate();
+    }
+
+    private void scheduleUiUpdate() {
+        if (uiUpdateScheduled.compareAndSet(false, true)) {
+            mainHandler.post(this::applyPendingFrame);
+        }
+    }
+
+    private void applyPendingFrame() {
+        int appliedGeneration;
+        synchronized (pixelLock) {
+            bitmap.setPixels(
+                    pendingPixels,
+                    0,
+                    PebbleQemuProcess.WIDTH,
+                    0,
+                    0,
+                    PebbleQemuProcess.WIDTH,
+                    PebbleQemuProcess.HEIGHT
+            );
+            appliedGeneration = pendingGeneration;
+        }
+        invalidate();
+        uiUpdateScheduled.set(false);
+        synchronized (pixelLock) {
+            if (pendingGeneration != appliedGeneration) {
+                scheduleUiUpdate();
+            }
+        }
     }
 
     @Override

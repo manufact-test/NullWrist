@@ -13,6 +13,10 @@ import android.view.View;
 import com.manufacttest.pebblereardisplay.runtime.PebbleQemuProcess;
 
 public final class PebbleFramebufferView extends View {
+    private static final long ACTIVE_POLL_MILLIS = 50;
+    private static final long IDLE_POLL_MILLIS = 250;
+    private static final int IDLE_AFTER_UNCHANGED_POLLS = 12;
+
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Paint paint = new Paint();
     private final Bitmap bitmap = Bitmap.createBitmap(
@@ -23,6 +27,8 @@ public final class PebbleFramebufferView extends View {
     private final int[] pixels = new int[PebbleQemuProcess.WIDTH * PebbleQemuProcess.HEIGHT];
     private PebbleQemuProcess runtime;
     private boolean polling;
+    private int lastSequence = -1;
+    private int unchangedPolls;
 
     private final Runnable framePoll = new Runnable() {
         @Override
@@ -30,20 +36,38 @@ public final class PebbleFramebufferView extends View {
             if (!polling) {
                 return;
             }
+
+            long nextDelay = IDLE_POLL_MILLIS;
             PebbleQemuProcess current = runtime;
-            if (current != null && current.readFrame(pixels)) {
-                bitmap.setPixels(
-                        pixels,
-                        0,
-                        PebbleQemuProcess.WIDTH,
-                        0,
-                        0,
-                        PebbleQemuProcess.WIDTH,
-                        PebbleQemuProcess.HEIGHT
-                );
-                invalidate();
+            if (current != null) {
+                int sequence = current.readFrameSequence();
+                if (sequence > 0 && sequence != lastSequence) {
+                    if (current.readFrame(pixels)) {
+                        bitmap.setPixels(
+                                pixels,
+                                0,
+                                PebbleQemuProcess.WIDTH,
+                                0,
+                                0,
+                                PebbleQemuProcess.WIDTH,
+                                PebbleQemuProcess.HEIGHT
+                        );
+                        lastSequence = sequence;
+                        unchangedPolls = 0;
+                        invalidate();
+                    }
+                    nextDelay = ACTIVE_POLL_MILLIS;
+                } else if (sequence > 0) {
+                    unchangedPolls++;
+                    nextDelay = unchangedPolls < IDLE_AFTER_UNCHANGED_POLLS
+                            ? ACTIVE_POLL_MILLIS
+                            : IDLE_POLL_MILLIS;
+                } else {
+                    unchangedPolls = 0;
+                    nextDelay = ACTIVE_POLL_MILLIS;
+                }
             }
-            handler.postDelayed(this, 100);
+            handler.postDelayed(this, nextDelay);
         }
     };
 
@@ -57,6 +81,8 @@ public final class PebbleFramebufferView extends View {
 
     public void attach(PebbleQemuProcess runtime) {
         this.runtime = runtime;
+        lastSequence = -1;
+        unchangedPolls = 0;
         if (!polling) {
             polling = true;
             handler.post(framePoll);
@@ -67,6 +93,8 @@ public final class PebbleFramebufferView extends View {
         polling = false;
         handler.removeCallbacks(framePoll);
         runtime = null;
+        lastSequence = -1;
+        unchangedPolls = 0;
     }
 
     @Override

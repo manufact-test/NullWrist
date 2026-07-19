@@ -21,17 +21,23 @@ import com.manufacttest.pebblereardisplay.ui.MainActivity;
 import java.io.File;
 import java.io.IOException;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** Owns the native PebbleOS/QEMU process independently from any Activity or display surface. */
 public final class PebbleRuntimeService extends Service {
-    private static final String ACTION_START = "com.manufacttest.pebblereardisplay.action.START_RUNTIME";
-    private static final String ACTION_SELECT = "com.manufacttest.pebblereardisplay.action.SELECT_WATCHFACE";
-    private static final String ACTION_RESTART = "com.manufacttest.pebblereardisplay.action.RESTART_RUNTIME";
-    private static final String ACTION_STOP = "com.manufacttest.pebblereardisplay.action.STOP_RUNTIME";
+    private static final String ACTION_START =
+            "com.manufacttest.pebblereardisplay.action.START_RUNTIME";
+    private static final String ACTION_SELECT =
+            "com.manufacttest.pebblereardisplay.action.SELECT_WATCHFACE";
+    private static final String ACTION_RESTART =
+            "com.manufacttest.pebblereardisplay.action.RESTART_RUNTIME";
+    private static final String ACTION_STOP =
+            "com.manufacttest.pebblereardisplay.action.STOP_RUNTIME";
     private static final String CHANNEL_ID = "pebble_runtime";
     private static final int NOTIFICATION_ID = 4102;
 
@@ -56,9 +62,9 @@ public final class PebbleRuntimeService extends Service {
         send(context, ACTION_SELECT);
     }
 
-    /** Kept for existing callers; selection no longer restarts the emulator. */
+    /** Explicitly replaces the emulator process while retaining persistent SPI flash. */
     public static void restart(Context context) {
-        select(context);
+        send(context, ACTION_RESTART);
     }
 
     public static void stop(Context context) {
@@ -69,6 +75,12 @@ public final class PebbleRuntimeService extends Service {
     public static boolean isActive() {
         PebbleRuntimeService current = instance;
         return current != null && (current.starting || current.runtime != null);
+    }
+
+    /** Returns the face acknowledged by the runtime, not merely the face selected in the UI. */
+    public static String getActiveStorageId() {
+        PebbleRuntimeService current = instance;
+        return current == null ? null : current.activeStorageId;
     }
 
     public static void addListener(Listener listener) {
@@ -136,57 +148,85 @@ public final class PebbleRuntimeService extends Service {
     }
 
     private synchronized void scheduleRuntime(boolean forceRestart) {
-        if (!forceRestart && (starting || runtime != null)) {
+        PebbleQemuProcess current = runtime;
+        boolean healthyRuntime = current != null
+                && current.isRunning()
+                && failure == null;
+
+        if (starting) {
             notifyListeners();
             return;
         }
+        if (!forceRestart && healthyRuntime) {
+            notifyListeners();
+            return;
+        }
+
         int requestedGeneration = generation.incrementAndGet();
+        boolean replaceExisting = forceRestart || current != null;
         starting = true;
         failure = null;
+        activeStorageId = null;
         setStatus("Starting PebbleOS…");
-        executor.execute(() -> runRuntime(requestedGeneration, forceRestart));
+        executor.execute(() -> runRuntime(requestedGeneration, replaceExisting));
     }
 
     private void scheduleSelection() {
-        executor.execute(() -> {
-            PebbleQemuProcess current = runtime;
-            if (current == null || !current.isRunning()) {
-                scheduleRuntime(false);
-                return;
-            }
-            try {
-                SelectedWatchface selected = selectedWatchface();
-                if (selected.metadata.getStorageId().equals(activeStorageId)) {
-                    return;
-                }
-                activateSelected(current, selected);
-            } catch (Throwable error) {
-                reportFailure(error);
-            }
-        });
+        int requestedGeneration = generation.get();
+        executor.execute(() -> applyLatestSelection(requestedGeneration));
     }
 
-    private void runRuntime(int requestedGeneration, boolean forceRestart) {
-        if (forceRestart) {
-            stopRuntime();
-        }
+    private void applyLatestSelection(int requestedGeneration) {
         if (requestedGeneration != generation.get()) {
             return;
         }
 
-        PebbleQemuProcess current = new PebbleQemuProcess(this);
-        runtime = current;
-        activeStorageId = null;
-        notifyListeners();
-        try {
-            current.start();
-            notifyListeners();
+        PebbleQemuProcess current = runtime;
+        if (current == null || !current.isRunning()) {
+            scheduleRuntime(false);
+            return;
+        }
 
-            setStatus("Waiting for PebbleOS…");
-            current.waitForFirmwareReady(35_000);
+        try {
+            SelectedWatchface selected = selectedWatchface();
+            if (selected.metadata.getStorageId().equals(activeStorageId)) {
+                return;
+            }
+            activateSelected(current, selected);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            failAndDiscardRuntime(current, interrupted);
+        } catch (Throwable error) {
+            failAndDiscardRuntime(current, error);
+        }
+    }
+
+    private void runRuntime(int requestedGeneration, boolean replaceExisting) {
+        PebbleQemuProcess current = null;
+        try {
+            if (replaceExisting) {
+                discardRuntime(null);
+            }
             ensureCurrent(requestedGeneration);
 
-            if (!current.waitForFirstFrame(10_000)) {
+            current = new PebbleQemuProcess(this);
+            synchronized (this) {
+                ensureCurrent(requestedGeneration);
+                runtime = current;
+                activeStorageId = null;
+            }
+            notifyListeners();
+
+            current.start();
+            ensureCurrent(requestedGeneration);
+            notifyListeners();
+
+            setStatus("Connecting to PebbleOS…");
+            current.waitForFirmwareReady(40_000);
+            ensureCurrent(requestedGeneration);
+
+            setStatus("Waiting for Pebble display…");
+            if (!current.waitForFirstFrame(12_000)) {
                 Integer exitCode = current.exitCode();
                 throw new IOException(exitCode == null
                         ? "PebbleOS did not produce a framebuffer"
@@ -197,30 +237,62 @@ public final class PebbleRuntimeService extends Service {
             activateSelected(current, selectedWatchface());
             ensureCurrent(requestedGeneration);
             starting = false;
+        } catch (CancellationException cancelled) {
+            discardRuntime(current);
         } catch (InterruptedException interrupted) {
+            discardRuntime(current);
+            if (requestedGeneration == generation.get()) {
+                starting = false;
+                reportFailure(interrupted);
+            }
             Thread.currentThread().interrupt();
         } catch (Throwable error) {
-            starting = false;
-            reportFailure(error);
+            discardRuntime(current);
+            if (requestedGeneration == generation.get()) {
+                starting = false;
+                reportFailure(error);
+            }
         }
     }
 
     private void activateSelected(PebbleQemuProcess current, SelectedWatchface selected)
             throws IOException, InterruptedException {
-        setStatus("Connecting to PebbleOS…");
+        setStatus("Launching " + selected.metadata.getName() + "…");
+        int frameBeforeLaunch = current.readFrameSequence();
         boolean installed = current.activateWatchface(
                 selected.file,
                 new InstalledWatchfaceRegistry(this),
                 (message, sentBytes, totalBytes) -> setStatus(message)
         );
-        Thread.sleep(installed ? 900 : 500);
+
+        setStatus("Waiting for watchface frame…");
+        waitForFrameAdvance(current, frameBeforeLaunch, installed ? 6_000 : 4_000);
         captureThumbnailIfNeeded(current, selected.metadata);
+
         activeStorageId = selected.metadata.getStorageId();
         starting = false;
         status = null;
         failure = null;
         updateNotification("Running " + selected.metadata.getName());
         notifyListeners();
+    }
+
+    private static void waitForFrameAdvance(
+            PebbleQemuProcess current,
+            int previousSequence,
+            long timeoutMillis
+    ) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        while (System.nanoTime() < deadline) {
+            int sequence = current.readFrameSequence();
+            if (sequence > 0 && sequence != previousSequence) {
+                return;
+            }
+            if (!current.isRunning()) {
+                return;
+            }
+            Thread.sleep(80);
+        }
     }
 
     private void captureThumbnailIfNeeded(
@@ -233,13 +305,43 @@ public final class PebbleRuntimeService extends Service {
         }
         sendBroadcast(new Intent(WatchfaceThumbnailRepository.ACTION_THUMBNAIL_UPDATED)
                 .setPackage(getPackageName())
-                .putExtra(WatchfaceThumbnailRepository.EXTRA_STORAGE_ID, metadata.getStorageId()));
+                .putExtra(
+                        WatchfaceThumbnailRepository.EXTRA_STORAGE_ID,
+                        metadata.getStorageId()
+                ));
     }
 
-    private void ensureCurrent(int requestedGeneration) throws InterruptedException {
+    private void ensureCurrent(int requestedGeneration) {
         if (requestedGeneration != generation.get()) {
-            throw new InterruptedException("Pebble runtime was replaced");
+            throw new CancellationException("Pebble runtime was replaced");
         }
+    }
+
+    private void failAndDiscardRuntime(PebbleQemuProcess current, Throwable error) {
+        discardRuntime(current);
+        starting = false;
+        reportFailure(error);
+    }
+
+    /**
+     * Stops the supplied runtime. When expected is null, whichever runtime is currently attached is
+     * discarded. A newer runtime is never cleared by an older failing task.
+     */
+    private void discardRuntime(PebbleQemuProcess expected) {
+        PebbleQemuProcess toStop;
+        synchronized (this) {
+            if (expected != null && runtime != expected) {
+                toStop = expected;
+            } else {
+                toStop = runtime;
+                runtime = null;
+                activeStorageId = null;
+            }
+        }
+        if (toStop != null) {
+            toStop.stop();
+        }
+        notifyListeners();
     }
 
     private synchronized void stopRuntime() {
@@ -269,7 +371,11 @@ public final class PebbleRuntimeService extends Service {
     }
 
     private void reportFailure(Throwable error) {
-        failure = error.getClass().getSimpleName() + ": " + error.getMessage();
+        String message = error.getMessage();
+        if (message == null || message.isBlank()) {
+            message = error.getClass().getSimpleName();
+        }
+        failure = error.getClass().getSimpleName() + ": " + message;
         status = "Could not start selected watchface";
         updateNotification("Pebble Time needs attention");
         notifyListeners();
@@ -301,7 +407,9 @@ public final class PebbleRuntimeService extends Service {
                 "Pebblehertz runtime",
                 NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription("Keeps the selected Pebble Time face active on the Titan 2 rear display");
+        channel.setDescription(
+                "Keeps the selected Pebble Time face active on the Titan 2 rear display"
+        );
         channel.setShowBadge(false);
         getSystemService(NotificationManager.class).createNotificationChannel(channel);
     }

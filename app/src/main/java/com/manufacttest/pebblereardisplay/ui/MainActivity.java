@@ -61,6 +61,7 @@ public final class MainActivity extends Activity {
     private boolean rearMode;
     private boolean redirectingToRear;
     private boolean listenersRegistered;
+    private String renderedActiveStorageId;
 
     private final PebbleRuntimeService.Listener runtimeListener = (
             PebbleQemuProcess runtime,
@@ -68,7 +69,10 @@ public final class MainActivity extends Activity {
             String failure
     ) -> runOnUiThread(() -> {
         updateRuntimeStatus(status, failure);
-        renderCatalog();
+        String activeId = PebbleRuntimeService.getActiveStorageId();
+        if (!sameStorageId(renderedActiveStorageId, activeId)) {
+            renderCatalog();
+        }
     });
 
     private final BroadcastReceiver thumbnailReceiver = new BroadcastReceiver() {
@@ -433,6 +437,7 @@ public final class MainActivity extends Activity {
         catalogContainer.removeAllViews();
         String selectedId = preferences.getSelectedWatchfaceId();
         String activeId = PebbleRuntimeService.getActiveStorageId();
+        renderedActiveStorageId = activeId;
         WatchfaceMetadata selected = null;
 
         View root = catalogContainer.getParent() instanceof View
@@ -628,6 +633,10 @@ public final class MainActivity extends Activity {
             runtimeLed.setTextColor(getColor(R.color.accent_mint));
             runtimeStatusLabel.setText("RUNTIME ONLINE");
         }
+    }
+
+    private static boolean sameStorageId(String first, String second) {
+        return first == null ? second == null : first.equals(second);
     }
 
     private static String shortStatus(String value) {

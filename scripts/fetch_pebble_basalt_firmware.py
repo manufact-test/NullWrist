@@ -8,6 +8,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import tarfile
 import urllib.request
 
@@ -21,7 +22,7 @@ MAX_IMAGE_BYTES = 32 * 1024 * 1024
 
 FILES = {
     "sdk-core/pebble/basalt/qemu/qemu_micro_flash.bin": ("qemu_micro_flash.bin", False),
-    "sdk-core/pebble/basalt/qemu/qemu_spi_flash.bin.bz2": ("qemu_spi_flash.bin", True),
+    "sdk-core/pebble/basalt/qemu/qemu_spi_flash.bin.bz2": ("qemu_spi_flash_base.bin", True),
 }
 
 
@@ -84,6 +85,30 @@ def main() -> int:
                 "compressed_in_sdk": compressed,
             }
             print(f"Wrote {destination.relative_to(ROOT)} ({len(data)} bytes, sha256={digest})")
+
+    base_spi = OUTPUT / "qemu_spi_flash_base.bin"
+    runtime_spi = OUTPUT / "qemu_spi_flash.bin"
+    preseed_manifest = OUTPUT / "preseeded-watchfaces.json"
+    if not runtime_spi.is_file():
+        shutil.copyfile(base_spi, runtime_spi)
+        print("Created unseeded runtime SPI fallback; preseed workflow can replace it")
+    elif preseed_manifest.is_file():
+        seed_info = json.loads(preseed_manifest.read_text(encoding="utf-8"))
+        expected_base = seed_info.get("base_spi_sha256")
+        actual_base = sha256(base_spi.read_bytes())
+        if expected_base != actual_base:
+            raise RuntimeError(
+                "Preseeded SPI was built from a different base firmware; rerun preseed workflow"
+            )
+        print("Preserved verified preseeded runtime SPI image")
+    else:
+        print("Preserved existing runtime SPI image without preseed metadata")
+
+    extracted["qemu_spi_flash.bin"] = {
+        "size": runtime_spi.stat().st_size,
+        "sha256": sha256(runtime_spi.read_bytes()),
+        "preseeded": preseed_manifest.is_file(),
+    }
 
     metadata = {
         "requested_sdk_version": SDK_VERSION,

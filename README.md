@@ -6,6 +6,7 @@ Pebble Time watchfaces running natively on the rear display of the Unihertz Tita
 
 - The main display is a pixel-art watchface locker with real previews, `.pbw` import, selection and rear-display preview.
 - The selected Pebble Time face runs inside native ARM64 QEMU and switches without rebooting the emulator.
+- The locker distinguishes a UI selection from a face actually acknowledged by PebbleOS: `QUEUED` becomes `ACTIVE / ON AIR` only after runtime activation.
 - Bundled watchfaces are preinstalled in persistent Basalt SPI flash; imported PBWs are installed once and retained.
 - A foreground service keeps PebbleOS alive independently from the main Activity.
 - When the app opens in the Titan 2 compact rear window, it routes directly to the fullscreen Pebble framebuffer.
@@ -14,19 +15,27 @@ Pebble Time watchfaces running natively on the rear display of the Unihertz Tita
 
 ## Current state
 
-Validated on physical Titan 2 hardware:
+Pebblehertz 0.8.1 includes the 0.8.0 pixel-art interface plus a runtime recovery rewrite prompted by physical Titan 2 testing.
 
-- native ARM64 Core Devices Pebble QEMU execution;
+Validated in CI:
+
+- native ARM64 Core Devices Pebble QEMU execution assets;
 - Pebble Time/Basalt-only machine registration;
 - official Pebble SDK 4.17 Basalt firmware;
 - persistent 16 MB SPI flash and 704 KB micro-flash;
-- real `144×168` PebbleOS framebuffer rendered directly on Android;
+- real `144×168` PebbleOS framebuffer support;
 - automatic PBW installation through BlobDB/AppFetch/PutBytes;
 - instant AppRunState switching for installed faces;
 - always-on foreground runtime lifecycle;
 - adaptive framebuffer polling that copies pixels only after the QEMU frame sequence changes;
 - pixel-art Pebblehertz control interface;
 - seven real QEMU-rendered bundled previews and on-device thumbnail capture for imported PBWs.
+
+### 0.8.1 runtime repair
+
+PebbleOS readiness is now determined by the actual phone-protocol handshake rather than by searching the diagnostic serial stream for a human-readable boot phrase. The diagnostic UART can contain binary bootloader records on Titan 2, so it is drained and sanitized separately and never controls runtime state.
+
+A failed start now stops and detaches the failed QEMU instance. A later app start or watchface selection creates a clean runtime while retaining the persistent SPI flash. Normal watchface changes still use AppRunState without rebooting QEMU.
 
 The WebView/WebAssembly route was tested and rejected because Titan 2 WebView reported `crossOriginIsolated=false`, preventing the pthread-enabled QEMU build from obtaining `SharedArrayBuffer`. Pebblehertz therefore uses a native Android QEMU process and a file-backed framebuffer.
 
@@ -99,9 +108,12 @@ The APK is generated at:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Next milestones
+## Physical-device validation for 0.8.1
 
-1. Physical-device validation and polish of the Pebblehertz 0.8.0 locker.
-2. Stable signed release APK and upgrade testing without clearing SPI flash.
-3. Optional PebbleKit JS support for configurable and connected watchfaces.
-4. Optional Device Owner/kiosk deployment for system-level rear-screen locking.
+1. Switch all seven bundled faces and confirm each reaches `ACTIVE / ON AIR` and appears on the rear display.
+2. Close and reopen the main Activity while the foreground runtime stays alive.
+3. Restart the runtime and confirm the last selected face returns without a communication-readiness exception.
+4. Import one PBW and confirm installation, rear rendering and thumbnail capture.
+5. Confirm fullscreen and input locking on the rear display remain unchanged.
+
+Rollback point: `backup/pebblehertz-0.8.0-before-runtime-fix`.

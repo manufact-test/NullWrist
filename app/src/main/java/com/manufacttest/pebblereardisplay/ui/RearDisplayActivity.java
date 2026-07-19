@@ -2,15 +2,19 @@ package com.manufacttest.pebblereardisplay.ui;
 
 import android.app.Activity;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.TextView;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 
 public final class RearDisplayActivity extends Activity {
     private boolean previewMode;
     private View rearSurface;
+    private OnBackInvokedCallback backCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,7 +37,23 @@ public final class RearDisplayActivity extends Activity {
         rearSurface.setFocusable(true);
         rearSurface.setFocusableInTouchMode(true);
         rearSurface.requestFocus();
+        registerBackGuard();
         rearSurface.post(() -> RearUi.lockRearSurface(this, rearSurface));
+    }
+
+    private void registerBackGuard() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return;
+        }
+        backCallback = () -> {
+            if (previewMode) {
+                finish();
+            }
+        };
+        getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_OVERLAY,
+                backCallback
+        );
     }
 
     @Override
@@ -92,6 +112,10 @@ public final class RearDisplayActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && backCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backCallback);
+            backCallback = null;
+        }
         if (previewMode) {
             RearUi.leaveImmersive(this);
         }

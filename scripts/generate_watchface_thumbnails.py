@@ -29,7 +29,8 @@ FB_FORMAT_COLOR_2BIT = 1
 FB_HEADER_BYTES = 64
 FB_WIDTH = 144
 FB_HEIGHT = 168
-PREVIEW_SETTLE_SECONDS = 3.0
+PREVIEW_MIN_SETTLE_SECONDS = 5.0
+PREVIEW_QUIET_SECONDS = 0.65
 
 
 def png_chunk(kind: bytes, payload: bytes) -> bytes:
@@ -80,19 +81,34 @@ def read_frame(path: Path) -> tuple[int, int, int, bytes] | None:
     return sequence, width, height, pixels
 
 
-def wait_for_preview(path: Path, previous_sequence: int, timeout: float = 8.0) -> tuple[int, int, bytes]:
+def wait_for_preview(path: Path, previous_sequence: int, timeout: float = 12.0) -> tuple[int, int, bytes]:
     deadline = time.monotonic() + timeout
     first_changed_at: float | None = None
+    last_changed_at: float | None = None
+    latest_sequence = previous_sequence
     latest: tuple[int, int, int, bytes] | None = None
+
     while time.monotonic() < deadline:
+        now = time.monotonic()
         frame = read_frame(path)
         if frame is not None and frame[0] > previous_sequence:
-            latest = frame
             if first_changed_at is None:
-                first_changed_at = time.monotonic()
-            if time.monotonic() - first_changed_at >= PREVIEW_SETTLE_SECONDS:
-                return frame[1], frame[2], frame[3]
+                first_changed_at = now
+                last_changed_at = now
+            if frame[0] != latest_sequence:
+                latest_sequence = frame[0]
+                latest = frame
+                last_changed_at = now
+            if (
+                latest is not None
+                and first_changed_at is not None
+                and last_changed_at is not None
+                and now - first_changed_at >= PREVIEW_MIN_SETTLE_SECONDS
+                and now - last_changed_at >= PREVIEW_QUIET_SECONDS
+            ):
+                return latest[1], latest[2], latest[3]
         time.sleep(0.05)
+
     if latest is None:
         raise RuntimeError("Watchface did not produce a new framebuffer frame")
     return latest[1], latest[2], latest[3]

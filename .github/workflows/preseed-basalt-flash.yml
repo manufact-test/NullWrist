@@ -1,0 +1,126 @@
+name: Preseed Pebble Time flash
+
+on:
+  push:
+    branches: ["feature/native-qemu-runtime"]
+    paths:
+      - "bundled-watchfaces.json"
+      - "app/src/main/assets/watchfaces/**"
+      - "scripts/fetch_bundled_watchfaces.py"
+      - "scripts/fetch_pebble_basalt_firmware.py"
+      - "scripts/build_pebble_qemu_host.sh"
+      - "scripts/patch_qemu_basalt_only.py"
+      - "scripts/preseed_basalt_flash.py"
+      - ".github/workflows/preseed-basalt-flash.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: preseed-pebble-time-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  preseed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install host QEMU build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential git ninja-build pkg-config python3-venv \
+            libglib2.0-dev libpixman-1-dev zlib1g-dev
+
+      - name: Restore host QEMU source cache
+        uses: actions/cache@v4
+        with:
+          path: .host-qemu-build/sources
+          key: host-pebble-qemu-source-v1-9ef633fa
+
+      - name: Fetch bundled PBW files
+        run: python3 scripts/fetch_bundled_watchfaces.py
+
+      - name: Fetch official Basalt firmware
+        env:
+          PEBBLE_SDK_VERSION: "4.17"
+        run: python3 scripts/fetch_pebble_basalt_firmware.py
+
+      - name: Build headless Pebble Time QEMU
+        env:
+          QEMU_HOST_WORK_DIR: ${{ github.workspace }}/.host-qemu-build
+          QEMU_HOST_OUTPUT_DIR: ${{ github.workspace }}/host-qemu-output
+          JOBS: "4"
+        run: |
+          set -o pipefail
+          bash scripts/build_pebble_qemu_host.sh 2>&1 | tee host-qemu-build.log
+
+      - name: Preinstall bundled watchfaces
+        run: |
+          set -o pipefail
+          python3 scripts/preseed_basalt_flash.py \
+            --qemu host-qemu-output/qemu-system-arm \
+            --micro app/src/main/assets/pebble/basalt/qemu_micro_flash.bin \
+            --base-spi .pebble-firmware-cache/basalt/qemu_spi_flash_base.bin \
+            --output-spi app/src/main/assets/pebble/basalt/qemu_spi_flash.bin \
+            --watchfaces app/src/main/assets/watchfaces \
+            --manifest-output app/src/main/assets/pebble/basalt/preseeded-watchfaces.json \
+            --log preseed-qemu.log \
+            2>&1 | tee preseed.log
+
+      - name: Verify preseed output
+        run: |
+          test "$(stat -c%s app/src/main/assets/pebble/basalt/qemu_spi_flash.bin)" -eq 16777216
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("app/src/main/assets/pebble/basalt/preseeded-watchfaces.json").read_text())
+          assert manifest["platform"] == "basalt"
+          assert len(manifest["watchfaces"]) == 7, manifest
+          print("Preseeded watchfaces:")
+          for item in manifest["watchfaces"]:
+              print(f"  {item['name']} {item['uuid']} {item['sha256']}")
+          PY
+
+      - name: Refresh firmware metadata
+        env:
+          PEBBLE_SDK_VERSION: "4.17"
+        run: python3 scripts/fetch_pebble_basalt_firmware.py
+
+      - name: Upload preseed diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pebble-time-preseed-diagnostics
+          path: |
+            host-qemu-build.log
+            host-qemu-output/machine-help.txt
+            preseed.log
+            preseed-qemu.log
+            app/src/main/assets/pebble/basalt/preseeded-watchfaces.json
+          if-no-files-found: warn
+
+      - name: Commit preseeded flash
+        if: success() && github.event_name == 'push'
+        run: |
+          if [ -z "$(git status --porcelain -- app/src/main/assets/pebble/basalt)" ]; then
+            echo "Preseeded Pebble Time flash is unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            app/src/main/assets/pebble/basalt/qemu_micro_flash.bin \
+            app/src/main/assets/pebble/basalt/qemu_spi_flash.bin \
+            app/src/main/assets/pebble/basalt/preseeded-watchfaces.json \
+            app/src/main/assets/pebble/basalt/firmware.json
+          git commit -m "Preinstall bundled watchfaces in Basalt flash"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

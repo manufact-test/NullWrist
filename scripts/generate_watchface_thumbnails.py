@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch every preinstalled Basalt watchface and save its real QEMU framebuffer as PNG."""
+"""Render settled QEMU framebuffer previews for every preinstalled Basalt watchface."""
 from __future__ import annotations
 
 import argparse

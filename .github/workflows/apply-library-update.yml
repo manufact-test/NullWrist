@@ -1,0 +1,522 @@
+name: Apply Pebblehertz library update
+
+on:
+  push:
+    branches: ["feature/native-qemu-runtime"]
+    paths: [".github/workflows/apply-library-update.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/native-qemu-runtime
+          fetch-depth: 0
+
+      - name: Finalize watchface manifest and patch application sources
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import importlib.util
+          import json
+          import shutil
+          import subprocess
+          import sys
+          import urllib.request
+          from pathlib import Path
+
+          root = Path.cwd()
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = root / path
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{path}: expected one match, found {count}")
+              target.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          fetch_path = root / "scripts" / "fetch_bundled_watchfaces.py"
+          spec = importlib.util.spec_from_file_location("fetch_bundled_watchfaces", fetch_path)
+          module = importlib.util.module_from_spec(spec)
+          assert spec.loader is not None
+          spec.loader.exec_module(module)
+
+          manifest_path = root / "bundled-watchfaces.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          by_name = {entry["name"]: entry for entry in manifest}
+          by_name["Code CMD"]["download_url"] = (
+              "https://appstore-api.repebble.com/api/assets/pbw/55de277d785abd44a4000073.pbw"
+          )
+
+          studio = by_name["Studio Clock"]
+          studio_url = module.resolve_download_url(studio)
+          temporary = root / ".studio-clock.pbw"
+          request = urllib.request.Request(studio_url, headers={"User-Agent": module.USER_AGENT})
+          with urllib.request.urlopen(request, timeout=120) as response, temporary.open("wb") as output:
+              shutil.copyfileobj(response, output)
+          module.validate_pbw(temporary, studio["name"])
+          studio["download_url"] = studio_url
+          studio["sha256"] = module.sha256(temporary)
+          temporary.unlink()
+          manifest_path.write_text(
+              json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8",
+          )
+
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/AppPreferences.java",
+              '''    public void setSelectedWatchfaceId(String storageId) {
+                  preferences.edit().putString(KEY_SELECTED_WATCHFACE, storageId).apply();
+              }
+          }
+          ''',
+              '''    public void setSelectedWatchfaceId(String storageId) {
+                  preferences.edit().putString(KEY_SELECTED_WATCHFACE, storageId).apply();
+              }
+
+              public void clearSelectedWatchfaceId() {
+                  preferences.edit().remove(KEY_SELECTED_WATCHFACE).apply();
+              }
+          }
+          ''',
+          )
+
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java",
+              "import android.content.Context;\n",
+              "import android.content.Context;\nimport android.content.SharedPreferences;\n",
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java",
+              '''    private static final String ASSET_DIRECTORY = "watchfaces";
+              private static final String[] RETIRED_BUNDLED_FILES = {
+          ''',
+              '''    private static final String ASSET_DIRECTORY = "watchfaces";
+              private static final String LIBRARY_PREFERENCES = "watchface_library";
+              private static final String KEY_HIDDEN_BUNDLED = "hidden_bundled";
+              private static final String[] RETIRED_BUNDLED_FILES = {
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java",
+              '''    public File fileFor(WatchfaceMetadata metadata) {
+                  return new File(watchfaceDirectory, metadata.getStorageId());
+              }
+
+              private void copyAndReadBundled(
+          ''',
+              '''    public File fileFor(WatchfaceMetadata metadata) {
+                  return new File(watchfaceDirectory, metadata.getStorageId());
+              }
+
+              public void delete(WatchfaceMetadata metadata) throws IOException {
+                  if (metadata == null) {
+                      throw new IOException("No watchface was selected for deletion");
+                  }
+                  ensureDirectory();
+                  File stored = fileFor(metadata);
+                  if (stored.isFile() && !stored.delete()) {
+                      throw new IOException("Cannot delete " + metadata.getName());
+                  }
+                  if (metadata.isBundled()) {
+                      Set<String> hidden = hiddenBundledStorageIds();
+                      hidden.add(metadata.getStorageId());
+                      context.getSharedPreferences(LIBRARY_PREFERENCES, Context.MODE_PRIVATE)
+                              .edit()
+                              .putStringSet(KEY_HIDDEN_BUNDLED, hidden)
+                              .apply();
+                  }
+              }
+
+              private void copyAndReadBundled(
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java",
+              '''        if (names == null) {
+                  return;
+              }
+
+              for (String name : names) {
+                  if (!name.toLowerCase(Locale.ROOT).endsWith(".pbw")) {
+          ''',
+              '''        if (names == null) {
+                  return;
+              }
+              Set<String> hiddenBundled = hiddenBundledStorageIds();
+
+              for (String name : names) {
+                  if (!name.toLowerCase(Locale.ROOT).endsWith(".pbw")
+                          || hiddenBundled.contains(name)) {
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java",
+              '''        File[] files = watchfaceDirectory.listFiles();
+              if (files == null) {
+                  return;
+              }
+              for (File file : files) {
+          ''',
+              '''        File[] files = watchfaceDirectory.listFiles();
+              if (files == null) {
+                  return;
+              }
+              Set<String> hiddenBundled = hiddenBundledStorageIds();
+              for (File file : files) {
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java",
+              '''                || !file.getName().toLowerCase(Locale.ROOT).endsWith(".pbw")
+                          || seenStorageIds.contains(file.getName())) {
+          ''',
+              '''                || !file.getName().toLowerCase(Locale.ROOT).endsWith(".pbw")
+                          || seenStorageIds.contains(file.getName())
+                          || hiddenBundled.contains(file.getName())) {
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java",
+              '''    private void removeRetiredBundledFiles() {
+          ''',
+              '''    private Set<String> hiddenBundledStorageIds() {
+                  SharedPreferences preferences = context.getSharedPreferences(
+                          LIBRARY_PREFERENCES,
+                          Context.MODE_PRIVATE
+                  );
+                  Set<String> stored = preferences.getStringSet(KEY_HIDDEN_BUNDLED, null);
+                  return stored == null ? new HashSet<>() : new HashSet<>(stored);
+              }
+
+              private void removeRetiredBundledFiles() {
+          ''',
+          )
+
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceThumbnailRepository.java",
+              '''    private static final String ASSET_DIRECTORY = "watchface-thumbnails";
+              private static final String FILE_DIRECTORY = "watchface-thumbnails";
+          ''',
+              '''    private static final String ASSET_DIRECTORY = "watchface-thumbnails";
+              private static final String FILE_DIRECTORY = "watchface-thumbnails";
+              private static final String CAPTURE_PREFERENCES = "watchface_thumbnail_captures";
+              private static final int CAPTURE_SCHEMA_VERSION = 2;
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceThumbnailRepository.java",
+              '''    public Bitmap load(WatchfaceMetadata metadata) {
+          ''',
+              '''    public boolean hasCurrentThumbnail(WatchfaceMetadata metadata) {
+                  if (metadata.isBundled()) {
+                      return hasThumbnail(metadata);
+                  }
+                  File captured = new File(directory, fileName(metadata));
+                  int version = context.getSharedPreferences(
+                          CAPTURE_PREFERENCES,
+                          Context.MODE_PRIVATE
+                  ).getInt(captureKey(metadata), 0);
+                  return captured.isFile() && version >= CAPTURE_SCHEMA_VERSION;
+              }
+
+              public Bitmap load(WatchfaceMetadata metadata) {
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceThumbnailRepository.java",
+              '''        if (!temporary.renameTo(destination)) {
+                  temporary.delete();
+                  return false;
+              }
+              return true;
+              }
+
+              private Bitmap decodeFile(File file) {
+          ''',
+              '''        if (!temporary.renameTo(destination)) {
+                  temporary.delete();
+                  return false;
+              }
+              context.getSharedPreferences(CAPTURE_PREFERENCES, Context.MODE_PRIVATE)
+                      .edit()
+                      .putInt(captureKey(metadata), CAPTURE_SCHEMA_VERSION)
+                      .apply();
+              return true;
+              }
+
+              public void delete(WatchfaceMetadata metadata) {
+                  File captured = new File(directory, fileName(metadata));
+                  if (captured.isFile()) {
+                      captured.delete();
+                  }
+                  context.getSharedPreferences(CAPTURE_PREFERENCES, Context.MODE_PRIVATE)
+                          .edit()
+                          .remove(captureKey(metadata))
+                          .apply();
+              }
+
+              private Bitmap decodeFile(File file) {
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceThumbnailRepository.java",
+              '''    private static String fileName(WatchfaceMetadata metadata) {
+          ''',
+              '''    private static String captureKey(WatchfaceMetadata metadata) {
+                  return "capture:" + fileName(metadata);
+              }
+
+              private static String fileName(WatchfaceMetadata metadata) {
+          ''',
+          )
+
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java",
+              "    private static final long THUMBNAIL_SETTLE_MILLIS = 2_500L;\n",
+              '''    private static final long THUMBNAIL_MIN_SETTLE_MILLIS = 4_500L;
+              private static final long THUMBNAIL_MAX_SETTLE_MILLIS = 8_000L;
+              private static final long THUMBNAIL_QUIET_MILLIS = 650L;
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java",
+              '''        WatchfaceThumbnailRepository thumbnails = new WatchfaceThumbnailRepository(this);
+              if (thumbnails.hasThumbnail(metadata)) {
+                  return;
+              }
+              waitForThumbnailSettle(current, THUMBNAIL_SETTLE_MILLIS);
+          ''',
+              '''        WatchfaceThumbnailRepository thumbnails = new WatchfaceThumbnailRepository(this);
+              if (thumbnails.hasCurrentThumbnail(metadata)) {
+                  return;
+              }
+              waitForThumbnailReady(current);
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java",
+              '''    private static void waitForThumbnailSettle(
+                  PebbleQemuProcess current,
+                  long settleMillis
+              ) throws InterruptedException {
+                  long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(settleMillis);
+                  while (current.isRunning() && System.nanoTime() < deadline) {
+                      long remaining = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+                      Thread.sleep(Math.max(1L, Math.min(100L, remaining)));
+                  }
+              }
+          ''',
+              '''    private static void waitForThumbnailReady(PebbleQemuProcess current)
+                  throws InterruptedException {
+                  long started = System.nanoTime();
+                  long minimumDeadline = started + TimeUnit.MILLISECONDS.toNanos(
+                          THUMBNAIL_MIN_SETTLE_MILLIS
+                  );
+                  long maximumDeadline = started + TimeUnit.MILLISECONDS.toNanos(
+                          THUMBNAIL_MAX_SETTLE_MILLIS
+                  );
+                  while (current.isRunning() && System.nanoTime() < minimumDeadline) {
+                      long remaining = TimeUnit.NANOSECONDS.toMillis(
+                              minimumDeadline - System.nanoTime()
+                      );
+                      Thread.sleep(Math.max(1L, Math.min(100L, remaining)));
+                  }
+
+                  int lastSequence = current.readFrameSequence();
+                  long lastFrameChange = System.nanoTime();
+                  long quietNanos = TimeUnit.MILLISECONDS.toNanos(THUMBNAIL_QUIET_MILLIS);
+                  while (current.isRunning() && System.nanoTime() < maximumDeadline) {
+                      int sequence = current.readFrameSequence();
+                      long now = System.nanoTime();
+                      if (sequence != lastSequence) {
+                          lastSequence = sequence;
+                          lastFrameChange = now;
+                      } else if (now - lastFrameChange >= quietNanos) {
+                          return;
+                      }
+                      Thread.sleep(80L);
+                  }
+              }
+          ''',
+          )
+
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java",
+              '''    private void ensureSelection() {
+                  String selectedId = preferences.getSelectedWatchfaceId();
+                  if (selectedId == null && !watchfaces.isEmpty()) {
+                      preferences.setSelectedWatchfaceId(watchfaces.get(0).getStorageId());
+                  }
+              }
+          ''',
+              '''    private void ensureSelection() {
+                  if (watchfaces.isEmpty()) {
+                      preferences.clearSelectedWatchfaceId();
+                      return;
+                  }
+                  String selectedId = preferences.getSelectedWatchfaceId();
+                  for (WatchfaceMetadata watchface : watchfaces) {
+                      if (watchface.getStorageId().equals(selectedId)) {
+                          return;
+                      }
+                  }
+                  preferences.setSelectedWatchfaceId(watchfaces.get(0).getStorageId());
+              }
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java",
+              '''        TextView action = pixelText(
+                          active ? "ON AIR" : selected ? "APPLYING..." : "TAP TO APPLY >",
+                          11,
+                          active
+                                  ? getColor(R.color.accent_coral)
+                                  : selected
+                                  ? getColor(R.color.accent_yellow)
+                                  : getColor(R.color.text_muted)
+                  );
+                  action.setPadding(0, dp(8), 0, 0);
+                  copy.addView(action);
+
+                  card.setOnClickListener(view -> applyWatchface(watchface));
+          ''',
+              '''        LinearLayout controls = new LinearLayout(this);
+                  controls.setOrientation(LinearLayout.HORIZONTAL);
+                  controls.setGravity(Gravity.CENTER_VERTICAL);
+                  controls.setPadding(0, dp(8), 0, 0);
+
+                  TextView action = pixelText(
+                          active ? "ON AIR" : selected ? "APPLYING..." : "TAP TO APPLY >",
+                          11,
+                          active
+                                  ? getColor(R.color.accent_coral)
+                                  : selected
+                                  ? getColor(R.color.accent_yellow)
+                                  : getColor(R.color.text_muted)
+                  );
+                  controls.addView(action, new LinearLayout.LayoutParams(
+                          0,
+                          LinearLayout.LayoutParams.WRAP_CONTENT,
+                          1f
+                  ));
+
+                  TextView delete = pixelText("DELETE", 10, getColor(R.color.error));
+                  delete.setGravity(Gravity.CENTER);
+                  delete.setPadding(dp(9), 0, dp(9), 0);
+                  delete.setMinHeight(dp(34));
+                  delete.setClickable(true);
+                  delete.setFocusable(true);
+                  delete.setBackground(interactivePanelBackground(
+                          getColor(R.color.surface_warm),
+                          getColor(R.color.surface_pressed),
+                          getColor(R.color.error)
+                  ));
+                  delete.setOnClickListener(view -> confirmDeleteWatchface(watchface));
+                  LinearLayout.LayoutParams deleteParams = new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.WRAP_CONTENT,
+                          dp(34)
+                  );
+                  deleteParams.leftMargin = dp(8);
+                  controls.addView(delete, deleteParams);
+                  copy.addView(controls);
+
+                  card.setOnClickListener(view -> applyWatchface(watchface));
+          ''',
+          )
+          replace_once(
+              "app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java",
+              '''    private void applyWatchface(WatchfaceMetadata watchface) {
+                  preferences.setSelectedWatchfaceId(watchface.getStorageId());
+                  renderCatalog();
+                  updateRuntimeStatus("Launching " + watchface.getName(), null);
+                  PebbleRuntimeService.select(this);
+              }
+
+              private void updateRuntimeStatus(String status, String failure) {
+          ''',
+              '''    private void applyWatchface(WatchfaceMetadata watchface) {
+                  preferences.setSelectedWatchfaceId(watchface.getStorageId());
+                  renderCatalog();
+                  updateRuntimeStatus("Launching " + watchface.getName(), null);
+                  PebbleRuntimeService.select(this);
+              }
+
+              private void confirmDeleteWatchface(WatchfaceMetadata watchface) {
+                  String message = watchface.isBundled()
+                          ? "Remove this preinstalled watchface from your locker? "
+                          + "It can be restored by clearing Pebblehertz app data or reinstalling the app."
+                          : "Permanently remove this imported PBW from Pebblehertz?";
+                  new AlertDialog.Builder(this)
+                          .setTitle("Delete " + watchface.getName() + "?")
+                          .setMessage(message)
+                          .setPositiveButton("Delete", (dialog, which) -> deleteWatchface(watchface))
+                          .setNegativeButton("Cancel", null)
+                          .show();
+              }
+
+              private void deleteWatchface(WatchfaceMetadata watchface) {
+                  boolean wasSelected = sameStorageId(
+                          preferences.getSelectedWatchfaceId(),
+                          watchface.getStorageId()
+                  );
+                  boolean wasActive = sameStorageId(
+                          PebbleRuntimeService.getActiveStorageId(),
+                          watchface.getStorageId()
+                  );
+                  try {
+                      repository.delete(watchface);
+                      thumbnails.delete(watchface);
+                      reloadCatalog();
+                      Toast.makeText(
+                              this,
+                              "Deleted " + watchface.getName(),
+                              Toast.LENGTH_SHORT
+                      ).show();
+                      if (watchfaces.isEmpty()) {
+                          PebbleRuntimeService.stop(this);
+                      } else if (wasSelected || wasActive) {
+                          WatchfaceMetadata replacement = watchfaces.get(0);
+                          String selectedId = preferences.getSelectedWatchfaceId();
+                          for (WatchfaceMetadata candidate : watchfaces) {
+                              if (candidate.getStorageId().equals(selectedId)) {
+                                  replacement = candidate;
+                                  break;
+                              }
+                          }
+                          updateRuntimeStatus("Launching " + replacement.getName(), null);
+                          PebbleRuntimeService.select(this);
+                      }
+                  } catch (IOException exception) {
+                      showError("Delete failed: " + exception.getMessage());
+                  }
+              }
+
+              private void updateRuntimeStatus(String status, String failure) {
+          ''',
+          )
+
+          subprocess.run([sys.executable, str(fetch_path)], check=True)
+          print(f"Studio Clock pinned as {studio['sha256']} from {studio_url}")
+          PY
+
+      - name: Commit completed library update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            bundled-watchfaces.json \
+            app/src/main/assets/watchfaces \
+            app/src/main/java/com/manufacttest/pebblereardisplay/data/AppPreferences.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceThumbnailRepository.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java
+          git rm .github/workflows/apply-library-update.yml
+          git commit -m "Add removable watchface library and settled previews"
+          git push origin HEAD:feature/native-qemu-runtime

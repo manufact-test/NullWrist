@@ -2,12 +2,20 @@
   "files": {
     "qemu_micro_flash.bin": {
       "compressed_in_sdk": false,
+      "packaged": true,
       "sdk_member": "sdk-core/pebble/basalt/qemu/qemu_micro_flash.bin",
       "sha256": "a1dbf60aa29cb4dad025f7a40f3dfb4ed1c8224e94359aaf9221e59148b9b7e7",
       "size": 704000
     },
     "qemu_spi_flash.bin": {
+      "packaged": true,
+      "preseeded": false,
+      "sha256": "1b054f95b68ca55428be15ad70590c1b099dd5723235e47807f8c2ce8cd119dd",
+      "size": 16777216
+    },
+    "qemu_spi_flash_base.bin": {
       "compressed_in_sdk": true,
+      "packaged": false,
       "sdk_member": "sdk-core/pebble/basalt/qemu/qemu_spi_flash.bin.bz2",
       "sha256": "1b054f95b68ca55428be15ad70590c1b099dd5723235e47807f8c2ce8cd119dd",
       "size": 16777216

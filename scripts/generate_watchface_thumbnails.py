@@ -29,6 +29,7 @@ FB_FORMAT_COLOR_2BIT = 1
 FB_HEADER_BYTES = 64
 FB_WIDTH = 144
 FB_HEIGHT = 168
+PREVIEW_SETTLE_SECONDS = 3.0
 
 
 def png_chunk(kind: bytes, payload: bytes) -> bytes:
@@ -79,7 +80,7 @@ def read_frame(path: Path) -> tuple[int, int, int, bytes] | None:
     return sequence, width, height, pixels
 
 
-def wait_for_preview(path: Path, previous_sequence: int, timeout: float = 5.0) -> tuple[int, int, bytes]:
+def wait_for_preview(path: Path, previous_sequence: int, timeout: float = 8.0) -> tuple[int, int, bytes]:
     deadline = time.monotonic() + timeout
     first_changed_at: float | None = None
     latest: tuple[int, int, int, bytes] | None = None
@@ -89,7 +90,7 @@ def wait_for_preview(path: Path, previous_sequence: int, timeout: float = 5.0) -
             latest = frame
             if first_changed_at is None:
                 first_changed_at = time.monotonic()
-            if time.monotonic() - first_changed_at >= 1.25:
+            if time.monotonic() - first_changed_at >= PREVIEW_SETTLE_SECONDS:
                 return frame[1], frame[2], frame[3]
         time.sleep(0.05)
     if latest is None:
@@ -116,8 +117,8 @@ def main() -> int:
 
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     watchfaces = manifest.get("watchfaces", [])
-    if len(watchfaces) != 7:
-        raise RuntimeError(f"Expected seven preinstalled watchfaces, got {len(watchfaces)}")
+    if not watchfaces:
+        raise RuntimeError("Preseed manifest contains no watchfaces")
 
     args.output.mkdir(parents=True, exist_ok=True)
     for old in args.output.glob("*.png"):

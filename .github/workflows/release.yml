@@ -3,9 +3,7 @@ name: Signed release APK
 on:
   workflow_dispatch:
   push:
-    branches: ["feature/native-qemu-runtime"]
     tags: ["v*"]
-  pull_request:
 
 permissions:
   contents: read

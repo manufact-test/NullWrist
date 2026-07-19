@@ -1,0 +1,463 @@
+name: Apply Pebblehertz 0.8.2 library update
+
+on:
+  push:
+    branches: ["feature/native-qemu-runtime"]
+    paths: [".github/workflows/apply-watchface-library-update.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/native-qemu-runtime
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Apply source and workflow changes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          root = Path.cwd()
+
+          additions = [
+              {
+                  "file": "enigma-1.1.pbw",
+                  "name": "Enigma",
+                  "version": "1.1",
+                  "page_url": "https://apps.repebble.com/enigma_55558c2a44dad6b80f000088",
+                  "download_url": "https://appstore-api.repebble.com/api/assets/pbw/555c330defc72feb4100006e.pbw",
+                  "prefer_download_url": True,
+                  "sha256": "da99f076b039ec444d9d5cf1616bbff8a089cd1d8f1cba1276555f672abdad95"
+              },
+              {
+                  "file": "rosewright-a-5.1.0.pbw",
+                  "name": "Rosewright A",
+                  "version": "5.1.0",
+                  "page_url": "https://apps.repebble.com/rosewright-a_52997231129af73409000033",
+                  "download_url": "https://appstore-api.repebble.com/api/assets/pbw/13fc19c9-5e71-44a6-be3d-0ed06d51a756.pbw",
+                  "prefer_download_url": True,
+                  "sha256": "5310ed3837eedeb87d1a6a20e14a44f6ed40aac879e28870182c1f57fd8892c0"
+              },
+              {
+                  "file": "electronika-5-1.0.pbw",
+                  "name": "Electronika 5",
+                  "version": "1.0",
+                  "page_url": "https://apps.repebble.com/electronika-5-soviet-russia-watch_542aae37072ba27db80000dc",
+                  "download_url": "https://appstore-api.repebble.com/api/assets/pbw/542aae5a0015be1e0800008b.pbw",
+                  "prefer_download_url": True,
+                  "sha256": "0794900890abfabfca59c51a47145fd763a6c8549774696d6e014d9a8d1cb186"
+              },
+              {
+                  "file": "darth-time-4.0.pbw",
+                  "name": "Darth Time",
+                  "version": "4.0",
+                  "page_url": "https://apps.repebble.com/darth-time_55e9493720f24c8f2e0000b5",
+                  "download_url": "https://appstore-api.repebble.com/api/assets/pbw/4.0.pbw",
+                  "prefer_download_url": True,
+                  "sha256": "851aecf86caee72499de819782d96b32ce1568541359a2890c95300869ce08cd"
+              },
+              {
+                  "file": "metro-watch-1.1.pbw",
+                  "name": "Metro Watch",
+                  "version": "1.1",
+                  "page_url": "https://apps.repebble.com/metro-watch_5303d8bc7097ac4d3e000359",
+                  "download_url": "https://appstore-api.repebble.com/api/assets/pbw/549839b7835244be3c0000e0.pbw",
+                  "prefer_download_url": True,
+                  "sha256": "a617124a051d9afaf5304c2c63569290da79dd2016c97cd7b756942993db31e7"
+              },
+              {
+                  "file": "starfield-smooth-1.0.0.pbw",
+                  "name": "Starfield Smooth",
+                  "version": "1.0.0",
+                  "page_url": "https://apps.repebble.com/starfield-smooth_52cd48ecc296577c6c00002f",
+                  "download_url": "https://appstore-api.repebble.com/api/assets/pbw/1.0.0.pbw",
+                  "prefer_download_url": True,
+                  "sha256": "90e269e42ae03236c405d5176d9690a7defc4441ea52ae0f300646ab8ec350e5"
+              },
+              {
+                  "file": "cmd-time-typed-1.1.pbw",
+                  "name": "CMD Time Typed",
+                  "version": "1.1",
+                  "page_url": "https://apps.repebble.com/cmd-time-typed_52e919c2ad615bf1a5000024",
+                  "download_url": "https://appstore-api.repebble.com/api/assets/pbw/1.1.pbw",
+                  "prefer_download_url": True,
+                  "sha256": "e0bcb2fbf883ed87e8fedee2a5607c2208fcc394b5fc1a0d1b5560290e7e47cc"
+              },
+              {
+                  "file": "omega-seamaster-007-1.1.pbw",
+                  "name": "Omega Seamaster 007",
+                  "version": "1.1",
+                  "page_url": "https://apps.repebble.com/omega-seamaster-007_547218ce95f74c03ba00007f",
+                  "download_url": "https://appstore-api.repebble.com/api/assets/pbw/5479efbd3fd38815f4000077.pbw",
+                  "prefer_download_url": True,
+                  "repair_crc": True,
+                  "source_sha256": "1713f6de874b2a9af510ce70353e8f35cfe4f3e810dad1b9082322d396ec0d8c",
+                  "sha256": "a60e3a1bcb1359399afcaadad409fe689a497b694ef937f62d153214c80b5967"
+              }
+          ]
+
+          manifest_path = root / "bundled-watchfaces.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          existing = {item["file"] for item in manifest}
+          manifest.extend(item for item in additions if item["file"] not in existing)
+          manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+          fetch_path = root / "scripts/fetch_bundled_watchfaces.py"
+          fetch = fetch_path.read_text(encoding="utf-8")
+          fetch = fetch.replace(
+              "import shutil\nimport sys\n",
+              "import shutil\nimport subprocess\nimport sys\n"
+          )
+          fetch = fetch.replace(
+              "def resolve_download_url(entry: dict[str, str]) -> str:\n    page_url = with_developer_links(entry[\"page_url\"])\n",
+              "def resolve_download_url(entry: dict[str, object]) -> str:\n"
+              "    fallback = str(entry.get(\"download_url\", \"\"))\n"
+              "    if entry.get(\"prefer_download_url\") and fallback:\n"
+              "        return fallback\n"
+              "    page_url = with_developer_links(str(entry[\"page_url\"]))\n"
+          )
+          fetch = fetch.replace(
+              "        fallback = entry.get(\"download_url\")\n        if fallback:\n",
+              "        if fallback:\n"
+          )
+          fetch = fetch.replace(
+              "def download(entry: dict[str, str]) -> None:\n",
+              "def repair_crc_archive(source: Path, destination: Path) -> None:\n"
+              "    with zipfile.ZipFile(source) as archive:\n"
+              "        entries = archive.infolist()\n"
+              "    with zipfile.ZipFile(destination, \"w\", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as output:\n"
+              "        for info in entries:\n"
+              "            if info.is_dir():\n"
+              "                repaired = zipfile.ZipInfo(info.filename, info.date_time)\n"
+              "                repaired.external_attr = info.external_attr\n"
+              "                output.writestr(repaired, b\"\")\n"
+              "                continue\n"
+              "            extracted = subprocess.run(\n"
+              "                [\"unzip\", \"-p\", str(source), info.filename],\n"
+              "                stdout=subprocess.PIPE,\n"
+              "                stderr=subprocess.PIPE,\n"
+              "                check=False,\n"
+              "            )\n"
+              "            if extracted.returncode not in (0, 2) or len(extracted.stdout) != info.file_size:\n"
+              "                raise RuntimeError(f\"Could not repair {info.filename} in {source.name}\")\n"
+              "            repaired = zipfile.ZipInfo(info.filename, info.date_time)\n"
+              "            repaired.compress_type = zipfile.ZIP_DEFLATED\n"
+              "            repaired.external_attr = info.external_attr\n"
+              "            repaired.create_system = info.create_system\n"
+              "            output.writestr(\n"
+              "                repaired,\n"
+              "                extracted.stdout,\n"
+              "                compress_type=zipfile.ZIP_DEFLATED,\n"
+              "                compresslevel=9,\n"
+              "            )\n"
+              "\n\n"
+              "def download(entry: dict[str, object]) -> None:\n"
+          )
+          old_download = '''    destination = OUTPUT_DIRECTORY / entry["file"]
+    expected_hash = entry["sha256"].lower()
+
+    if destination.exists() and sha256(destination) == expected_hash:
+        print(f"Using cached {entry['name']} {entry['version']}")
+        return
+
+    temporary = destination.with_suffix(destination.suffix + ".part")
+    temporary.unlink(missing_ok=True)
+
+    download_url = resolve_download_url(entry)
+    request = urllib.request.Request(download_url, headers={"User-Agent": USER_AGENT})
+
+    print(f"Downloading {entry['name']} {entry['version']} from {download_url}")
+    total = 0
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response, temporary.open("wb") as output:
+            while True:
+                chunk = response.read(64 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_BYTES:
+                    raise RuntimeError(f"{entry['name']}: PBW exceeds {MAX_BYTES} bytes")
+                output.write(chunk)
+
+        actual_hash = sha256(temporary)
+        if actual_hash != expected_hash:
+            raise RuntimeError(
+                f"{entry['name']}: SHA-256 mismatch; expected {expected_hash}, got {actual_hash}"
+            )
+
+        validate_pbw(temporary, entry["name"])
+        shutil.move(str(temporary), str(destination))
+    finally:
+        temporary.unlink(missing_ok=True)
+'''
+          new_download = '''    destination = OUTPUT_DIRECTORY / str(entry["file"])
+    expected_hash = str(entry["sha256"]).lower()
+    expected_source_hash = str(entry.get("source_sha256", expected_hash)).lower()
+
+    if destination.exists() and sha256(destination) == expected_hash:
+        validate_pbw(destination, str(entry["name"]))
+        print(f"Using cached {entry['name']} {entry['version']}")
+        return
+
+    temporary = destination.with_suffix(destination.suffix + ".part")
+    repaired = destination.with_suffix(destination.suffix + ".repaired")
+    temporary.unlink(missing_ok=True)
+    repaired.unlink(missing_ok=True)
+
+    download_url = resolve_download_url(entry)
+    request = urllib.request.Request(download_url, headers={"User-Agent": USER_AGENT})
+
+    print(f"Downloading {entry['name']} {entry['version']} from {download_url}")
+    total = 0
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response, temporary.open("wb") as output:
+            while True:
+                chunk = response.read(64 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_BYTES:
+                    raise RuntimeError(f"{entry['name']}: PBW exceeds {MAX_BYTES} bytes")
+                output.write(chunk)
+
+        actual_source_hash = sha256(temporary)
+        if actual_source_hash != expected_source_hash:
+            raise RuntimeError(
+                f"{entry['name']}: source SHA-256 mismatch; expected "
+                f"{expected_source_hash}, got {actual_source_hash}"
+            )
+
+        candidate = temporary
+        if entry.get("repair_crc"):
+            repair_crc_archive(temporary, repaired)
+            candidate = repaired
+
+        actual_hash = sha256(candidate)
+        if actual_hash != expected_hash:
+            raise RuntimeError(
+                f"{entry['name']}: SHA-256 mismatch; expected {expected_hash}, got {actual_hash}"
+            )
+
+        validate_pbw(candidate, str(entry["name"]))
+        shutil.move(str(candidate), str(destination))
+    finally:
+        temporary.unlink(missing_ok=True)
+        repaired.unlink(missing_ok=True)
+'''
+          if old_download not in fetch:
+              raise RuntimeError("fetcher download block changed unexpectedly")
+          fetch = fetch.replace(old_download, new_download)
+          fetch_path.write_text(fetch, encoding="utf-8")
+
+          thumbs_path = root / "scripts/generate_watchface_thumbnails.py"
+          thumbs = thumbs_path.read_text(encoding="utf-8")
+          thumbs = thumbs.replace(
+              "FB_HEIGHT = 168\n",
+              "FB_HEIGHT = 168\nPREVIEW_SETTLE_SECONDS = 3.0\n"
+          )
+          thumbs = thumbs.replace(
+              "def wait_for_preview(path: Path, previous_sequence: int, timeout: float = 5.0)",
+              "def wait_for_preview(path: Path, previous_sequence: int, timeout: float = 8.0)"
+          )
+          thumbs = thumbs.replace(
+              "time.monotonic() - first_changed_at >= 1.25",
+              "time.monotonic() - first_changed_at >= PREVIEW_SETTLE_SECONDS"
+          )
+          thumbs = thumbs.replace(
+              "    if len(watchfaces) != 7:\n        raise RuntimeError(f\"Expected seven preinstalled watchfaces, got {len(watchfaces)}\")\n",
+              "    if not watchfaces:\n        raise RuntimeError(\"Preseed manifest contains no watchfaces\")\n"
+          )
+          thumbs_path.write_text(thumbs, encoding="utf-8")
+
+          service_path = root / "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java"
+          service = service_path.read_text(encoding="utf-8")
+          service = service.replace(
+              "    private static final int NOTIFICATION_ID = 4102;\n",
+              "    private static final int NOTIFICATION_ID = 4102;\n"
+              "    private static final long THUMBNAIL_SETTLE_MILLIS = 2_500L;\n"
+          )
+          old_capture = '''    private void captureThumbnailIfNeeded(
+            PebbleQemuProcess current,
+            WatchfaceMetadata metadata
+    ) {
+        WatchfaceThumbnailRepository thumbnails = new WatchfaceThumbnailRepository(this);
+        if (thumbnails.hasThumbnail(metadata) || !thumbnails.capture(current, metadata)) {
+            return;
+        }
+        sendBroadcast(new Intent(WatchfaceThumbnailRepository.ACTION_THUMBNAIL_UPDATED)
+                .setPackage(getPackageName())
+                .putExtra(
+                        WatchfaceThumbnailRepository.EXTRA_STORAGE_ID,
+                        metadata.getStorageId()
+                ));
+    }
+'''
+          new_capture = '''    private void captureThumbnailIfNeeded(
+            PebbleQemuProcess current,
+            WatchfaceMetadata metadata
+    ) throws InterruptedException {
+        WatchfaceThumbnailRepository thumbnails = new WatchfaceThumbnailRepository(this);
+        if (thumbnails.hasThumbnail(metadata)) {
+            return;
+        }
+        waitForThumbnailSettle(current, THUMBNAIL_SETTLE_MILLIS);
+        if (!current.isRunning() || !thumbnails.capture(current, metadata)) {
+            return;
+        }
+        sendBroadcast(new Intent(WatchfaceThumbnailRepository.ACTION_THUMBNAIL_UPDATED)
+                .setPackage(getPackageName())
+                .putExtra(
+                        WatchfaceThumbnailRepository.EXTRA_STORAGE_ID,
+                        metadata.getStorageId()
+                ));
+    }
+
+    private static void waitForThumbnailSettle(
+            PebbleQemuProcess current,
+            long settleMillis
+    ) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(settleMillis);
+        while (current.isRunning() && System.nanoTime() < deadline) {
+            long remaining = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+            Thread.sleep(Math.max(1L, Math.min(100L, remaining)));
+        }
+    }
+'''
+          if old_capture not in service:
+              raise RuntimeError("runtime thumbnail capture block changed unexpectedly")
+          service = service.replace(old_capture, new_capture)
+          service_path.write_text(service, encoding="utf-8")
+
+          preseed_path = root / ".github/workflows/preseed-basalt-flash.yml"
+          preseed = preseed_path.read_text(encoding="utf-8")
+          preseed = preseed.replace(
+              "          test \"$(find app/src/main/assets/watchface-thumbnails -maxdepth 1 -name '*.png' | wc -l)\" -eq 7\n",
+              ""
+          )
+          preseed = preseed.replace(
+              "          manifest = json.loads(Path(\"app/src/main/assets/pebble/basalt/preseeded-watchfaces.json\").read_text())\n"
+              "          assert manifest[\"platform\"] == \"basalt\"\n"
+              "          assert len(manifest[\"watchfaces\"]) == 7, manifest\n"
+              "          previews = Path(\"app/src/main/assets/watchface-thumbnails\")\n",
+              "          manifest = json.loads(Path(\"app/src/main/assets/pebble/basalt/preseeded-watchfaces.json\").read_text())\n"
+              "          expected = json.loads(Path(\"bundled-watchfaces.json\").read_text())\n"
+              "          assert manifest[\"platform\"] == \"basalt\"\n"
+              "          assert len(manifest[\"watchfaces\"]) == len(expected), (manifest, expected)\n"
+              "          previews = Path(\"app/src/main/assets/watchface-thumbnails\")\n"
+              "          assert len(list(previews.glob(\"*.png\"))) == len(expected)\n"
+          )
+          preseed_path.write_text(preseed, encoding="utf-8")
+
+          gradle_path = root / "app/build.gradle.kts"
+          gradle = gradle_path.read_text(encoding="utf-8")
+          gradle = gradle.replace("versionCode = 15", "versionCode = 16")
+          gradle = gradle.replace('versionName = "0.8.1"', 'versionName = "0.8.2"')
+          gradle_path.write_text(gradle, encoding="utf-8")
+
+          release_path = root / ".github/workflows/release.yml"
+          release = release_path.read_text(encoding="utf-8")
+          release = release.replace(
+              "  push:\n    tags: [\"v*\"]\n",
+              "  push:\n    branches: [\"feature/native-qemu-runtime\"]\n    tags: [\"v*\"]\n"
+          )
+          release_path.write_text(release, encoding="utf-8")
+
+          readme_path = root / "README.md"
+          readme = readme_path.read_text(encoding="utf-8")
+          readme = readme.replace(
+              "Pebblehertz 0.8.1 includes the 0.8.0 pixel-art interface plus a runtime recovery rewrite prompted by physical Titan 2 testing.",
+              "Pebblehertz 0.8.2 keeps the 0.8.1 runtime recovery and expands the preinstalled Pebble Time library with later-settling real previews."
+          )
+          readme = readme.replace(
+              "- seven real QEMU-rendered bundled previews and on-device thumbnail capture for imported PBWs.",
+              "- fifteen real QEMU-rendered bundled previews and delayed on-device thumbnail capture for imported PBWs."
+          )
+          readme = readme.replace(
+              "### 0.8.1 runtime repair\n",
+              "### 0.8.2 watchface library and preview timing\n\n"
+              "Eight additional Basalt-compatible faces are bundled and preinstalled. CI now waits three seconds after the first changed framebuffer before saving each bundled preview; imported faces also receive a short settling period before their thumbnail is captured.\n\n"
+              "Quartz by Dalpek is not bundled because the supplied PBW contains only Emery/Gabbro builds and no Basalt executable.\n\n"
+              "### 0.8.1 runtime repair\n"
+          )
+          readme = readme.replace(
+              "- polvtorogo 0.1.1\n",
+              "- polvtorogo 0.1.1\n"
+              "- Enigma 1.1\n"
+              "- Rosewright A 5.1.0\n"
+              "- Electronika 5 1.0\n"
+              "- Darth Time 4.0\n"
+              "- Metro Watch 1.1\n"
+              "- Starfield Smooth 1.0.0\n"
+              "- CMD Time Typed 1.1\n"
+              "- Omega Seamaster 007 1.1\n"
+          )
+          readme = readme.replace(
+              "## Physical-device validation for 0.8.1",
+              "## Physical-device validation for 0.8.2"
+          )
+          readme = readme.replace(
+              "Switch all seven bundled faces",
+              "Switch all fifteen bundled faces"
+          )
+          readme_path.write_text(readme, encoding="utf-8")
+
+          third_path = root / "THIRD_PARTY_WATCHFACES.md"
+          third = third_path.read_text(encoding="utf-8")
+          rows = '''| `enigma-1.1.pbw` | Enigma | Neal Patel | 1.1 | basalt | [Appstore listing](https://apps.repebble.com/enigma_55558c2a44dad6b80f000088); SHA-256 `da99f076b039ec444d9d5cf1616bbff8a089cd1d8f1cba1276555f672abdad95` |
+| `rosewright-a-5.1.0.pbw` | Rosewright A | drwrose | 5.1.0 | aplite, basalt, chalk, diorite, emery, gabbro | [Appstore listing](https://apps.repebble.com/rosewright-a_52997231129af73409000033); SHA-256 `5310ed3837eedeb87d1a6a20e14a44f6ed40aac879e28870182c1f57fd8892c0` |
+| `electronika-5-1.0.pbw` | Electronika 5 | Watchface-Generator.de | 1.0 | legacy package; no `targetPlatforms` field | [Appstore listing](https://apps.repebble.com/electronika-5-soviet-russia-watch_542aae37072ba27db80000dc); SHA-256 `0794900890abfabfca59c51a47145fd763a6c8549774696d6e014d9a8d1cb186` |
+| `darth-time-4.0.pbw` | Darth Time | TenaciousDev | 4.0 | aplite, basalt, chalk | [Appstore listing](https://apps.repebble.com/darth-time_55e9493720f24c8f2e0000b5); SHA-256 `851aecf86caee72499de819782d96b32ce1568541359a2890c95300869ce08cd` |
+| `metro-watch-1.1.pbw` | Metro Watch | Marc Ferrandiz Borras | 1.1 | legacy package; no `targetPlatforms` field | [Appstore listing](https://apps.repebble.com/metro-watch_5303d8bc7097ac4d3e000359); SHA-256 `a617124a051d9afaf5304c2c63569290da79dd2016c97cd7b756942993db31e7` |
+| `starfield-smooth-1.0.0.pbw` | Starfield Smooth | Chris Lewis | 1.0.0 | legacy package; no `targetPlatforms` field | [Appstore listing](https://apps.repebble.com/starfield-smooth_52cd48ecc296577c6c00002f); SHA-256 `90e269e42ae03236c405d5176d9690a7defc4441ea52ae0f300646ab8ec350e5` |
+| `cmd-time-typed-1.1.pbw` | CMD Time Typed | Chris Lewis | 1.1 | aplite, basalt, chalk, diorite, emery | [Appstore listing](https://apps.repebble.com/cmd-time-typed_52e919c2ad615bf1a5000024); SHA-256 `e0bcb2fbf883ed87e8fedee2a5607c2208fcc394b5fc1a0d1b5560290e7e47cc` |
+| `omega-seamaster-007-1.1.pbw` | Omega Seamaster 007 | Watchface-Generator.de | 1.1 | legacy package; no `targetPlatforms` field | [Appstore listing](https://apps.repebble.com/omega-seamaster-007_547218ce95f74c03ba00007f); normalized archive SHA-256 `a60e3a1bcb1359399afcaadad409fe689a497b694ef937f62d153214c80b5967` |
+'''
+          third = third.replace(
+              "\nThe machine-readable source manifest is",
+              "\n" + rows + "\nQuartz by Dalpek is excluded because its supplied PBW contains only Emery/Gabbro binaries and no Basalt build.\n\nThe machine-readable source manifest is"
+          )
+          third_path.write_text(third, encoding="utf-8")
+          PY
+
+      - name: Download and validate pinned PBWs
+        run: python3 scripts/fetch_bundled_watchfaces.py
+
+      - name: Verify Basalt compatibility and library size
+        run: |
+          python3 - <<'PY'
+          import json
+          import zipfile
+          from pathlib import Path
+
+          entries = json.loads(Path("bundled-watchfaces.json").read_text())
+          assert len(entries) == 15, len(entries)
+          directory = Path("app/src/main/assets/watchfaces")
+          files = sorted(directory.glob("*.pbw"))
+          assert len(files) == 15, [item.name for item in files]
+          for entry in entries:
+              path = directory / entry["file"]
+              with zipfile.ZipFile(path) as archive:
+                  names = set(archive.namelist())
+                  assert "basalt/manifest.json" in names or "manifest.json" in names, path
+                  json.loads(archive.read("appinfo.json"))
+              print(f"OK {entry['name']}: {path.stat().st_size} bytes")
+          PY
+
+      - name: Commit Pebblehertz 0.8.2 update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-watchface-library-update.yml
+          git add -A
+          git commit -m "Add eight Pebble Time faces and delay preview capture"
+          git push origin HEAD:feature/native-qemu-runtime

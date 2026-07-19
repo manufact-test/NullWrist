@@ -17,6 +17,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply pending Pebblehertz 0.8.4 migration
+        if: github.event_name == 'push' && github.ref_name == 'feature/native-qemu-runtime' && hashFiles('scripts/apply_v084_ui.py') != ''
+        run: |
+          python3 scripts/apply_v084_ui.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Finish Pebblehertz 0.8.4 power UI and native TCG"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - uses: actions/setup-java@v4
         with:

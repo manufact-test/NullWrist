@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch Core Devices QEMU for Android execution and framebuffer export."""
+"""Patch Core Devices QEMU for Android framebuffer export and event delivery."""
 from __future__ import annotations
 
 import pathlib
@@ -15,12 +15,14 @@ DISPLAY_INCLUDE_BLOCK = r'''
 #if defined(__ANDROID__) || defined(PEBBLE_REAR_FB_EXPORT)
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdint.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
-#define PEBBLE_ANDROID_FB_MAGIC 0x50424642u /* PBFB */
+#define PEBBLE_ANDROID_FB_MAGIC 0x50424642u
 #define PEBBLE_ANDROID_FB_VERSION 1u
 #define PEBBLE_ANDROID_FB_FORMAT_COLOR_2BIT 1u
 
@@ -36,10 +38,21 @@ typedef struct {
 } PebbleAndroidFramebufferHeader;
 
 static int s_android_fb_fd = -1;
+static int s_android_fb_event_fd = -1;
 static void *s_android_fb_mapping = MAP_FAILED;
 static size_t s_android_fb_mapping_size = 0;
 static uint32_t s_android_fb_width = 0;
 static uint32_t s_android_fb_height = 0;
+static int64_t s_android_fb_event_retry_ms = 0;
+
+static int64_t pebble_android_monotonic_ms(void)
+{
+    struct timespec value;
+    if (clock_gettime(CLOCK_MONOTONIC, &value) != 0) {
+        return 0;
+    }
+    return (int64_t)value.tv_sec * 1000 + value.tv_nsec / 1000000;
+}
 
 static void pebble_android_fb_close(void)
 {
@@ -50,6 +63,10 @@ static void pebble_android_fb_close(void)
     if (s_android_fb_fd >= 0) {
         close(s_android_fb_fd);
         s_android_fb_fd = -1;
+    }
+    if (s_android_fb_event_fd >= 0) {
+        close(s_android_fb_event_fd);
+        s_android_fb_event_fd = -1;
     }
     s_android_fb_mapping_size = 0;
     s_android_fb_width = 0;
@@ -105,15 +122,44 @@ static bool pebble_android_fb_open(uint32_t width, uint32_t height)
     header->stride = width;
     header->pixel_format = PEBBLE_ANDROID_FB_FORMAT_COLOR_2BIT;
     __atomic_store_n(&header->sequence, 0u, __ATOMIC_RELEASE);
+    signal(SIGPIPE, SIG_IGN);
     return true;
 }
 
+static void pebble_android_fb_signal(void)
+{
+    const char *path = getenv("PEBBLE_FB_EVENT_PATH");
+    if (!path || !path[0]) {
+        return;
+    }
+
+    int64_t now = pebble_android_monotonic_ms();
+    if (s_android_fb_event_fd < 0) {
+        if (now < s_android_fb_event_retry_ms) {
+            return;
+        }
+        s_android_fb_event_fd = open(path, O_WRONLY | O_NONBLOCK | O_CLOEXEC);
+        if (s_android_fb_event_fd < 0) {
+            s_android_fb_event_retry_ms = now + 1000;
+            return;
+        }
+    }
+
+    const uint8_t event = 1;
+    if (write(s_android_fb_event_fd, &event, sizeof(event)) < 0 &&
+        errno != EAGAIN && errno != EWOULDBLOCK) {
+        close(s_android_fb_event_fd);
+        s_android_fb_event_fd = -1;
+        s_android_fb_event_retry_ms = now + 1000;
+    }
+}
+
 static void pebble_android_fb_publish(const uint8_t *source,
-                                      uint32_t source_stride,
-                                      uint32_t border_x,
-                                      uint32_t border_y,
-                                      uint32_t width,
-                                      uint32_t height)
+                                       uint32_t source_stride,
+                                       uint32_t border_x,
+                                       uint32_t border_y,
+                                       uint32_t width,
+                                       uint32_t height)
 {
     if (!pebble_android_fb_open(width, height)) {
         return;
@@ -128,6 +174,7 @@ static void pebble_android_fb_publish(const uint8_t *source,
 
     const uint32_t next = __atomic_load_n(&header->sequence, __ATOMIC_RELAXED) + 1u;
     __atomic_store_n(&header->sequence, next, __ATOMIC_RELEASE);
+    pebble_android_fb_signal();
 }
 #endif
 '''

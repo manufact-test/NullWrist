@@ -1,0 +1,32 @@
+name: Apply Pebblehertz 0.8.4 UI and build updates
+
+on:
+  push:
+    branches: ["feature/native-qemu-runtime"]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ hashFiles('scripts/apply_v084_ui.py') != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/native-qemu-runtime
+          fetch-depth: 0
+
+      - name: Apply UI and build updates
+        run: python3 scripts/apply_v084_ui.py
+
+      - name: Commit UI and build updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Finish Pebblehertz 0.8.4 power UI and native TCG"
+          git push origin HEAD:feature/native-qemu-runtime

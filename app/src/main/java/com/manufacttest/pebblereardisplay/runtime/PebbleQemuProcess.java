@@ -29,6 +29,7 @@ public final class PebbleQemuProcess {
 
     private static final int HEADER_BYTES = 64;
     private static final int FRAME_BYTES = WIDTH * HEIGHT;
+    private static final int SEQUENCE_OFFSET_BYTES = 24;
     private static final int MAGIC = 0x50424642; // PBFB
     private static final String ASSET_ROOT = "pebble/basalt/";
 
@@ -40,6 +41,9 @@ public final class PebbleQemuProcess {
     private final File logFile;
     private final ByteBuffer frameData = ByteBuffer
             .allocate(HEADER_BYTES + FRAME_BYTES)
+            .order(ByteOrder.LITTLE_ENDIAN);
+    private final ByteBuffer sequenceData = ByteBuffer
+            .allocate(Integer.BYTES)
             .order(ByteOrder.LITTLE_ENDIAN);
 
     private Process process;
@@ -273,6 +277,36 @@ public final class PebbleQemuProcess {
             Thread.sleep(80);
         }
         return hasValidFrame();
+    }
+
+    /** Returns the current QEMU framebuffer generation without copying pixel data. */
+    public synchronized int readFrameSequence() {
+        if (!framebuffer.isFile()) {
+            return -1;
+        }
+        try {
+            ensureFramebufferReader();
+            if (framebufferChannel.size() < HEADER_BYTES + FRAME_BYTES) {
+                return -1;
+            }
+            sequenceData.clear();
+            int total = 0;
+            while (sequenceData.hasRemaining()) {
+                int read = framebufferChannel.read(
+                        sequenceData,
+                        SEQUENCE_OFFSET_BYTES + total
+                );
+                if (read <= 0) {
+                    return -1;
+                }
+                total += read;
+            }
+            sequenceData.flip();
+            return sequenceData.getInt();
+        } catch (IOException error) {
+            closeFramebufferReader();
+            return -1;
+        }
     }
 
     public synchronized boolean readFrame(int[] argbPixels) {

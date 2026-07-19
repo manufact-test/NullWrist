@@ -12,6 +12,16 @@ on:
       - "scripts/patch_qemu_basalt_only.py"
       - "scripts/preseed_basalt_flash.py"
       - ".github/workflows/preseed-basalt-flash.yml"
+  pull_request:
+    paths:
+      - "bundled-watchfaces.json"
+      - "app/src/main/assets/watchfaces/**"
+      - "scripts/fetch_bundled_watchfaces.py"
+      - "scripts/fetch_pebble_basalt_firmware.py"
+      - "scripts/build_pebble_qemu_host.sh"
+      - "scripts/patch_qemu_basalt_only.py"
+      - "scripts/preseed_basalt_flash.py"
+      - ".github/workflows/preseed-basalt-flash.yml"
   workflow_dispatch:
 
 concurrency:

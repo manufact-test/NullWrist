@@ -14,6 +14,7 @@ import android.os.IBinder;
 import com.manufacttest.pebblereardisplay.R;
 import com.manufacttest.pebblereardisplay.data.AppPreferences;
 import com.manufacttest.pebblereardisplay.data.WatchfaceRepository;
+import com.manufacttest.pebblereardisplay.data.WatchfaceThumbnailRepository;
 import com.manufacttest.pebblereardisplay.model.WatchfaceMetadata;
 import com.manufacttest.pebblereardisplay.ui.MainActivity;
 
@@ -98,7 +99,7 @@ public final class PebbleRuntimeService extends Service {
         super.onCreate();
         instance = this;
         createNotificationChannel();
-        promoteToForeground(buildNotification("Pebble watchface is starting"));
+        promoteToForeground(buildNotification("Pebble Time is starting"));
     }
 
     @Override
@@ -212,13 +213,27 @@ public final class PebbleRuntimeService extends Service {
                 new InstalledWatchfaceRegistry(this),
                 (message, sentBytes, totalBytes) -> setStatus(message)
         );
-        Thread.sleep(installed ? 700 : 300);
+        Thread.sleep(installed ? 900 : 500);
+        captureThumbnailIfNeeded(current, selected.metadata);
         activeStorageId = selected.metadata.getStorageId();
         starting = false;
         status = null;
         failure = null;
         updateNotification("Running " + selected.metadata.getName());
         notifyListeners();
+    }
+
+    private void captureThumbnailIfNeeded(
+            PebbleQemuProcess current,
+            WatchfaceMetadata metadata
+    ) {
+        WatchfaceThumbnailRepository thumbnails = new WatchfaceThumbnailRepository(this);
+        if (thumbnails.hasThumbnail(metadata) || !thumbnails.capture(current, metadata)) {
+            return;
+        }
+        sendBroadcast(new Intent(WatchfaceThumbnailRepository.ACTION_THUMBNAIL_UPDATED)
+                .setPackage(getPackageName())
+                .putExtra(WatchfaceThumbnailRepository.EXTRA_STORAGE_ID, metadata.getStorageId()));
     }
 
     private void ensureCurrent(int requestedGeneration) throws InterruptedException {
@@ -256,14 +271,14 @@ public final class PebbleRuntimeService extends Service {
     private void reportFailure(Throwable error) {
         failure = error.getClass().getSimpleName() + ": " + error.getMessage();
         status = "Could not start selected watchface";
-        updateNotification("Pebble runtime needs attention");
+        updateNotification("Pebble Time needs attention");
         notifyListeners();
     }
 
     private void setStatus(String value) {
         status = value;
         failure = null;
-        updateNotification(value == null ? "Pebble watchface is running" : value);
+        updateNotification(value == null ? "Pebble Time is running" : value);
         notifyListeners();
     }
 
@@ -283,10 +298,10 @@ public final class PebbleRuntimeService extends Service {
         }
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "Pebble rear display",
+                "Pebblehertz runtime",
                 NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription("Keeps the Pebble watchface active on the Titan 2 rear display");
+        channel.setDescription("Keeps the selected Pebble Time face active on the Titan 2 rear display");
         channel.setShowBadge(false);
         getSystemService(NotificationManager.class).createNotificationChannel(channel);
     }
@@ -316,7 +331,7 @@ public final class PebbleRuntimeService extends Service {
                 : new Notification.Builder(this);
         return builder
                 .setSmallIcon(R.drawable.ic_launcher)
-                .setContentTitle("Pebble Rear Display")
+                .setContentTitle(getString(R.string.app_name))
                 .setContentText(text)
                 .setContentIntent(openIntent)
                 .setOngoing(true)

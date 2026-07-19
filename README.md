@@ -15,7 +15,7 @@ Pebble Time watchfaces running natively on the rear display of the Unihertz Tita
 
 ## Current state
 
-Pebblehertz 0.8.1 includes the 0.8.0 pixel-art interface plus a runtime recovery rewrite prompted by physical Titan 2 testing.
+Pebblehertz 0.8.2 keeps the 0.8.1 runtime recovery and expands the preinstalled Pebble Time library with later-settling real previews.
 
 Validated in CI:
 
@@ -29,7 +29,13 @@ Validated in CI:
 - always-on foreground runtime lifecycle;
 - adaptive framebuffer polling that copies pixels only after the QEMU frame sequence changes;
 - pixel-art Pebblehertz control interface;
-- seven real QEMU-rendered bundled previews and on-device thumbnail capture for imported PBWs.
+- fifteen real QEMU-rendered bundled previews and delayed on-device thumbnail capture for imported PBWs.
+
+### 0.8.2 watchface library and preview timing
+
+Eight additional Basalt-compatible faces are bundled and preinstalled. CI now waits three seconds after the first changed framebuffer before saving each bundled preview. Imported faces also receive a 2.5-second settling period before their thumbnail is captured.
+
+Quartz by Dalpek is not bundled because the supplied PBW contains only Emery/Gabbro builds and no Basalt executable.
 
 ### 0.8.1 runtime repair
 
@@ -50,6 +56,14 @@ The application ships with these pinned PBW packages, preinstalled in the packag
 - Mario Time 3.41
 - 91 Dub 4.0 version 4.21
 - polvtorogo 0.1.1
+- Enigma 1.1
+- Rosewright A 5.1.0
+- Electronika 5 1.0
+- Darth Time 4.0
+- Metro Watch 1.1
+- Starfield Smooth 1.0.0
+- CMD Time Typed 1.1
+- Omega Seamaster 007 1.1
 
 Source pages and SHA-256 hashes are recorded in [`bundled-watchfaces.json`](bundled-watchfaces.json) and [`THIRD_PARTY_WATCHFACES.md`](THIRD_PARTY_WATCHFACES.md).
 
@@ -108,12 +122,13 @@ The APK is generated at:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Physical-device validation for 0.8.1
+## Physical-device validation for 0.8.2
 
-1. Switch all seven bundled faces and confirm each reaches `ACTIVE / ON AIR` and appears on the rear display.
-2. Close and reopen the main Activity while the foreground runtime stays alive.
-3. Restart the runtime and confirm the last selected face returns without a communication-readiness exception.
-4. Import one PBW and confirm installation, rear rendering and thumbnail capture.
-5. Confirm fullscreen and input locking on the rear display remain unchanged.
+1. Switch all fifteen bundled faces and confirm each reaches `ACTIVE / ON AIR` and appears on the rear display.
+2. Confirm the locker previews show fully initialized faces rather than startup frames.
+3. Close and reopen the main Activity while the foreground runtime stays alive.
+4. Restart the runtime and confirm the last selected face returns without a communication-readiness exception.
+5. Import one PBW and confirm installation, rear rendering and delayed thumbnail capture.
+6. Confirm fullscreen and input locking on the rear display remain unchanged.
 
 Rollback point: `backup/pebblehertz-0.8.0-before-runtime-fix`.

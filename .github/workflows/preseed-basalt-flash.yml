@@ -8,20 +8,7 @@ on:
       - "app/src/main/assets/watchfaces/**"
       - "scripts/fetch_bundled_watchfaces.py"
       - "scripts/fetch_pebble_basalt_firmware.py"
-      - "scripts/build_pebble_qemu_host.sh"
-      - "scripts/patch_qemu_basalt_only.py"
       - "scripts/preseed_basalt_flash.py"
-      - ".github/workflows/preseed-basalt-flash.yml"
-  pull_request:
-    paths:
-      - "bundled-watchfaces.json"
-      - "app/src/main/assets/watchfaces/**"
-      - "scripts/fetch_bundled_watchfaces.py"
-      - "scripts/fetch_pebble_basalt_firmware.py"
-      - "scripts/build_pebble_qemu_host.sh"
-      - "scripts/patch_qemu_basalt_only.py"
-      - "scripts/preseed_basalt_flash.py"
-      - ".github/workflows/preseed-basalt-flash.yml"
   workflow_dispatch:
 
 concurrency:
@@ -39,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref || github.ref_name }}
+          ref: ${{ github.ref_name }}
 
       - uses: actions/setup-python@v5
         with:
@@ -121,13 +108,12 @@ jobs:
           if-no-files-found: warn
 
       - name: Commit preseeded flash
-        if: success() && github.repository == 'manufact-test/pebble-rear-display'
+        if: success()
         run: |
           if [ -z "$(git status --porcelain -- app/src/main/assets/pebble/basalt)" ]; then
             echo "Preseeded Pebble Time flash is unchanged."
             exit 0
           fi
-          TARGET_BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
@@ -136,4 +122,4 @@ jobs:
             app/src/main/assets/pebble/basalt/preseeded-watchfaces.json \
             app/src/main/assets/pebble/basalt/firmware.json
           git commit -m "Preinstall bundled watchfaces in Basalt flash"
-          git push origin "HEAD:${TARGET_BRANCH}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

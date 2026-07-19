@@ -27,10 +27,14 @@
 
         <activity
             android:name=".ui.RearDisplayActivity"
+            android:alwaysRetainTaskState="true"
             android:configChanges="density|fontScale|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
             android:excludeFromRecents="true"
             android:exported="false"
+            android:finishOnTaskLaunch="false"
+            android:immersive="true"
             android:launchMode="singleTop"
+            android:lockTaskMode="if_whitelisted"
             android:screenOrientation="unspecified"
             android:taskAffinity="${applicationId}.rear"
             android:theme="@style/Theme.PebbleRearDisplay.Rear" />

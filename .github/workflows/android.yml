@@ -32,6 +32,39 @@ jobs:
         with:
           gradle-version: "9.5.0"
 
+      - name: Apply pending Pebblehertz library update
+        if: hashFiles('.github/workflows/apply-library-update.yml') != ''
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration = Path(".github/workflows/apply-library-update.yml")
+          text = migration.read_text(encoding="utf-8")
+          start_marker = "          python3 - <<'PY'\n"
+          end_marker = "\n          PY\n\n      - name: Commit completed library update"
+          payload = text.split(start_marker, 1)[1].split(end_marker, 1)[0]
+          payload = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in payload.splitlines()
+          )
+          exec(compile(payload, str(migration), "exec"))
+
+          workflow = Path(".github/workflows/android.yml")
+          workflow_text = workflow.read_text(encoding="utf-8")
+          block_start = workflow_text.index(
+              "      - name: Apply pending Pebblehertz library update\n"
+          )
+          block_end = workflow_text.index(
+              "      - name: Fetch bundled watchfaces\n",
+              block_start,
+          )
+          workflow.write_text(
+              workflow_text[:block_start] + workflow_text[block_end:],
+              encoding="utf-8",
+          )
+          migration.unlink()
+          PY
+
       - name: Fetch bundled watchfaces
         id: fetch-watchfaces
         continue-on-error: true
@@ -105,15 +138,37 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Commit pinned runtime assets
+      - name: Commit pinned runtime assets and library update
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/')
         run: |
-          if [ -z "$(git status --porcelain -- app/src/main/assets/watchfaces app/src/main/assets/pebble)" ]; then
-            echo "Bundled PBW and Pebble firmware assets are already committed."
+          paths=(
+            bundled-watchfaces.json
+            app/src/main/assets/watchfaces
+            app/src/main/assets/pebble
+            app/src/main/java/com/manufacttest/pebblereardisplay/data/AppPreferences.java
+            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java
+            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceThumbnailRepository.java
+            app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java
+            app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java
+            .github/workflows/android.yml
+            .github/workflows/apply-library-update.yml
+          )
+          if [ -z "$(git status --porcelain -- "${paths[@]}")" ]; then
+            echo "Bundled assets and application sources are already current."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/src/main/assets/watchfaces app/src/main/assets/pebble
-          git commit -m "Bundle watchfaces and Basalt emulator firmware"
+          git add \
+            bundled-watchfaces.json \
+            app/src/main/assets/watchfaces \
+            app/src/main/assets/pebble \
+            app/src/main/java/com/manufacttest/pebblereardisplay/data/AppPreferences.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceThumbnailRepository.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java \
+            .github/workflows/android.yml
+          git add -u -- .github/workflows/apply-library-update.yml
+          git commit -m "Add removable watchface library and settled previews"
           git push origin "HEAD:${GITHUB_REF_NAME}"

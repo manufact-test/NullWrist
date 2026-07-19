@@ -4,7 +4,6 @@ import android.content.Context;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -23,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/** Owns one native Pebble Time QEMU process and its persistent runtime files. */
 public final class PebbleQemuProcess {
     public static final int WIDTH = 144;
     public static final int HEIGHT = 168;
@@ -31,6 +31,7 @@ public final class PebbleQemuProcess {
     private static final int FRAME_BYTES = WIDTH * HEIGHT;
     private static final int SEQUENCE_OFFSET_BYTES = 24;
     private static final int MAGIC = 0x50424642; // PBFB
+    private static final int MAX_CONSOLE_CHARS = 12 * 1024;
     private static final String ASSET_ROOT = "pebble/basalt/";
 
     private final Context context;
@@ -39,6 +40,8 @@ public final class PebbleQemuProcess {
     private final File spiFlash;
     private final File framebuffer;
     private final File logFile;
+    private final Object consoleLock = new Object();
+    private final StringBuilder consoleTail = new StringBuilder();
     private final ByteBuffer frameData = ByteBuffer
             .allocate(HEADER_BYTES + FRAME_BYTES)
             .order(ByteOrder.LITTLE_ENDIAN);
@@ -50,10 +53,11 @@ public final class PebbleQemuProcess {
     private PebbleProtocolLink protocolLink;
     private RandomAccessFile framebufferReader;
     private FileChannel framebufferChannel;
+    private Socket consoleSocket;
+    private Thread consoleThread;
     private int protocolPort;
     private int consolePort;
     private volatile boolean firmwareReady;
-    private volatile String consoleTail = "";
 
     public PebbleQemuProcess(Context context) {
         this.context = context.getApplicationContext();
@@ -68,13 +72,19 @@ public final class PebbleQemuProcess {
         if (isRunning()) {
             return;
         }
+
         prepareFiles();
         protocolPort = chooseUnusedPort();
         consolePort = chooseUnusedPort();
         firmwareReady = false;
-        consoleTail = "";
+        synchronized (consoleLock) {
+            consoleTail.setLength(0);
+        }
 
-        File qemu = new File(context.getApplicationInfo().nativeLibraryDir, "libpebble_qemu_exec.so");
+        File qemu = new File(
+                context.getApplicationInfo().nativeLibraryDir,
+                "libpebble_qemu_exec.so"
+        );
         if (!qemu.isFile()) {
             throw new IOException("Bundled QEMU binary is missing: " + qemu);
         }
@@ -91,7 +101,7 @@ public final class PebbleQemuProcess {
         command.add("-serial");
         command.add("tcp::" + protocolPort + ",server=on,wait=off,nodelay=on");
         command.add("-serial");
-        command.add("tcp::" + consolePort + ",server=on,wait=on,nodelay=on");
+        command.add("tcp::" + consolePort + ",server=on,wait=off,nodelay=on");
         command.add("-kernel");
         command.add(microFlash.getAbsolutePath());
         command.add("-monitor");
@@ -103,7 +113,9 @@ public final class PebbleQemuProcess {
         command.add("-cpu");
         command.add("cortex-m4");
         command.add("-drive");
-        command.add("if=none,id=spi-flash,file=" + spiFlash.getAbsolutePath() + ",format=raw");
+        command.add("if=none,id=spi-flash,file="
+                + spiFlash.getAbsolutePath()
+                + ",format=raw");
         command.add("-no-reboot");
 
         ProcessBuilder builder = new ProcessBuilder(command);
@@ -115,80 +127,57 @@ public final class PebbleQemuProcess {
         builder.environment().put("PEBBLE_FB_PATH", framebuffer.getAbsolutePath());
 
         process = builder.start();
-    }
-
-    public boolean waitForFirmwareReady(long timeoutMillis) throws IOException, InterruptedException {
-        if (firmwareReady) {
-            return true;
-        }
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
-        IOException lastConnectionError = null;
-        Socket console = null;
-
-        while (System.nanoTime() < deadline && console == null) {
-            if (!isRunning()) {
-                throw new IOException("QEMU stopped before PebbleOS became ready");
-            }
-            Socket candidate = new Socket();
-            try {
-                candidate.connect(new InetSocketAddress("127.0.0.1", consolePort), 500);
-                candidate.setSoTimeout(750);
-                candidate.setTcpNoDelay(true);
-                console = candidate;
-            } catch (IOException error) {
-                lastConnectionError = error;
-                try {
-                    candidate.close();
-                } catch (IOException ignored) {
-                }
-                Thread.sleep(80);
-            }
-        }
-
-        if (console == null) {
-            throw new IOException("Could not connect to PebbleOS console", lastConnectionError);
-        }
-
-        ByteArrayOutputStream received = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        try (Socket socket = console; InputStream input = socket.getInputStream()) {
-            while (System.nanoTime() < deadline) {
-                if (!isRunning()) {
-                    throw new IOException("QEMU stopped while PebbleOS was booting");
-                }
-                try {
-                    int read = input.read(buffer);
-                    if (read < 0) {
-                        break;
-                    }
-                    if (read == 0) {
-                        continue;
-                    }
-                    received.write(buffer, 0, read);
-                    trimConsoleBuffer(received, 64 * 1024);
-                    String text = received.toString(StandardCharsets.UTF_8.name());
-                    consoleTail = tail(text, 8 * 1024);
-                    if (text.contains("Ready for communication")
-                            || text.contains("<Launcher>")
-                            || text.contains("<SDK Home>")) {
-                        firmwareReady = true;
-                        return true;
-                    }
-                } catch (SocketTimeoutException ignored) {
-                    // Continue until the absolute deadline so slow first boots remain valid.
-                }
-            }
-        }
-
-        String detail = consoleTail.isEmpty() ? "" : "\n\nConsole:\n" + consoleTail;
-        throw new IOException("PebbleOS did not report communication readiness" + detail);
+        startConsoleCapture();
     }
 
     /**
-     * Installs a PBW only when its UUID/SHA fingerprint is not already present in persistent SPI flash,
-     * otherwise it only sends the AppRunState launch command.
+     * Waits for the real Pebble phone protocol handshake.
      *
-     * @return true when bytes were installed, false when the existing app was launched directly.
+     * The diagnostic serial stream is binary/mixed on some Android QEMU builds, so text such as
+     * "Ready for communication" is deliberately not used as a readiness signal.
+     */
+    public boolean waitForFirmwareReady(long timeoutMillis)
+            throws IOException, InterruptedException {
+        if (firmwareReady) {
+            return true;
+        }
+        if (!isRunning()) {
+            throw new IOException("QEMU stopped before PebbleOS became ready");
+        }
+
+        try {
+            protocolLink(timeoutMillis);
+            if (!isRunning()) {
+                throw new IOException("QEMU stopped while PebbleOS was becoming ready");
+            }
+            firmwareReady = true;
+            return true;
+        } catch (IOException error) {
+            Integer exitCode = exitCode();
+            StringBuilder message = new StringBuilder();
+            if (exitCode == null) {
+                message.append("PebbleOS phone protocol did not become ready");
+            } else {
+                message.append("PebbleOS stopped with code ").append(exitCode);
+            }
+
+            String diagnostics = consoleDiagnostics();
+            if (!diagnostics.isEmpty()) {
+                message.append("\n\nConsole diagnostics:\n").append(diagnostics);
+            }
+            String qemuLog = readLogTail(4 * 1024);
+            if (!qemuLog.isEmpty() && !"QEMU produced no log file.".equals(qemuLog)) {
+                message.append("\n\nQEMU log:\n").append(qemuLog);
+            }
+            throw new IOException(message.toString(), error);
+        }
+    }
+
+    /**
+     * Installs a PBW only when its UUID/SHA fingerprint is not already present in persistent SPI
+     * flash; otherwise only AppRunState is sent.
+     *
+     * @return true when bytes were installed, false when an existing app was launched directly.
      */
     public boolean activateWatchface(
             File pbwFile,
@@ -206,7 +195,7 @@ public final class PebbleQemuProcess {
         }
 
         String fingerprint = InstalledWatchfaceRegistry.sha256(pbwFile);
-        PebbleProtocolLink link = protocolLink();
+        PebbleProtocolLink link = protocolLink(20_000);
         try (PebblePbwBundle bundle = new PebblePbwBundle(pbwFile)) {
             PebblePbwBundle.AppHeader header = bundle.getHeader();
             PebbleAppInstaller installer = new PebbleAppInstaller(link, progressListener);
@@ -225,7 +214,11 @@ public final class PebbleQemuProcess {
             File pbwFile,
             PebbleAppInstaller.ProgressListener progressListener
     ) throws IOException, InterruptedException {
-        activateWatchface(pbwFile, new InstalledWatchfaceRegistry(context), progressListener);
+        activateWatchface(
+                pbwFile,
+                new InstalledWatchfaceRegistry(context),
+                progressListener
+        );
     }
 
     public synchronized boolean isRunning() {
@@ -240,11 +233,15 @@ public final class PebbleQemuProcess {
     }
 
     public synchronized void stop() {
+        firmwareReady = false;
+
         PebbleProtocolLink currentLink = protocolLink;
         protocolLink = null;
         if (currentLink != null) {
             currentLink.close();
         }
+
+        closeConsoleCapture();
         closeFramebufferReader();
 
         Process current = process;
@@ -252,11 +249,12 @@ public final class PebbleQemuProcess {
         if (current == null) {
             return;
         }
+
         current.destroy();
         try {
-            if (!current.waitFor(1200, TimeUnit.MILLISECONDS)) {
+            if (!current.waitFor(1_200, TimeUnit.MILLISECONDS)) {
                 current.destroyForcibly();
-                current.waitFor(1200, TimeUnit.MILLISECONDS);
+                current.waitFor(1_200, TimeUnit.MILLISECONDS);
             }
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
@@ -270,8 +268,7 @@ public final class PebbleQemuProcess {
             if (hasValidFrame()) {
                 return true;
             }
-            Integer code = exitCode();
-            if (code != null) {
+            if (exitCode() != null) {
                 return false;
             }
             Thread.sleep(80);
@@ -310,7 +307,9 @@ public final class PebbleQemuProcess {
     }
 
     public synchronized boolean readFrame(int[] argbPixels) {
-        if (argbPixels == null || argbPixels.length < FRAME_BYTES || !framebuffer.isFile()) {
+        if (argbPixels == null
+                || argbPixels.length < FRAME_BYTES
+                || !framebuffer.isFile()) {
             return false;
         }
 
@@ -342,8 +341,13 @@ public final class PebbleQemuProcess {
         int format = frameData.getInt();
         int sequence = frameData.getInt();
         frameData.position(HEADER_BYTES);
-        if (magic != MAGIC || version != 1 || width != WIDTH || height != HEIGHT
-                || stride != WIDTH || format != 1 || sequence <= 0) {
+        if (magic != MAGIC
+                || version != 1
+                || width != WIDTH
+                || height != HEIGHT
+                || stride != WIDTH
+                || format != 1
+                || sequence <= 0) {
             return false;
         }
 
@@ -361,7 +365,7 @@ public final class PebbleQemuProcess {
         if (!logFile.isFile()) {
             return "QEMU produced no log file.";
         }
-        int limit = Math.max(1024, maxBytes);
+        int limit = Math.max(1_024, maxBytes);
         try (RandomAccessFile file = new RandomAccessFile(logFile, "r")) {
             long start = Math.max(0, file.length() - limit);
             file.seek(start);
@@ -377,23 +381,45 @@ public final class PebbleQemuProcess {
         return framebuffer;
     }
 
-    private synchronized PebbleProtocolLink protocolLink() throws IOException, InterruptedException {
-        if (protocolLink == null) {
-            protocolLink = PebbleProtocolLink.connect("127.0.0.1", protocolPort, 20_000);
+    private PebbleProtocolLink protocolLink(long timeoutMillis)
+            throws IOException, InterruptedException {
+        synchronized (this) {
+            if (protocolLink != null) {
+                return protocolLink;
+            }
         }
-        return protocolLink;
+
+        PebbleProtocolLink candidate = PebbleProtocolLink.connect(
+                "127.0.0.1",
+                protocolPort,
+                timeoutMillis
+        );
+        synchronized (this) {
+            if (!isRunning()) {
+                candidate.close();
+                throw new IOException("QEMU stopped before the protocol connection completed");
+            }
+            if (protocolLink == null) {
+                protocolLink = candidate;
+            } else {
+                candidate.close();
+            }
+            return protocolLink;
+        }
     }
 
     private void prepareFiles() throws IOException {
         if (!runtimeDirectory.isDirectory() && !runtimeDirectory.mkdirs()) {
             throw new IOException("Cannot create runtime directory: " + runtimeDirectory);
         }
+
         boolean existingSpiFlash = spiFlash.isFile() && spiFlash.length() > 0;
         copyAsset(ASSET_ROOT + "qemu_micro_flash.bin", microFlash, true);
         copyAsset(ASSET_ROOT + "qemu_spi_flash.bin", spiFlash, false);
         if (!existingSpiFlash) {
             new InstalledWatchfaceRegistry(context).clear();
         }
+
         closeFramebufferReader();
         if (framebuffer.exists() && !framebuffer.delete()) {
             throw new IOException("Cannot reset framebuffer: " + framebuffer);
@@ -403,19 +429,27 @@ public final class PebbleQemuProcess {
         }
     }
 
-    private void copyAsset(String assetPath, File destination, boolean overwrite) throws IOException {
+    private void copyAsset(String assetPath, File destination, boolean overwrite)
+            throws IOException {
         if (!overwrite && destination.isFile() && destination.length() > 0) {
             return;
         }
-        File temporary = new File(destination.getParentFile(), destination.getName() + ".tmp");
+
+        File temporary = new File(
+                destination.getParentFile(),
+                destination.getName() + ".tmp"
+        );
         try (InputStream input = new BufferedInputStream(context.getAssets().open(assetPath));
-             BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(temporary))) {
+             BufferedOutputStream output = new BufferedOutputStream(
+                     new FileOutputStream(temporary)
+             )) {
             byte[] buffer = new byte[64 * 1024];
             int read;
             while ((read = input.read(buffer)) != -1) {
                 output.write(buffer, 0, read);
             }
         }
+
         if (destination.exists() && !destination.delete()) {
             throw new IOException("Cannot replace " + destination);
         }
@@ -424,6 +458,144 @@ public final class PebbleQemuProcess {
             if (!temporary.delete()) {
                 temporary.deleteOnExit();
             }
+        }
+    }
+
+    private void startConsoleCapture() {
+        Thread thread = new Thread(this::captureConsole, "PebbleQemuConsole");
+        thread.setDaemon(true);
+        consoleThread = thread;
+        thread.start();
+    }
+
+    private void captureConsole() {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        Socket connected = null;
+        try {
+            while (!Thread.currentThread().isInterrupted()
+                    && System.nanoTime() < deadline
+                    && connected == null) {
+                if (!isRunning()) {
+                    return;
+                }
+                Socket candidate = new Socket();
+                try {
+                    candidate.connect(
+                            new InetSocketAddress("127.0.0.1", consolePort),
+                            600
+                    );
+                    candidate.setSoTimeout(1_000);
+                    candidate.setTcpNoDelay(true);
+                    connected = candidate;
+                } catch (IOException error) {
+                    try {
+                        candidate.close();
+                    } catch (IOException ignored) {
+                    }
+                    Thread.sleep(100);
+                }
+            }
+            if (connected == null) {
+                appendConsoleMessage("[diagnostic console unavailable]\n");
+                return;
+            }
+
+            synchronized (this) {
+                if (!isRunning()) {
+                    connected.close();
+                    return;
+                }
+                consoleSocket = connected;
+            }
+
+            byte[] buffer = new byte[4_096];
+            try (InputStream input = connected.getInputStream()) {
+                while (!Thread.currentThread().isInterrupted() && isRunning()) {
+                    try {
+                        int read = input.read(buffer);
+                        if (read < 0) {
+                            break;
+                        }
+                        if (read > 0) {
+                            appendConsoleBytes(buffer, read);
+                        }
+                    } catch (SocketTimeoutException ignored) {
+                        // Periodically re-check process and interruption state.
+                    }
+                }
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        } catch (IOException error) {
+            if (isRunning()) {
+                appendConsoleMessage("\n[diagnostic console closed: "
+                        + safeMessage(error)
+                        + "]\n");
+            }
+        } finally {
+            synchronized (this) {
+                if (consoleSocket == connected) {
+                    consoleSocket = null;
+                }
+            }
+            if (connected != null) {
+                try {
+                    connected.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+
+    private synchronized void closeConsoleCapture() {
+        Socket currentSocket = consoleSocket;
+        consoleSocket = null;
+        if (currentSocket != null) {
+            try {
+                currentSocket.close();
+            } catch (IOException ignored) {
+            }
+        }
+
+        Thread currentThread = consoleThread;
+        consoleThread = null;
+        if (currentThread != null) {
+            currentThread.interrupt();
+        }
+    }
+
+    private void appendConsoleBytes(byte[] bytes, int length) {
+        StringBuilder printable = new StringBuilder(length);
+        boolean inBinaryRun = false;
+        for (int index = 0; index < length; index++) {
+            int value = bytes[index] & 0xff;
+            boolean visible = value == '\n'
+                    || value == '\r'
+                    || value == '\t'
+                    || (value >= 0x20 && value <= 0x7e);
+            if (visible) {
+                printable.append((char) value);
+                inBinaryRun = false;
+            } else if (!inBinaryRun) {
+                printable.append("[binary]");
+                inBinaryRun = true;
+            }
+        }
+        appendConsoleMessage(printable.toString());
+    }
+
+    private void appendConsoleMessage(String value) {
+        synchronized (consoleLock) {
+            consoleTail.append(value);
+            if (consoleTail.length() > MAX_CONSOLE_CHARS) {
+                consoleTail.delete(0, consoleTail.length() - MAX_CONSOLE_CHARS);
+            }
+        }
+    }
+
+    private String consoleDiagnostics() {
+        synchronized (consoleLock) {
+            return consoleTail.toString().trim();
         }
     }
 
@@ -469,17 +641,11 @@ public final class PebbleQemuProcess {
         }
     }
 
-    private static void trimConsoleBuffer(ByteArrayOutputStream output, int maxBytes) throws IOException {
-        if (output.size() <= maxBytes) {
-            return;
-        }
-        byte[] bytes = output.toByteArray();
-        output.reset();
-        output.write(bytes, bytes.length - maxBytes, maxBytes);
-    }
-
-    private static String tail(String value, int maxChars) {
-        return value.length() <= maxChars ? value : value.substring(value.length() - maxChars);
+    private static String safeMessage(Throwable error) {
+        String message = error.getMessage();
+        return message == null || message.isBlank()
+                ? error.getClass().getSimpleName()
+                : message;
     }
 
     private boolean hasValidFrame() {

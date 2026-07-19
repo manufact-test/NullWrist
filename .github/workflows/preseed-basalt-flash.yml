@@ -161,36 +161,31 @@ jobs:
             app/src/main/assets/watchface-thumbnails/*.png
           if-no-files-found: warn
 
-      - name: Remove temporary update plumbing
+      - name: Restore the clean reusable preseed workflow
         if: success() && github.event_name != 'workflow_dispatch'
         run: |
+          git show e4df5ca66f484e836a62f7a21053ec002e54befe:.github/workflows/preseed-basalt-flash.yml > .github/workflows/preseed-basalt-flash.yml
           python3 - <<'PY'
           from pathlib import Path
           path = Path('.github/workflows/preseed-basalt-flash.yml')
           text = path.read_text(encoding='utf-8')
-          apply_start = text.index("      - name: Apply prepared Pebblehertz 0.8.2 source update\n")
-          install_start = text.index("      - name: Install host QEMU build dependencies\n", apply_start)
-          text = text[:apply_start] + text[install_start:]
-          cleanup_start = text.index("      - name: Remove temporary update plumbing\n")
-          clean_tail = '''      - name: Commit preseeded flash and previews
-        if: success() && github.event_name == 'push'
-        run: |
-          if [ -z "$(git status --porcelain -- app/src/main/assets/pebble/basalt app/src/main/assets/watchface-thumbnails)" ]; then
-            echo "Preseeded Pebble Time flash and thumbnails are unchanged."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \\
-            app/src/main/assets/pebble/basalt/qemu_micro_flash.bin \\
-            app/src/main/assets/pebble/basalt/qemu_spi_flash.bin \\
-            app/src/main/assets/pebble/basalt/preseeded-watchfaces.json \\
-            app/src/main/assets/pebble/basalt/firmware.json \\
-            app/src/main/assets/watchface-thumbnails
-          git commit -m "Bundle real Pebble Time watchface previews"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-'''
-          path.write_text(text[:cleanup_start] + clean_tail, encoding='utf-8')
+          text = text.replace(
+              "          test \"$(find app/src/main/assets/watchface-thumbnails -maxdepth 1 -name '*.png' | wc -l)\" -eq 7\n",
+              ""
+          )
+          text = text.replace(
+              "          manifest = json.loads(Path(\"app/src/main/assets/pebble/basalt/preseeded-watchfaces.json\").read_text())\n"
+              "          assert manifest[\"platform\"] == \"basalt\"\n"
+              "          assert len(manifest[\"watchfaces\"]) == 7, manifest\n"
+              "          previews = Path(\"app/src/main/assets/watchface-thumbnails\")\n",
+              "          manifest = json.loads(Path(\"app/src/main/assets/pebble/basalt/preseeded-watchfaces.json\").read_text())\n"
+              "          expected = json.loads(Path(\"bundled-watchfaces.json\").read_text())\n"
+              "          assert manifest[\"platform\"] == \"basalt\"\n"
+              "          assert len(manifest[\"watchfaces\"]) == len(expected), (manifest, expected)\n"
+              "          previews = Path(\"app/src/main/assets/watchface-thumbnails\")\n"
+              "          assert len(list(previews.glob(\"*.png\"))) == len(expected)\n"
+          )
+          path.write_text(text, encoding='utf-8')
           PY
           rm -f .github/workflows/apply-watchface-library-update.yml
 

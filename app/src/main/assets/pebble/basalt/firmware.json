@@ -9,8 +9,8 @@
     },
     "qemu_spi_flash.bin": {
       "packaged": true,
-      "preseeded": false,
-      "sha256": "1b054f95b68ca55428be15ad70590c1b099dd5723235e47807f8c2ce8cd119dd",
+      "preseeded": true,
+      "sha256": "4b9cf3c85cb987dcb8f31da0074834e643ef151ef25f08469e3ddff0b051afcc",
       "size": 16777216
     },
     "qemu_spi_flash_base.bin": {

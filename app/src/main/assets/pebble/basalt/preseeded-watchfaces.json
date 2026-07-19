@@ -1,0 +1,57 @@
+{
+  "base_spi_sha256": "1b054f95b68ca55428be15ad70590c1b099dd5723235e47807f8c2ce8cd119dd",
+  "format": 1,
+  "platform": "basalt",
+  "seeded_spi_sha256": "4b9cf3c85cb987dcb8f31da0074834e643ef151ef25f08469e3ddff0b051afcc",
+  "watchfaces": [
+    {
+      "file": "91-dub-4.21.pbw",
+      "name": "91 Dub 4.0",
+      "sha256": "70704f3e53265ebda5a78a4c7f9f98ee1d50521a9dde19731da7954c876038d4",
+      "uuid": "0c3ca0ae-9067-4764-af92-bdcad1fb6084",
+      "version": "4.21"
+    },
+    {
+      "file": "big-shadow-2.00.5.pbw",
+      "name": "Big Shadow",
+      "sha256": "55e8930ea87be349c1b78f56a5f1e634ad837f405374db488a762795093cfbaf",
+      "uuid": "54245e09-942f-4ab1-b0c6-7c8fd8c92fac",
+      "version": "2.0"
+    },
+    {
+      "file": "mario-time-3.41.pbw",
+      "name": "Mario Time",
+      "sha256": "d3855f1a6eaa32f3d72a8e0580438699b737b42d2ffab17b81922b77827a179d",
+      "uuid": "43caa750-2896-4f46-94dc-1adbd4bc1ff3",
+      "version": "3.41"
+    },
+    {
+      "file": "modern-3.1.1.pbw",
+      "name": "Modern",
+      "sha256": "ed128c7af8b6710adf0acbfdc7da4cb9b85a98d64dc26cf57ae289e86df5ff5c",
+      "uuid": "3beca065-3267-43b4-bc18-8f489555db89",
+      "version": "3.1"
+    },
+    {
+      "file": "nyan-cat-8.9.pbw",
+      "name": "Nyan Cat",
+      "sha256": "fc0d9717c7691b7d389c930af569cf5e0481ea8cac9c80219e0823992d248588",
+      "uuid": "4e5f8669-b364-4b6c-9978-cff12b9b3524",
+      "version": "8.9"
+    },
+    {
+      "file": "pip-boy-100-5.4.pbw",
+      "name": "Pip Boy 100",
+      "sha256": "2421ac2ae2554cab2e473be199f8b727c67474fb7618709d6dd3cadcaaf55e63",
+      "uuid": "1fb4a901-0c56-427d-a53e-3f423c8b589e",
+      "version": "5.4"
+    },
+    {
+      "file": "polvtorogo.pbw",
+      "name": "polvtorogo",
+      "sha256": "057e78b8b29e15a5186d16db8c84c5125d353271030c66c909aa18cffa82c0c8",
+      "uuid": "65c08138-7700-4c31-8ddf-3c56b67159e8",
+      "version": "0.1"
+    }
+  ]
+}

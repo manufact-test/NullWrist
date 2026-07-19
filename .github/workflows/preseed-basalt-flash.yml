@@ -38,6 +38,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - uses: actions/setup-python@v5
         with:
@@ -119,12 +121,13 @@ jobs:
           if-no-files-found: warn
 
       - name: Commit preseeded flash
-        if: success() && github.event_name == 'push'
+        if: success() && github.repository == 'manufact-test/pebble-rear-display'
         run: |
           if [ -z "$(git status --porcelain -- app/src/main/assets/pebble/basalt)" ]; then
             echo "Preseeded Pebble Time flash is unchanged."
             exit 0
           fi
+          TARGET_BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
@@ -133,4 +136,4 @@ jobs:
             app/src/main/assets/pebble/basalt/preseeded-watchfaces.json \
             app/src/main/assets/pebble/basalt/firmware.json
           git commit -m "Preinstall bundled watchfaces in Basalt flash"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "HEAD:${TARGET_BRANCH}"

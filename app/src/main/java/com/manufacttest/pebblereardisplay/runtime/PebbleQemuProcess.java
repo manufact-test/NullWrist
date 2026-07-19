@@ -17,6 +17,8 @@ import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -38,6 +40,7 @@ public final class PebbleQemuProcess {
     private final File spiFlash;
     private final File framebuffer;
     private final File frameEventPipe;
+    private final File pidFile;
     private final ByteBuffer frameData = ByteBuffer
             .allocate(HEADER_BYTES + FRAME_BYTES)
             .order(ByteOrder.LITTLE_ENDIAN);
@@ -50,6 +53,7 @@ public final class PebbleQemuProcess {
     private RandomAccessFile framebufferReader;
     private FileChannel framebufferChannel;
     private int protocolPort;
+    private int qemuPid = -1;
     private volatile boolean firmwareReady;
     private volatile boolean paused;
 
@@ -60,6 +64,7 @@ public final class PebbleQemuProcess {
         spiFlash = new File(runtimeDirectory, "qemu_spi_flash.bin");
         framebuffer = new File(runtimeDirectory, "framebuffer.bin");
         frameEventPipe = new File(runtimeDirectory, "frame-events.fifo");
+        pidFile = new File(runtimeDirectory, "qemu.pid");
     }
 
     public synchronized void start() throws IOException {
@@ -71,6 +76,7 @@ public final class PebbleQemuProcess {
         protocolPort = chooseUnusedPort();
         firmwareReady = false;
         paused = false;
+        qemuPid = -1;
 
         File qemu = new File(
                 context.getApplicationInfo().nativeLibraryDir,
@@ -83,33 +89,40 @@ public final class PebbleQemuProcess {
             throw new IOException("Bundled QEMU binary is not executable: " + qemu);
         }
 
-        List<String> command = new ArrayList<>();
-        command.add(qemu.getAbsolutePath());
-        command.add("-rtc");
-        command.add("base=localtime");
-        command.add("-serial");
-        command.add("null");
-        command.add("-serial");
-        command.add("tcp::" + protocolPort + ",server=on,wait=off,nodelay=on");
-        command.add("-serial");
-        command.add("null");
-        command.add("-kernel");
-        command.add(microFlash.getAbsolutePath());
-        command.add("-monitor");
-        command.add("none");
-        command.add("-display");
-        command.add("none");
-        command.add("-machine");
-        command.add("pebble-snowy-bb");
-        command.add("-cpu");
-        command.add("cortex-m4");
-        command.add("-drive");
-        command.add("if=none,id=spi-flash,file="
+        List<String> qemuCommand = new ArrayList<>();
+        qemuCommand.add(qemu.getAbsolutePath());
+        qemuCommand.add("-rtc");
+        qemuCommand.add("base=localtime");
+        qemuCommand.add("-serial");
+        qemuCommand.add("null");
+        qemuCommand.add("-serial");
+        qemuCommand.add("tcp::" + protocolPort + ",server=on,wait=off,nodelay=on");
+        qemuCommand.add("-serial");
+        qemuCommand.add("null");
+        qemuCommand.add("-kernel");
+        qemuCommand.add(microFlash.getAbsolutePath());
+        qemuCommand.add("-monitor");
+        qemuCommand.add("none");
+        qemuCommand.add("-display");
+        qemuCommand.add("none");
+        qemuCommand.add("-machine");
+        qemuCommand.add("pebble-snowy-bb");
+        qemuCommand.add("-cpu");
+        qemuCommand.add("cortex-m4");
+        qemuCommand.add("-drive");
+        qemuCommand.add("if=none,id=spi-flash,file="
                 + spiFlash.getAbsolutePath()
                 + ",format=raw");
-        command.add("-no-reboot");
+        qemuCommand.add("-no-reboot");
 
-        ProcessBuilder builder = new ProcessBuilder(command);
+        List<String> launcher = new ArrayList<>();
+        launcher.add("/system/bin/sh");
+        launcher.add("-c");
+        launcher.add("echo $$ > \"$PEBBLE_QEMU_PID_PATH\"; exec \"$@\"");
+        launcher.add("pebble-qemu-launcher");
+        launcher.addAll(qemuCommand);
+
+        ProcessBuilder builder = new ProcessBuilder(launcher);
         builder.directory(runtimeDirectory);
         builder.redirectErrorStream(true);
         builder.redirectOutput(ProcessBuilder.Redirect.to(new File("/dev/null")));
@@ -117,8 +130,16 @@ public final class PebbleQemuProcess {
         builder.environment().put("TMPDIR", context.getCacheDir().getAbsolutePath());
         builder.environment().put("PEBBLE_FB_PATH", framebuffer.getAbsolutePath());
         builder.environment().put("PEBBLE_FB_EVENT_PATH", frameEventPipe.getAbsolutePath());
+        builder.environment().put("PEBBLE_QEMU_PID_PATH", pidFile.getAbsolutePath());
 
         process = builder.start();
+        try {
+            qemuPid = awaitPid(2_000L);
+        } catch (IOException error) {
+            process.destroyForcibly();
+            process = null;
+            throw error;
+        }
     }
 
     public boolean waitForFirmwareReady(long timeoutMillis)
@@ -199,26 +220,18 @@ public final class PebbleQemuProcess {
         if (!isRunning() || paused) {
             return isRunning();
         }
-        try {
-            Os.kill((int) process.pid(), OsConstants.SIGSTOP);
-            paused = true;
-            return true;
-        } catch (ErrnoException error) {
-            throw new IOException("Could not freeze PebbleOS", error);
-        }
+        signal(OsConstants.SIGSTOP, "freeze");
+        paused = true;
+        return true;
     }
 
     public synchronized boolean resume() throws IOException {
         if (!isRunning() || !paused) {
             return isRunning();
         }
-        try {
-            Os.kill((int) process.pid(), OsConstants.SIGCONT);
-            paused = false;
-            return true;
-        } catch (ErrnoException error) {
-            throw new IOException("Could not resume PebbleOS", error);
-        }
+        signal(OsConstants.SIGCONT, "resume");
+        paused = false;
+        return true;
     }
 
     public synchronized Integer exitCode() {
@@ -243,12 +256,13 @@ public final class PebbleQemuProcess {
         process = null;
         if (current == null) {
             paused = false;
+            qemuPid = -1;
             return;
         }
 
-        if (paused) {
+        if (paused && qemuPid > 0) {
             try {
-                Os.kill((int) current.pid(), OsConstants.SIGCONT);
+                Os.kill(qemuPid, OsConstants.SIGCONT);
             } catch (ErrnoException ignored) {
             }
             paused = false;
@@ -263,6 +277,9 @@ public final class PebbleQemuProcess {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             current.destroyForcibly();
+        } finally {
+            qemuPid = -1;
+            pidFile.delete();
         }
     }
 
@@ -376,6 +393,46 @@ public final class PebbleQemuProcess {
         return "QEMU diagnostics are disabled in the battery-optimized runtime.";
     }
 
+    private void signal(int signal, String operation) throws IOException {
+        if (qemuPid <= 0) {
+            throw new IOException("QEMU PID is unavailable");
+        }
+        try {
+            Os.kill(qemuPid, signal);
+        } catch (ErrnoException error) {
+            throw new IOException("Could not " + operation + " PebbleOS", error);
+        }
+    }
+
+    private int awaitPid(long timeoutMillis) throws IOException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        while (System.nanoTime() < deadline) {
+            if (pidFile.isFile()) {
+                try {
+                    String value = new String(
+                            Files.readAllBytes(pidFile.toPath()),
+                            StandardCharsets.US_ASCII
+                    ).trim();
+                    int pid = Integer.parseInt(value);
+                    if (pid > 0) {
+                        return pid;
+                    }
+                } catch (IOException | NumberFormatException ignored) {
+                }
+            }
+            if (process == null || !process.isAlive()) {
+                break;
+            }
+            try {
+                Thread.sleep(10L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while reading QEMU PID", interrupted);
+            }
+        }
+        throw new IOException("QEMU did not publish its process ID");
+    }
+
     private PebbleProtocolLink protocolLink(long timeoutMillis)
             throws IOException, InterruptedException {
         synchronized (this) {
@@ -418,6 +475,9 @@ public final class PebbleQemuProcess {
         closeFramebufferReader();
         if (framebuffer.exists() && !framebuffer.delete()) {
             throw new IOException("Cannot reset framebuffer: " + framebuffer);
+        }
+        if (pidFile.exists() && !pidFile.delete()) {
+            throw new IOException("Cannot reset QEMU PID file");
         }
         prepareFrameEventPipe();
     }

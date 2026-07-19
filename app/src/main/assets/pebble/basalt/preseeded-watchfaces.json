@@ -2,7 +2,7 @@
   "base_spi_sha256": "1b054f95b68ca55428be15ad70590c1b099dd5723235e47807f8c2ce8cd119dd",
   "format": 1,
   "platform": "basalt",
-  "seeded_spi_sha256": "4b9cf3c85cb987dcb8f31da0074834e643ef151ef25f08469e3ddff0b051afcc",
+  "seeded_spi_sha256": "f147829f5f3715f1177f9292139bff607e24cf1aba5d68ff4fde43105420be1e",
   "watchfaces": [
     {
       "file": "91-dub-4.21.pbw",

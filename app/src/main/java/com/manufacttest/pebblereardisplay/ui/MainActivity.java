@@ -66,7 +66,10 @@ public final class MainActivity extends Activity {
             PebbleQemuProcess runtime,
             String status,
             String failure
-    ) -> runOnUiThread(() -> updateRuntimeStatus(status, failure));
+    ) -> runOnUiThread(() -> {
+        updateRuntimeStatus(status, failure);
+        renderCatalog();
+    });
 
     private final BroadcastReceiver thumbnailReceiver = new BroadcastReceiver() {
         @Override
@@ -429,6 +432,7 @@ public final class MainActivity extends Activity {
         }
         catalogContainer.removeAllViews();
         String selectedId = preferences.getSelectedWatchfaceId();
+        String activeId = PebbleRuntimeService.getActiveStorageId();
         WatchfaceMetadata selected = null;
 
         View root = catalogContainer.getParent() instanceof View
@@ -449,12 +453,13 @@ public final class MainActivity extends Activity {
         }
 
         for (WatchfaceMetadata watchface : watchfaces) {
-            boolean active = watchface.getStorageId().equals(selectedId);
-            if (active) {
+            boolean selectedInUi = watchface.getStorageId().equals(selectedId);
+            boolean active = watchface.getStorageId().equals(activeId);
+            if (selectedInUi) {
                 selected = watchface;
             }
             catalogContainer.addView(
-                    watchfaceCard(watchface, active),
+                    watchfaceCard(watchface, selectedInUi, active),
                     matchWidthWrapHeight(dp(11))
             );
         }
@@ -476,16 +481,20 @@ public final class MainActivity extends Activity {
         updateHero(selected);
     }
 
-    private View watchfaceCard(WatchfaceMetadata watchface, boolean active) {
+    private View watchfaceCard(
+            WatchfaceMetadata watchface,
+            boolean selected,
+            boolean active
+    ) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
         card.setPadding(dp(12), dp(12), dp(12), dp(12));
         card.setMinimumHeight(dp(116));
         card.setBackground(interactivePanelBackground(
-                active ? getColor(R.color.surface_selected) : getColor(R.color.surface),
+                selected ? getColor(R.color.surface_selected) : getColor(R.color.surface),
                 getColor(R.color.surface_pressed),
-                active ? getColor(R.color.accent_coral) : getColor(R.color.ink)
+                selected ? getColor(R.color.accent_coral) : getColor(R.color.ink)
         ));
         card.setElevation(dp(3));
         card.setClickable(true);
@@ -493,7 +502,7 @@ public final class MainActivity extends Activity {
 
         Bitmap bitmap = thumbnails.load(watchface);
         PixelWatchfaceThumbnailView preview = new PixelWatchfaceThumbnailView(this);
-        preview.setWatchface(watchface, bitmap, active);
+        preview.setWatchface(watchface, bitmap, selected);
         card.addView(preview, new LinearLayout.LayoutParams(dp(82), dp(98)));
 
         LinearLayout copy = new LinearLayout(this);
@@ -539,6 +548,15 @@ public final class MainActivity extends Activity {
             jsParams.leftMargin = dp(6);
             badges.addView(js, jsParams);
         }
+        if (selected && !active) {
+            TextView queuedBadge = badge("QUEUED", getColor(R.color.accent_yellow), getColor(R.color.ink));
+            LinearLayout.LayoutParams queuedParams = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    dp(26)
+            );
+            queuedParams.leftMargin = dp(6);
+            badges.addView(queuedBadge, queuedParams);
+        }
         if (active) {
             TextView activeBadge = badge("ACTIVE", getColor(R.color.accent_coral), Color.WHITE);
             LinearLayout.LayoutParams activeParams = new LinearLayout.LayoutParams(
@@ -551,9 +569,13 @@ public final class MainActivity extends Activity {
         copy.addView(badges);
 
         TextView action = pixelText(
-                active ? "ON AIR" : "TAP TO APPLY >",
+                active ? "ON AIR" : selected ? "APPLYING..." : "TAP TO APPLY >",
                 11,
-                active ? getColor(R.color.accent_coral) : getColor(R.color.text_muted)
+                active
+                        ? getColor(R.color.accent_coral)
+                        : selected
+                        ? getColor(R.color.accent_yellow)
+                        : getColor(R.color.text_muted)
         );
         action.setPadding(0, dp(8), 0, 0);
         copy.addView(action);

@@ -40,6 +40,7 @@ public final class PebbleRuntimeService extends Service {
             "com.manufacttest.pebblereardisplay.action.STOP_RUNTIME";
     private static final String CHANNEL_ID = "pebble_runtime";
     private static final int NOTIFICATION_ID = 4102;
+    private static final long THUMBNAIL_SETTLE_MILLIS = 2_500L;
 
     private static final Set<Listener> LISTENERS = new CopyOnWriteArraySet<>();
     private static volatile PebbleRuntimeService instance;
@@ -298,9 +299,13 @@ public final class PebbleRuntimeService extends Service {
     private void captureThumbnailIfNeeded(
             PebbleQemuProcess current,
             WatchfaceMetadata metadata
-    ) {
+    ) throws InterruptedException {
         WatchfaceThumbnailRepository thumbnails = new WatchfaceThumbnailRepository(this);
-        if (thumbnails.hasThumbnail(metadata) || !thumbnails.capture(current, metadata)) {
+        if (thumbnails.hasThumbnail(metadata)) {
+            return;
+        }
+        waitForThumbnailSettle(current, THUMBNAIL_SETTLE_MILLIS);
+        if (!current.isRunning() || !thumbnails.capture(current, metadata)) {
             return;
         }
         sendBroadcast(new Intent(WatchfaceThumbnailRepository.ACTION_THUMBNAIL_UPDATED)
@@ -309,6 +314,17 @@ public final class PebbleRuntimeService extends Service {
                         WatchfaceThumbnailRepository.EXTRA_STORAGE_ID,
                         metadata.getStorageId()
                 ));
+    }
+
+    private static void waitForThumbnailSettle(
+            PebbleQemuProcess current,
+            long settleMillis
+    ) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(settleMillis);
+        while (current.isRunning() && System.nanoTime() < deadline) {
+            long remaining = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+            Thread.sleep(Math.max(1L, Math.min(100L, remaining)));
+        }
     }
 
     private void ensureCurrent(int requestedGeneration) {

@@ -117,3 +117,17 @@ jobs:
           git add app/src/main/assets/watchfaces app/src/main/assets/pebble
           git commit -m "Bundle watchfaces and Basalt emulator firmware"
           git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Record successful Android artifact run
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature/')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${GITHUB_REF_NAME}"
+          git rebase "origin/${GITHUB_REF_NAME}"
+          mkdir -p ci
+          printf 'run_id=%s\nhead_sha=%s\nartifact=pebble-rear-display-debug-apk\n' \
+            "${GITHUB_RUN_ID}" "${GITHUB_SHA}" > ci/latest-android-run.txt
+          git add ci/latest-android-run.txt
+          git commit -m "Record Android APK artifact [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

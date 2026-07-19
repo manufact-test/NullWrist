@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Disable every Pebble QEMU machine registration except Pebble Time/Basalt."""
+"""Disable every Pebble QEMU machine registration except Pebble Time/Basalt.
+
+Touching this pinned source patch intentionally triggers the native AArch64 TCG rebuild.
+"""
 from __future__ import annotations
 
 import re

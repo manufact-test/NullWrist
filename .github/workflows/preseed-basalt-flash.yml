@@ -50,22 +50,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Apply prepared Pebblehertz 0.8.2 source update
-        if: github.event_name != 'workflow_dispatch'
-        run: |
-          git show 85ea7e969755d39568940f1fa1efafa40501b2ae:.github/workflows/apply-watchface-library-update.yml > /tmp/prepared-update.yml
-          python3 - <<'PY'
-          from pathlib import Path
-          source = Path('/tmp/prepared-update.yml').read_text(encoding='utf-8')
-          marker = "          python3 - <<'PY'\n"
-          start = source.index(marker) + len(marker)
-          end = source.index("          PY\n\n      - name: Download and validate pinned PBWs", start)
-          block = source[start:end]
-          lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
-          Path('/tmp/apply-watchface-update.py').write_text('\n'.join(lines) + '\n', encoding='utf-8')
-          PY
-          python3 /tmp/apply-watchface-update.py
-
       - name: Install host QEMU build dependencies
         run: |
           sudo apt-get update
@@ -161,44 +145,23 @@ jobs:
             app/src/main/assets/watchface-thumbnails/*.png
           if-no-files-found: warn
 
-      - name: Restore the clean reusable preseed workflow
+      - name: Commit fetched PBWs, flash and previews
         if: success() && github.event_name != 'workflow_dispatch'
         run: |
-          git show e4df5ca66f484e836a62f7a21053ec002e54befe:.github/workflows/preseed-basalt-flash.yml > .github/workflows/preseed-basalt-flash.yml
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('.github/workflows/preseed-basalt-flash.yml')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace(
-              "          test \"$(find app/src/main/assets/watchface-thumbnails -maxdepth 1 -name '*.png' | wc -l)\" -eq 7\n",
-              ""
-          )
-          text = text.replace(
-              "          manifest = json.loads(Path(\"app/src/main/assets/pebble/basalt/preseeded-watchfaces.json\").read_text())\n"
-              "          assert manifest[\"platform\"] == \"basalt\"\n"
-              "          assert len(manifest[\"watchfaces\"]) == 7, manifest\n"
-              "          previews = Path(\"app/src/main/assets/watchface-thumbnails\")\n",
-              "          manifest = json.loads(Path(\"app/src/main/assets/pebble/basalt/preseeded-watchfaces.json\").read_text())\n"
-              "          expected = json.loads(Path(\"bundled-watchfaces.json\").read_text())\n"
-              "          assert manifest[\"platform\"] == \"basalt\"\n"
-              "          assert len(manifest[\"watchfaces\"]) == len(expected), (manifest, expected)\n"
-              "          previews = Path(\"app/src/main/assets/watchface-thumbnails\")\n"
-              "          assert len(list(previews.glob(\"*.png\"))) == len(expected)\n"
-          )
-          path.write_text(text, encoding='utf-8')
-          PY
-          rm -f .github/workflows/apply-watchface-library-update.yml
-
-      - name: Commit Pebblehertz 0.8.2 assets and previews
-        if: success() && github.event_name != 'workflow_dispatch'
-        run: |
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "Pebblehertz 0.8.2 assets are unchanged."
+          if [ "$(git log -1 --pretty=%ae)" = "41898282+github-actions[bot]@users.noreply.github.com" ]; then
+            echo "Skipping recursive asset commit for the automation commit."
+            exit 0
+          fi
+          if [ -z "$(git status --porcelain -- app/src/main/assets/watchfaces app/src/main/assets/pebble/basalt app/src/main/assets/watchface-thumbnails)" ]; then
+            echo "Bundled PBWs, flash and thumbnails are unchanged."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Add eight Pebble Time faces and delay preview capture"
+          git add \
+            app/src/main/assets/watchfaces \
+            app/src/main/assets/pebble/basalt \
+            app/src/main/assets/watchface-thumbnails
+          git commit -m "Bundle fifteen Pebble Time faces and settled previews"
           TARGET_BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           git push origin "HEAD:${TARGET_BRANCH}"

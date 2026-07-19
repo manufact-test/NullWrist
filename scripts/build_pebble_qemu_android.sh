@@ -182,6 +182,7 @@ checkout_qemu() {
   git -C "$qemu" checkout --detach --force FETCH_HEAD
   git -C "$qemu" clean -ffdqx
   python3 "$ROOT_DIR/scripts/patch_qemu_framebuffer.py" "$qemu"
+  python3 "$ROOT_DIR/scripts/patch_qemu_basalt_only.py" "$qemu"
 }
 
 build_qemu() {
@@ -223,6 +224,10 @@ build_qemu() {
   file "$OUTPUT_DIR/libpebble_qemu_exec.so"
   "$READELF" -h "$OUTPUT_DIR/libpebble_qemu_exec.so"
   "$READELF" -d "$OUTPUT_DIR/libpebble_qemu_exec.so" || true
+  echo "Registered Pebble machine strings retained in binary:"
+  strings "$OUTPUT_DIR/libpebble_qemu_exec.so" \
+    | grep -E '^pebble-[a-z0-9-]+$' \
+    | sort -u || true
   sha256sum "$OUTPUT_DIR/libpebble_qemu_exec.so" > "$OUTPUT_DIR/libpebble_qemu_exec.so.sha256"
 }
 

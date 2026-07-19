@@ -6,6 +6,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** Installs and launches modern Pebble apps using BlobDB, AppFetch and PutBytes. */
@@ -33,6 +34,8 @@ public final class PebbleAppInstaller {
     private final ProgressListener progressListener;
     private int totalSent;
     private int totalSize;
+    private int lastPublishedPercent = -1;
+    private long lastPublishedNanos;
 
     public PebbleAppInstaller(PebbleProtocolLink link, ProgressListener progressListener) {
         this.link = link;
@@ -139,7 +142,6 @@ public final class PebbleAppInstaller {
             sendPutBytes(put.array());
             totalSent += length;
             publishProgress();
-            Thread.sleep(4);
         }
 
         ByteBuffer commit = ByteBuffer.allocate(9).order(ByteOrder.BIG_ENDIAN);
@@ -177,6 +179,14 @@ public final class PebbleAppInstaller {
             return;
         }
         int percent = totalSize <= 0 ? 0 : Math.min(100, Math.round(totalSent * 100f / totalSize));
+        long now = System.nanoTime();
+        if (percent < 100
+                && percent - lastPublishedPercent < 2
+                && now - lastPublishedNanos < TimeUnit.MILLISECONDS.toNanos(200)) {
+            return;
+        }
+        lastPublishedPercent = percent;
+        lastPublishedNanos = now;
         progressListener.onProgress("Installing watchface… " + percent + "%", totalSent, totalSize);
     }
 

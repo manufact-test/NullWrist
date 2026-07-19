@@ -24,6 +24,9 @@ import android.provider.Settings;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.text.InputType;
+import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -57,6 +60,7 @@ public final class MainActivity extends Activity {
     private TextView heroMeta;
     private TextView runtimeStatusLabel;
     private TextView runtimeLed;
+    private TextView powerScheduleSummary;
     private List<WatchfaceMetadata> watchfaces = new ArrayList<>();
     private boolean rearMode;
     private boolean redirectingToRear;
@@ -78,6 +82,16 @@ public final class MainActivity extends Activity {
     private final BroadcastReceiver thumbnailReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            if (PebbleRuntimeService.ACTION_SELECTION_FAILED.equals(intent.getAction())) {
+                String message = intent.getStringExtra(
+                        PebbleRuntimeService.EXTRA_SELECTION_FAILURE
+                );
+                if (message != null && !message.isBlank()) {
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                }
+                reloadCatalog();
+                return;
+            }
             if (!rearMode) {
                 renderCatalog();
             }
@@ -196,6 +210,7 @@ public final class MainActivity extends Activity {
         }
         PebbleRuntimeService.addListener(runtimeListener);
         IntentFilter filter = new IntentFilter(WatchfaceThumbnailRepository.ACTION_THUMBNAIL_UPDATED);
+        filter.addAction(PebbleRuntimeService.ACTION_SELECTION_FAILED);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(thumbnailReceiver, filter, RECEIVER_NOT_EXPORTED);
         } else {
@@ -242,6 +257,7 @@ public final class MainActivity extends Activity {
         root.addView(buildHeader(), matchWidthWrapHeight(dp(14)));
         root.addView(buildHeroCard(), matchWidthWrapHeight(dp(12)));
         root.addView(buildActionRow(), matchWidthWrapHeight(dp(10)));
+        root.addView(buildPowerScheduleCard(), matchWidthWrapHeight(dp(10)));
         root.addView(buildReliabilityCard(), matchWidthWrapHeight(dp(20)));
 
         TextView listTitle = pixelText("WATCHFACE LOCKER // 00", 16, getColor(R.color.text_primary));
@@ -372,6 +388,150 @@ public final class MainActivity extends Activity {
         row.addView(settingsButton, weightedButtonParams(0));
         return row;
     }
+
+
+private View buildPowerScheduleCard() {
+    LinearLayout panel = new LinearLayout(this);
+    panel.setOrientation(LinearLayout.VERTICAL);
+    panel.setPadding(dp(13), dp(12), dp(13), dp(12));
+    panel.setBackground(panelBackground(
+            getColor(R.color.surface),
+            getColor(R.color.ink),
+            dp(1)
+    ));
+
+    TextView title = pixelText("POWER SCHEDULE // 24H", 13, getColor(R.color.text_primary));
+    panel.addView(title);
+
+    powerScheduleSummary = bodyText("", 12, getColor(R.color.text_secondary));
+    powerScheduleSummary.setPadding(0, dp(6), 0, dp(10));
+    panel.addView(powerScheduleSummary);
+
+    TextView edit = pixelButton(
+            "EDIT SLEEP SCHEDULE",
+            getColor(R.color.paper),
+            getColor(R.color.ink)
+    );
+    edit.setOnClickListener(view -> showPowerScheduleDialog());
+    panel.addView(edit, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(46)
+    ));
+    refreshPowerScheduleSummary();
+    return panel;
+}
+
+private void refreshPowerScheduleSummary() {
+    if (powerScheduleSummary == null || preferences == null) {
+        return;
+    }
+    if (preferences.isSleepScheduleEnabled()) {
+        powerScheduleSummary.setText(
+                "FREEZE "
+                        + AppPreferences.formatMinutes(preferences.getSleepStartMinutes())
+                        + "–"
+                        + AppPreferences.formatMinutes(preferences.getSleepEndMinutes())
+                        + "  /  CHARGING OVERRIDES  /  ≤15% MINUTE SAVER"
+        );
+    } else {
+        powerScheduleSummary.setText(
+                "SCHEDULE OFF  /  CHARGING ALWAYS ON  /  ≤15% MINUTE SAVER"
+        );
+    }
+}
+
+private void showPowerScheduleDialog() {
+    LinearLayout form = new LinearLayout(this);
+    form.setOrientation(LinearLayout.VERTICAL);
+    form.setPadding(dp(22), dp(8), dp(22), 0);
+
+    CheckBox enabled = new CheckBox(this);
+    enabled.setText("Freeze PebbleOS on schedule");
+    enabled.setChecked(preferences.isSleepScheduleEnabled());
+    form.addView(enabled);
+
+    TextView startLabel = bodyText("Freeze from (HH:mm)", 13, getColor(R.color.text_secondary));
+    startLabel.setPadding(0, dp(10), 0, dp(4));
+    form.addView(startLabel);
+    EditText start = timeField(AppPreferences.formatMinutes(
+            preferences.getSleepStartMinutes()
+    ));
+    form.addView(start);
+
+    TextView endLabel = bodyText("Resume at (HH:mm)", 13, getColor(R.color.text_secondary));
+    endLabel.setPadding(0, dp(10), 0, dp(4));
+    form.addView(endLabel);
+    EditText end = timeField(AppPreferences.formatMinutes(
+            preferences.getSleepEndMinutes()
+    ));
+    form.addView(end);
+
+    TextView note = bodyText(
+            "24-hour format. Charging always keeps PebbleOS running. "
+                    + "Below 15% battery it wakes once per minute to refresh the face.",
+            12,
+            getColor(R.color.text_muted)
+    );
+    note.setPadding(0, dp(12), 0, 0);
+    form.addView(note);
+
+    AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("PebbleOS sleep schedule")
+            .setView(form)
+            .setPositiveButton("Save", null)
+            .setNegativeButton("Cancel", null)
+            .create();
+    dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            .setOnClickListener(view -> {
+                int startMinutes = parseTime(start.getText().toString());
+                int endMinutes = parseTime(end.getText().toString());
+                if (startMinutes < 0 || endMinutes < 0) {
+                    Toast.makeText(
+                            this,
+                            "Use 24-hour HH:mm format, for example 23:30",
+                            Toast.LENGTH_LONG
+                    ).show();
+                    return;
+                }
+                preferences.setSleepSchedule(
+                        enabled.isChecked(),
+                        startMinutes,
+                        endMinutes
+                );
+                refreshPowerScheduleSummary();
+                PebbleRuntimeService.refreshPowerPolicy(this);
+                dialog.dismiss();
+            }));
+    dialog.show();
+}
+
+private EditText timeField(String value) {
+    EditText field = new EditText(this);
+    field.setSingleLine(true);
+    field.setText(value);
+    field.setSelectAllOnFocus(true);
+    field.setInputType(
+            InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME
+    );
+    return field;
+}
+
+private static int parseTime(String value) {
+    if (value == null || !value.matches("\\d{1,2}:\\d{2}")) {
+        return -1;
+    }
+    String[] parts = value.split(":", 2);
+    try {
+        int hour = Integer.parseInt(parts[0]);
+        int minute = Integer.parseInt(parts[1]);
+        if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+            return -1;
+        }
+        return hour * 60 + minute;
+    } catch (NumberFormatException ignored) {
+        return -1;
+    }
+}
 
     private View buildReliabilityCard() {
         LinearLayout panel = new LinearLayout(this);
@@ -646,7 +806,6 @@ public final class MainActivity extends Activity {
     private void applyWatchface(WatchfaceMetadata watchface) {
         preferences.setSelectedWatchfaceId(watchface.getStorageId());
         renderCatalog();
-        updateRuntimeStatus("Launching " + watchface.getName(), null);
         PebbleRuntimeService.select(this);
     }
 
@@ -692,7 +851,6 @@ public final class MainActivity extends Activity {
                         break;
                     }
                 }
-                updateRuntimeStatus("Launching " + replacement.getName(), null);
                 PebbleRuntimeService.select(this);
             }
         } catch (IOException exception) {
@@ -715,8 +873,14 @@ public final class MainActivity extends Activity {
             runtimeLed.setTextColor(getColor(R.color.accent_yellow));
             runtimeStatusLabel.setText(shortStatus(status));
         } else {
-            runtimeLed.setTextColor(getColor(R.color.accent_mint));
-            runtimeStatusLabel.setText("RUNTIME ONLINE");
+            String powerMode = PebbleRuntimeService.getPowerModeLabel();
+            if (powerMode != null) {
+                runtimeLed.setTextColor(getColor(R.color.accent_yellow));
+                runtimeStatusLabel.setText(powerMode);
+            } else {
+                runtimeLed.setTextColor(getColor(R.color.accent_mint));
+                runtimeStatusLabel.setText("RUNTIME ONLINE");
+            }
         }
     }
 

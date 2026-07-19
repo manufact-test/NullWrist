@@ -200,7 +200,7 @@ build_qemu() {
     --cross-prefix="$WRAPPERS/${TRIPLE}-" \
     --cc="$CC" --cxx="$CXX" --host-cc=gcc \
     --python=python3 \
-    --enable-tcg-interpreter \
+    --enable-tcg \
     --enable-fdt=internal \
     --disable-werror --disable-docs --disable-tools --disable-guest-agent \
     --disable-modules --disable-plugins --disable-debug-info \

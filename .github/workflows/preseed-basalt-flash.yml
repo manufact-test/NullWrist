@@ -64,7 +64,9 @@ jobs:
           key: host-pebble-qemu-source-v2-9ef633fa
 
       - name: Fetch bundled PBW files
-        run: python3 scripts/fetch_bundled_watchfaces.py
+        run: |
+          set -o pipefail
+          python3 scripts/fetch_bundled_watchfaces.py 2>&1 | tee fetch-watchfaces.log
 
       - name: Fetch official Basalt firmware
         env:
@@ -135,6 +137,7 @@ jobs:
         with:
           name: pebble-time-preseed-diagnostics
           path: |
+            fetch-watchfaces.log
             host-qemu-build.log
             host-qemu-output/machine-help.txt
             preseed.log

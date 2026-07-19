@@ -1,13 +1,6 @@
 name: Native Pebble QEMU build
 
 on:
-  push:
-    branches: ["feature/native-qemu-runtime"]
-    paths:
-      - "scripts/build_pebble_qemu_android.sh"
-      - "scripts/patch_qemu_framebuffer.py"
-      - "scripts/patch_qemu_basalt_only.py"
-      - ".github/workflows/native-qemu-build.yml"
   pull_request:
     paths:
       - "scripts/build_pebble_qemu_android.sh"
@@ -30,6 +23,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - uses: actions/setup-python@v5
         with:
@@ -85,7 +80,7 @@ jobs:
           if-no-files-found: error
 
       - name: Pin native QEMU in Android app
-        if: success() && github.event_name == 'push'
+        if: success() && github.repository == 'manufact-test/pebble-rear-display'
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cp native-qemu-output/libpebble_qemu_exec.so \
@@ -94,8 +89,9 @@ jobs:
             echo "Pinned QEMU binary is unchanged."
             exit 0
           fi
+          TARGET_BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/src/main/jniLibs/arm64-v8a/libpebble_qemu_exec.so
           git commit -m "Bundle Basalt-only native Pebble QEMU for arm64"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "HEAD:${TARGET_BRANCH}"

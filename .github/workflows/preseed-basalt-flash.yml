@@ -51,7 +51,7 @@ jobs:
           python-version: "3.12"
 
       - name: Apply prepared Pebblehertz 0.8.2 source update
-        if: github.event_name == 'push'
+        if: github.event_name != 'workflow_dispatch'
         run: |
           git show 85ea7e969755d39568940f1fa1efafa40501b2ae:.github/workflows/apply-watchface-library-update.yml > /tmp/prepared-update.yml
           python3 - <<'PY'
@@ -162,20 +162,40 @@ jobs:
           if-no-files-found: warn
 
       - name: Remove temporary update plumbing
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name != 'workflow_dispatch'
         run: |
           python3 - <<'PY'
           from pathlib import Path
           path = Path('.github/workflows/preseed-basalt-flash.yml')
           text = path.read_text(encoding='utf-8')
-          start = text.index("      - name: Apply prepared Pebblehertz 0.8.2 source update\n")
-          end = text.index("      - name: Install host QEMU build dependencies\n", start)
-          path.write_text(text[:start] + text[end:], encoding='utf-8')
+          apply_start = text.index("      - name: Apply prepared Pebblehertz 0.8.2 source update\n")
+          install_start = text.index("      - name: Install host QEMU build dependencies\n", apply_start)
+          text = text[:apply_start] + text[install_start:]
+          cleanup_start = text.index("      - name: Remove temporary update plumbing\n")
+          clean_tail = '''      - name: Commit preseeded flash and previews
+        if: success() && github.event_name == 'push'
+        run: |
+          if [ -z "$(git status --porcelain -- app/src/main/assets/pebble/basalt app/src/main/assets/watchface-thumbnails)" ]; then
+            echo "Preseeded Pebble Time flash and thumbnails are unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \\
+            app/src/main/assets/pebble/basalt/qemu_micro_flash.bin \\
+            app/src/main/assets/pebble/basalt/qemu_spi_flash.bin \\
+            app/src/main/assets/pebble/basalt/preseeded-watchfaces.json \\
+            app/src/main/assets/pebble/basalt/firmware.json \\
+            app/src/main/assets/watchface-thumbnails
+          git commit -m "Bundle real Pebble Time watchface previews"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+'''
+          path.write_text(text[:cleanup_start] + clean_tail, encoding='utf-8')
           PY
           rm -f .github/workflows/apply-watchface-library-update.yml
 
       - name: Commit Pebblehertz 0.8.2 assets and previews
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name != 'workflow_dispatch'
         run: |
           if [ -z "$(git status --porcelain)" ]; then
             echo "Pebblehertz 0.8.2 assets are unchanged."
@@ -185,4 +205,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Add eight Pebble Time faces and delay preview capture"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          TARGET_BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          git push origin "HEAD:${TARGET_BRANCH}"

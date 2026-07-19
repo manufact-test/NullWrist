@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a headless host QEMU used only to pre-seed the Basalt SPI image in CI.
+# Build a headless host QEMU used to pre-seed Basalt flash and render thumbnails in CI.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,6 +20,7 @@ git -C "$SOURCES/qemu-pebble" fetch --depth 1 origin "$QEMU_COMMIT"
 git -C "$SOURCES/qemu-pebble" checkout --detach --force FETCH_HEAD
 git -C "$SOURCES/qemu-pebble" clean -ffdqx
 python3 "$ROOT_DIR/scripts/patch_qemu_basalt_only.py" "$SOURCES/qemu-pebble"
+python3 "$ROOT_DIR/scripts/patch_qemu_framebuffer.py" "$SOURCES/qemu-pebble"
 
 rm -rf "$BUILD"
 mkdir -p "$BUILD"
@@ -27,6 +28,7 @@ pushd "$BUILD" >/dev/null
 "$SOURCES/qemu-pebble/configure" \
   --target-list=arm-softmmu \
   --enable-fdt=internal \
+  --extra-cflags=-DPEBBLE_REAR_FB_EXPORT \
   --disable-werror --disable-docs --disable-tools --disable-guest-agent \
   --disable-modules --disable-plugins --disable-debug-info \
   --disable-sdl --disable-sdl-image --disable-gtk --disable-vte \

@@ -13,6 +13,14 @@ captures/
 .externalNativeBuild/
 .cxx/
 
+# Native Pebble/QEMU build caches
+.native-qemu-build/
+.host-qemu-build/
+.native-qemu-output/
+native-qemu-output/
+host-qemu-output/
+.pebble-firmware-cache/
+
 # Build outputs and signing
 *.apk
 *.aab

@@ -32,6 +32,18 @@ public final class WatchfaceThumbnailRepository {
         directory = new File(this.context.getFilesDir(), FILE_DIRECTORY);
     }
 
+    public boolean hasThumbnail(WatchfaceMetadata metadata) {
+        String fileName = fileName(metadata);
+        if (new File(directory, fileName).isFile()) {
+            return true;
+        }
+        try (InputStream ignored = context.getAssets().open(ASSET_DIRECTORY + "/" + fileName)) {
+            return true;
+        } catch (IOException ignored) {
+            return false;
+        }
+    }
+
     public Bitmap load(WatchfaceMetadata metadata) {
         String fileName = fileName(metadata);
         File captured = new File(directory, fileName);

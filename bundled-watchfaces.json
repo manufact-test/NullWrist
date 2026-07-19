@@ -61,7 +61,6 @@
     "version": "1.1",
     "page_url": "https://apps.repebble.com/enigma_55558c2a44dad6b80f000088",
     "download_url": "https://appstore-api.repebble.com/api/assets/pbw/555c330defc72feb4100006e.pbw",
-    "prefer_download_url": true,
     "sha256": "da99f076b039ec444d9d5cf1616bbff8a089cd1d8f1cba1276555f672abdad95"
   },
   {
@@ -70,7 +69,6 @@
     "version": "5.1.0",
     "page_url": "https://apps.repebble.com/rosewright-a_52997231129af73409000033",
     "download_url": "https://appstore-api.repebble.com/api/assets/pbw/13fc19c9-5e71-44a6-be3d-0ed06d51a756.pbw",
-    "prefer_download_url": true,
     "sha256": "5310ed3837eedeb87d1a6a20e14a44f6ed40aac879e28870182c1f57fd8892c0"
   },
   {
@@ -79,7 +77,6 @@
     "version": "1.0",
     "page_url": "https://apps.repebble.com/electronika-5-soviet-russia-watch_542aae37072ba27db80000dc",
     "download_url": "https://appstore-api.repebble.com/api/assets/pbw/542aae5a0015be1e0800008b.pbw",
-    "prefer_download_url": true,
     "sha256": "0794900890abfabfca59c51a47145fd763a6c8549774696d6e014d9a8d1cb186"
   },
   {
@@ -88,7 +85,6 @@
     "version": "4.0",
     "page_url": "https://apps.repebble.com/darth-time_55e9493720f24c8f2e0000b5",
     "download_url": "https://appstore-api.repebble.com/api/assets/pbw/4.0.pbw",
-    "prefer_download_url": true,
     "sha256": "851aecf86caee72499de819782d96b32ce1568541359a2890c95300869ce08cd"
   },
   {
@@ -97,7 +93,6 @@
     "version": "1.1",
     "page_url": "https://apps.repebble.com/metro-watch_5303d8bc7097ac4d3e000359",
     "download_url": "https://appstore-api.repebble.com/api/assets/pbw/549839b7835244be3c0000e0.pbw",
-    "prefer_download_url": true,
     "sha256": "a617124a051d9afaf5304c2c63569290da79dd2016c97cd7b756942993db31e7"
   },
   {
@@ -106,17 +101,7 @@
     "version": "1.0.0",
     "page_url": "https://apps.repebble.com/starfield-smooth_52cd48ecc296577c6c00002f",
     "download_url": "https://appstore-api.repebble.com/api/assets/pbw/1.0.0.pbw",
-    "prefer_download_url": true,
     "sha256": "90e269e42ae03236c405d5176d9690a7defc4441ea52ae0f300646ab8ec350e5"
-  },
-  {
-    "file": "cmd-time-typed-1.1.pbw",
-    "name": "CMD Time Typed",
-    "version": "1.1",
-    "page_url": "https://apps.repebble.com/cmd-time-typed_52e919c2ad615bf1a5000024",
-    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/1.1.pbw",
-    "prefer_download_url": true,
-    "sha256": "e0bcb2fbf883ed87e8fedee2a5607c2208fcc394b5fc1a0d1b5560290e7e47cc"
   },
   {
     "file": "omega-seamaster-007-1.1.pbw",
@@ -124,9 +109,22 @@
     "version": "1.1",
     "page_url": "https://apps.repebble.com/omega-seamaster-007_547218ce95f74c03ba00007f",
     "download_url": "https://appstore-api.repebble.com/api/assets/pbw/5479efbd3fd38815f4000077.pbw",
-    "prefer_download_url": true,
     "repair_crc": true,
     "source_sha256": "1713f6de874b2a9af510ce70353e8f35cfe4f3e810dad1b9082322d396ec0d8c",
     "sha256": "a60e3a1bcb1359399afcaadad409fe689a497b694ef937f62d153214c80b5967"
+  },
+  {
+    "file": "code-cmd-1.0.pbw",
+    "name": "Code CMD",
+    "version": "1.0",
+    "page_url": "https://apps.repebble.com/code-cmd_55de277531f4896b4b00007c",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+    "file": "studio-clock-6.03.pbw",
+    "name": "Studio Clock",
+    "version": "6.03",
+    "page_url": "https://apps.repebble.com/studio-clock_5299db40129af76761000087",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
   }
 ]

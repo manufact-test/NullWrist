@@ -301,7 +301,12 @@ public final class PebbleRuntimeService extends Service {
         String previousId = activeStorageId;
         try {
             if (previousId != null) {
-                previous = watchfaceByStorageId(previousId);
+                try {
+                    previous = watchfaceByStorageId(previousId);
+                } catch (IOException missingPrevious) {
+                    // The active PBW may just have been deleted. Continue with the replacement.
+                    previous = null;
+                }
             }
             SelectedWatchface selected = selectedWatchface();
             if (selected.metadata.getStorageId().equals(activeStorageId)) {

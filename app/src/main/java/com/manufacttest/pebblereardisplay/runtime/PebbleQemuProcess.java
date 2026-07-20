@@ -187,21 +187,45 @@ public final class PebbleQemuProcess {
         try (PebblePbwBundle bundle = new PebblePbwBundle(pbwFile)) {
             PebblePbwBundle.AppHeader header = bundle.getHeader();
             if (registry.isInstalled(header.getUuid(), fingerprint)) {
+                IOException launchFailure = null;
                 try {
                     new PebbleAppInstaller(link, progressListener).launch(
                             header.getUuid(),
                             header.getAppName()
                     );
+                    return false;
                 } catch (IOException firstFailure) {
+                    launchFailure = firstFailure;
                     invalidateProtocolLink(link);
+                }
+
+                try {
                     link = protocolLink(8_000);
                     new PebbleAppInstaller(link, progressListener).launch(
                             header.getUuid(),
                             header.getAppName()
                     );
+                    return false;
+                } catch (IOException secondFailure) {
+                    secondFailure.addSuppressed(launchFailure);
+                    launchFailure = secondFailure;
+                    invalidateProtocolLink(link);
                 }
-                return false;
+
+                // The Android registry can outlive a replaced/corrupted SPI AppDB. Repair it
+                // automatically instead of leaving all later commands stuck behind a stale entry.
+                registry.forget(header.getUuid());
+                try {
+                    link = protocolLink(8_000);
+                    new PebbleAppInstaller(link, progressListener).install(bundle);
+                    registry.markInstalled(header.getUuid(), fingerprint);
+                    return true;
+                } catch (IOException installFailure) {
+                    installFailure.addSuppressed(launchFailure);
+                    throw installFailure;
+                }
             }
+
             new PebbleAppInstaller(link, progressListener).install(bundle);
             registry.markInstalled(header.getUuid(), fingerprint);
             return true;

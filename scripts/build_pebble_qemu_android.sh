@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Cross-build Core Devices Pebble QEMU for Android arm64.
+# Public-runner rebuild marker: native AArch64 TCG.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

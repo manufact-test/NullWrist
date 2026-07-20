@@ -5,6 +5,9 @@ import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
 
+import com.manufacttest.pebblereardisplay.data.WatchfaceRepository;
+import com.manufacttest.pebblereardisplay.model.WatchfaceMetadata;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -21,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /** Owns one native Pebble Time QEMU process and its persistent runtime files. */
@@ -521,9 +525,16 @@ public final class PebbleQemuProcess {
         }
 
         boolean existingSpiFlash = spiFlash.isFile() && spiFlash.length() > 0;
+        boolean recoverStaleImportedApps = existingSpiFlash && hasImportedRegistryMismatch();
         copyAsset(ASSET_ROOT + "qemu_micro_flash.bin", microFlash, true);
-        copyAsset(ASSET_ROOT + "qemu_spi_flash.bin", spiFlash, false);
-        if (!existingSpiFlash) {
+        copyAsset(
+                ASSET_ROOT + "qemu_spi_flash.bin",
+                spiFlash,
+                recoverStaleImportedApps
+        );
+        if (!existingSpiFlash || recoverStaleImportedApps) {
+            // Preserve PBW files in the Android library, but rebuild PebbleOS AppDB/cache from the
+            // known-good bundled image when 0.8.5 left imported bytes without a registry entry.
             new InstalledWatchfaceRegistry(context).clear();
         }
 
@@ -535,6 +546,34 @@ public final class PebbleQemuProcess {
             throw new IOException("Cannot reset QEMU PID file");
         }
         prepareFrameEventPipe();
+    }
+
+    private boolean hasImportedRegistryMismatch() {
+        WatchfaceRepository repository = new WatchfaceRepository(context);
+        InstalledWatchfaceRegistry registry = new InstalledWatchfaceRegistry(context);
+        try {
+            for (WatchfaceMetadata metadata : repository.loadAll()) {
+                if (metadata.isBundled()) {
+                    continue;
+                }
+                File file = repository.fileFor(metadata);
+                if (!file.isFile()) {
+                    continue;
+                }
+                try {
+                    UUID uuid = UUID.fromString(metadata.getUuid());
+                    String fingerprint = InstalledWatchfaceRegistry.sha256(file);
+                    if (!registry.isInstalled(uuid, fingerprint)) {
+                        return true;
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // Invalid UUIDs are already excluded by normal PBW import validation.
+                }
+            }
+        } catch (IOException ignored) {
+            // A library read failure is reported by the UI; do not destroy a healthy SPI image.
+        }
+        return false;
     }
 
     private void prepareFrameEventPipe() throws IOException {

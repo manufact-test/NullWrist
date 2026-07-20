@@ -15,7 +15,7 @@ Pebble Time watchfaces running natively on the rear display of the Unihertz Tita
 
 ## Current state
 
-Pebblehertz 0.8.6 repairs imported-PBW completion after the stricter 0.8.5 AppRunState validation.
+Pebblehertz 0.8.7 repairs imported-PBW completion and automatically recovers partial imports left by 0.8.5.
 
 Validated in CI:
 
@@ -34,6 +34,10 @@ Validated in CI:
 - automatic user-configurable Night Mode schedule;
 - charging override and below-15% minute-refresh battery saver;
 - sixteen real QEMU-rendered bundled previews.
+
+### 0.8.7 stale imported-app recovery
+
+On startup, Pebblehertz compares every stored imported PBW with the Android registry that mirrors PebbleOS SPI flash. If 0.8.5 transferred an app but timed out before recording it, the runtime restores the known-good bundled SPI image once. Imported PBW files remain in the locker and reinstall normally; clearing Android app data is not required.
 
 ### 0.8.6 imported PBW completion repair
 

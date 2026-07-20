@@ -3,7 +3,7 @@ name: One-shot style support dialog PR5
 on:
   pull_request:
     branches: ["feature/native-qemu-runtime"]
-    types: [synchronize]
+    types: [synchronize, reopened]
 
 permissions:
   contents: write

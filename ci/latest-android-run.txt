@@ -1,3 +1,3 @@
-run_id=29733509337
-head_sha=7ffd7083432492175b05cba4fc57a634c3c70a46
+run_id=29733977896
+head_sha=cee9feffb90089cfb0ba147583e965650c361d8c
 artifact=pebble-rear-display-debug-apk

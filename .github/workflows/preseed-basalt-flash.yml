@@ -6,24 +6,30 @@ on:
     paths:
       - "bundled-watchfaces.json"
       - "app/src/main/assets/watchfaces/**"
+      - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleAppInstaller.java"
+      - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleProtocolLink.java"
       - "scripts/fetch_bundled_watchfaces.py"
       - "scripts/fetch_pebble_basalt_firmware.py"
       - "scripts/build_pebble_qemu_host.sh"
       - "scripts/patch_qemu_basalt_only.py"
       - "scripts/patch_qemu_framebuffer.py"
       - "scripts/preseed_basalt_flash.py"
+      - "scripts/java_installer_smoke.py"
       - "scripts/generate_watchface_thumbnails.py"
       - ".github/workflows/preseed-basalt-flash.yml"
   pull_request:
     paths:
       - "bundled-watchfaces.json"
       - "app/src/main/assets/watchfaces/**"
+      - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleAppInstaller.java"
+      - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleProtocolLink.java"
       - "scripts/fetch_bundled_watchfaces.py"
       - "scripts/fetch_pebble_basalt_firmware.py"
       - "scripts/build_pebble_qemu_host.sh"
       - "scripts/patch_qemu_basalt_only.py"
       - "scripts/patch_qemu_framebuffer.py"
       - "scripts/preseed_basalt_flash.py"
+      - "scripts/java_installer_smoke.py"
       - "scripts/generate_watchface_thumbnails.py"
       - ".github/workflows/preseed-basalt-flash.yml"
   workflow_dispatch:
@@ -49,6 +55,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
       - name: Install host QEMU build dependencies
         run: |
@@ -81,6 +92,17 @@ jobs:
         run: |
           set -o pipefail
           bash scripts/build_pebble_qemu_host.sh 2>&1 | tee host-qemu-build.log
+
+      - name: Verify production Java PBW importer
+        run: |
+          set -o pipefail
+          python3 scripts/java_installer_smoke.py \
+            --qemu host-qemu-output/qemu-system-arm \
+            --micro app/src/main/assets/pebble/basalt/qemu_micro_flash.bin \
+            --base-spi .pebble-firmware-cache/basalt/qemu_spi_flash_base.bin \
+            --watchfaces app/src/main/assets/watchfaces \
+            --log java-installer-qemu.log \
+            2>&1 | tee java-installer-smoke.log
 
       - name: Preinstall bundled watchfaces
         run: |
@@ -140,6 +162,8 @@ jobs:
             fetch-watchfaces.log
             host-qemu-build.log
             host-qemu-output/machine-help.txt
+            java-installer-smoke.log
+            java-installer-qemu.log
             preseed.log
             preseed-qemu.log
             thumbnail-render.log

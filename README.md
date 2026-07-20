@@ -15,33 +15,44 @@ Pebble Time watchfaces running natively on the rear display of the Unihertz Tita
 
 ## Current state
 
-Pebblehertz 0.8.2 keeps the 0.8.1 runtime recovery and expands the preinstalled Pebble Time library with later-settling real previews.
+Pebblehertz 0.8.4 focuses on native runtime performance, battery control and reliable watchface switching.
 
 Validated in CI:
 
-- native ARM64 Core Devices Pebble QEMU execution assets;
+- native AArch64 TCG Core Devices Pebble QEMU;
 - Pebble Time/Basalt-only machine registration;
 - official Pebble SDK 4.17 Basalt firmware;
 - persistent 16 MB SPI flash and 704 KB micro-flash;
 - real `144×168` PebbleOS framebuffer support;
+- FIFO-driven framebuffer events with a low-frequency safety fallback;
 - automatic PBW installation through BlobDB/AppFetch/PutBytes;
-- instant AppRunState switching for installed faces;
+- AppRunState switching confirmed by a real new framebuffer generation;
+- failed imported-PBW rollback without discarding the running QEMU process;
+- asynchronous thumbnail capture after activation;
 - always-on foreground runtime lifecycle;
-- adaptive framebuffer polling that copies pixels only after the QEMU frame sequence changes;
-- pixel-art Pebblehertz control interface;
-- fifteen real QEMU-rendered bundled previews and delayed on-device thumbnail capture for imported PBWs.
+- user-configurable 24-hour PebbleOS freeze schedule;
+- charging override and below-15% minute-refresh battery saver;
+- sixteen real QEMU-rendered bundled previews.
 
-### 0.8.2 watchface library and preview timing
+### 0.8.4 performance and power
 
-Eight additional Basalt-compatible faces are bundled and preinstalled. CI now waits three seconds after the first changed framebuffer before saving each bundled preview. Imported faces also receive a 2.5-second settling period before their thumbnail is captured.
+The Android QEMU build uses native AArch64 TCG instead of the TCG interpreter. The production runtime no longer opens a diagnostic serial console or continuously writes QEMU logs.
 
-Quartz by Dalpek is not bundled because the supplied PBW contains only Emery/Gabbro builds and no Basalt executable.
+The rear display waits for FIFO frame events from QEMU instead of polling the framebuffer every 50–250 ms. Pixel conversion runs outside the Android main thread, with a one-second sequence check retained as a recovery fallback.
+
+PebbleOS can be frozen on a user-defined `HH:mm` schedule. Charging always keeps the emulator active. Below 15% battery, PebbleOS wakes around the minute boundary, refreshes the face and freezes again.
+
+### 0.8.4 watchface switching
+
+A selected watchface becomes active only after PebbleOS produces a new framebuffer generation. Thumbnail capture is then scheduled separately, so it no longer delays the active state.
+
+If an imported PBW fails to install or launch, Pebblehertz relaunches the previous face without destroying the QEMU process. Per-chunk Android UI and notification progress text has been removed; the PebbleOS loading strip remains visible on the rear screen.
 
 ### 0.8.1 runtime repair
 
-PebbleOS readiness is now determined by the actual phone-protocol handshake rather than by searching the diagnostic serial stream for a human-readable boot phrase. The diagnostic UART can contain binary bootloader records on Titan 2, so it is drained and sanitized separately and never controls runtime state.
+PebbleOS readiness is determined by the actual phone-protocol handshake rather than by searching a diagnostic serial stream for a human-readable boot phrase.
 
-A failed start now stops and detaches the failed QEMU instance. A later app start or watchface selection creates a clean runtime while retaining the persistent SPI flash. Normal watchface changes still use AppRunState without rebooting QEMU.
+A failed start stops and detaches the failed QEMU instance. A later app start or watchface selection creates a clean runtime while retaining the persistent SPI flash. Normal watchface changes use AppRunState without rebooting QEMU.
 
 The WebView/WebAssembly route was tested and rejected because Titan 2 WebView reported `crossOriginIsolated=false`, preventing the pthread-enabled QEMU build from obtaining `SharedArrayBuffer`. Pebblehertz therefore uses a native Android QEMU process and a file-backed framebuffer.
 
@@ -64,6 +75,7 @@ The application ships with these pinned PBW packages, preinstalled in the packag
 - Starfield Smooth 1.0.0
 - CMD Time Typed 1.1
 - Omega Seamaster 007 1.1
+- Studio Clock 6.03
 
 Source pages and SHA-256 hashes are recorded in [`bundled-watchfaces.json`](bundled-watchfaces.json) and [`THIRD_PARTY_WATCHFACES.md`](THIRD_PARTY_WATCHFACES.md).
 
@@ -122,13 +134,14 @@ The APK is generated at:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Physical-device validation for 0.8.2
+## Physical-device validation for 0.8.4
 
-1. Switch all fifteen bundled faces and confirm each reaches `ACTIVE / ON AIR` and appears on the rear display.
-2. Confirm the locker previews show fully initialized faces rather than startup frames.
-3. Close and reopen the main Activity while the foreground runtime stays alive.
-4. Restart the runtime and confirm the last selected face returns without a communication-readiness exception.
-5. Import one PBW and confirm installation, rear rendering and delayed thumbnail capture.
-6. Confirm fullscreen and input locking on the rear display remain unchanged.
+1. Confirm native-TCG QEMU boots on Titan 2 and compare CPU/battery use against 0.8.3.
+2. Switch all sixteen bundled faces and confirm each reaches `ACTIVE / ON AIR`.
+3. Import several PBWs and verify activation, asynchronous thumbnails and failed-PBW rollback.
+4. Verify the configured overnight freeze and resume times.
+5. Verify charging override and below-15% minute refresh behavior.
+6. Verify static, seconds and animated faces with event-driven framebuffer delivery.
+7. Confirm fullscreen and input locking on the rear display remain unchanged.
 
 Rollback point: `backup/pebblehertz-0.8.0-before-runtime-fix`.

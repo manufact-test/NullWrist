@@ -1,10 +1,9 @@
 name: One-shot style support dialog
 
 on:
-  push:
+  pull_request:
     branches: ["main"]
-    paths:
-      - ".github/workflows/one-shot-style-support-dialog.yml"
+    types: [opened, synchronize]
 
 permissions:
   contents: write
@@ -201,13 +200,3 @@ jobs:
           git commit -m "Style support dialog with Wise and PayPal branding"
           git pull --rebase origin feature/minor-fixes-0.8.9
           git push origin HEAD:feature/minor-fixes-0.8.9
-
-      - name: Remove one-shot workflow from main
-        run: |
-          git fetch origin main
-          git checkout -B main origin/main
-          git rm .github/workflows/one-shot-style-support-dialog.yml
-          git commit -m "Remove one-shot support dialog workflow"
-          git push origin HEAD:main
-
-# retry-with-rebase

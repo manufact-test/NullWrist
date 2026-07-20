@@ -1,0 +1,1 @@
+Trigger custom support dialog styling.

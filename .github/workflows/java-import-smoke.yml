@@ -1,5 +1,6 @@
 name: Java PBW import smoke
 
+# Release gate: the exact Java transport shipped in the APK must import several PBWs in one PebbleOS session.
 on:
   push:
     branches: ["feature/native-qemu-runtime"]

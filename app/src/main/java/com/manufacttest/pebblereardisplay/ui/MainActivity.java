@@ -1,6 +1,5 @@
 package com.manufacttest.pebblereardisplay.ui;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.ActivityOptions;
 import android.app.AlertDialog;
@@ -11,7 +10,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -28,8 +26,6 @@ import android.view.Gravity;
 import android.view.Window;
 import android.view.MotionEvent;
 import android.view.View;
-import android.text.InputType;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -50,7 +46,6 @@ import java.util.Locale;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_IMPORT_PBW = 1001;
-    private static final int REQUEST_NOTIFICATIONS = 1002;
     private static final String SETUP_PREFS = "background_setup";
     private static final String KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown";
 

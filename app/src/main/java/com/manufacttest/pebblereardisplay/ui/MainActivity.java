@@ -1,5 +1,6 @@
 package com.manufacttest.pebblereardisplay.ui;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.ActivityOptions;
 import android.app.AlertDialog;
@@ -10,6 +11,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -46,6 +48,7 @@ import java.util.Locale;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_IMPORT_PBW = 1001;
+    private static final int REQUEST_NOTIFICATIONS = 1002;
     private static final String SETUP_PREFS = "background_setup";
     private static final String KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown";
 
@@ -291,18 +294,18 @@ public final class MainActivity extends Activity {
     }
 
     private void showSupportDialog() {
-        String[] platforms = {"Wise", "PayPal"};
-        new AlertDialog.Builder(this)
-                .setTitle("Support Pebblehertz")
-                .setMessage("Choose a platform. Thank you for helping the project grow!")
-                .setItems(platforms, (dialog, which) -> openExternalLink(
-                        which == 0
-                                ? "https://wise.com/pay/me/ilyas709"
-                                : "https://www.paypal.me/myarrogantfox"
-                ))
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
+    new AlertDialog.Builder(this)
+            .setTitle("Support Pebblehertz")
+            .setMessage("Choose a platform. Thank you for helping the project grow!")
+            .setPositiveButton("Wise", (dialog, which) -> openExternalLink(
+                    "https://wise.com/pay/me/ilyas709"
+            ))
+            .setNeutralButton("PayPal", (dialog, which) -> openExternalLink(
+                    "https://www.paypal.me/myarrogantfox"
+            ))
+            .setNegativeButton("Cancel", null)
+            .show();
+}
 
     private void openExternalLink(String url) {
         try {
@@ -1067,8 +1070,31 @@ private static int parseTime(String value) {
     }
 
     private void maybeRequestBackgroundSetup() {
-        getWindow().getDecorView().post(this::maybeShowBatteryPrompt);
+    getWindow().getDecorView().post(() -> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                    REQUEST_NOTIFICATIONS
+            );
+            return;
+        }
+        maybeShowBatteryPrompt();
+    });
+}
+
+@Override
+public void onRequestPermissionsResult(
+        int requestCode,
+        String[] permissions,
+        int[] grantResults
+) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    if (requestCode == REQUEST_NOTIFICATIONS) {
+        maybeShowBatteryPrompt();
     }
+}
 
     private void maybeShowBatteryPrompt() {
         if (isIgnoringBatteryOptimizations()) {

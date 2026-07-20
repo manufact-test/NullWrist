@@ -1,0 +1,206 @@
+name: Style Pebblehertz support dialog
+
+on:
+  push:
+    branches: ["feature/minor-fixes-0.8.9"]
+    paths:
+      - ".github/workflows/style-support-dialog-089.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/minor-fixes-0.8.9
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Replace support dialog
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java")
+          text = path.read_text(encoding="utf-8")
+
+          replacement = r'''    private void showSupportDialog() {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(18), dp(18), dp(18), dp(14));
+        root.setBackground(panelBackground(
+                getColor(R.color.paper),
+                getColor(R.color.ink),
+                dp(2)
+        ));
+
+        LinearLayout heading = new LinearLayout(this);
+        heading.setOrientation(LinearLayout.HORIZONTAL);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView signal = pixelText("◆", 18, getColor(R.color.accent_coral));
+        signal.setPadding(0, 0, dp(10), 0);
+        heading.addView(signal);
+
+        TextView title = pixelText("KEEP THE SIGNAL ALIVE", 18, getColor(R.color.ink));
+        title.setLetterSpacing(0.025f);
+        heading.addView(title, new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+        ));
+        root.addView(heading);
+
+        TextView subtitle = bodyText(
+                "Pebblehertz stays free. Support is completely optional, but every contribution helps the project grow.",
+                13,
+                getColor(R.color.text_secondary)
+        );
+        subtitle.setPadding(0, dp(9), 0, dp(16));
+        root.addView(subtitle);
+
+        View wise = supportPlatformButton(
+                "W",
+                "WISE",
+                "FAST INTERNATIONAL SUPPORT",
+                Color.parseColor("#9FE870"),
+                Color.parseColor("#163300"),
+                Color.parseColor("#163300")
+        );
+        wise.setOnClickListener(view -> {
+            dialog.dismiss();
+            openExternalLink("https://wise.com/pay/me/ilyas709");
+        });
+        root.addView(wise, matchWidthWrapHeight(dp(10)));
+
+        View paypal = supportPlatformButton(
+                "P",
+                "PAYPAL",
+                "CARD OR PAYPAL BALANCE",
+                Color.parseColor("#0070E0"),
+                Color.parseColor("#003087"),
+                Color.WHITE
+        );
+        paypal.setOnClickListener(view -> {
+            dialog.dismiss();
+            openExternalLink("https://www.paypal.me/myarrogantfox");
+        });
+        root.addView(paypal, matchWidthWrapHeight(dp(12)));
+
+        TextView close = pixelText("CLOSE", 10, getColor(R.color.text_muted));
+        close.setGravity(Gravity.CENTER);
+        close.setPadding(dp(10), dp(7), dp(10), dp(7));
+        close.setAlpha(0.72f);
+        close.setClickable(true);
+        close.setFocusable(true);
+        close.setOnClickListener(view -> dialog.dismiss());
+
+        LinearLayout closeRow = new LinearLayout(this);
+        closeRow.setGravity(Gravity.END);
+        closeRow.addView(close, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+        root.addView(closeRow);
+
+        dialog.setContentView(root);
+        dialog.setCanceledOnTouchOutside(true);
+        dialog.show();
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.setLayout(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            window.getDecorView().setPadding(dp(18), 0, dp(18), 0);
+        }
+    }
+
+    private View supportPlatformButton(
+            String mark,
+            String platform,
+            String note,
+            int fillColor,
+            int markColor,
+            int textColor
+    ) {
+        LinearLayout button = new LinearLayout(this);
+        button.setOrientation(LinearLayout.HORIZONTAL);
+        button.setGravity(Gravity.CENTER_VERTICAL);
+        button.setPadding(dp(10), dp(9), dp(12), dp(9));
+        button.setMinimumHeight(dp(66));
+        button.setClickable(true);
+        button.setFocusable(true);
+        button.setBackground(interactivePanelBackground(
+                fillColor,
+                blend(fillColor, getColor(R.color.ink), 0.12f),
+                getColor(R.color.ink)
+        ));
+
+        TextView badge = pixelText(mark, 22, Color.WHITE);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(panelBackground(markColor, getColor(R.color.ink), dp(1)));
+        button.addView(badge, new LinearLayout.LayoutParams(dp(46), dp(46)));
+
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.setPadding(dp(12), 0, dp(8), 0);
+
+        TextView name = pixelText(platform, 17, textColor);
+        name.setLetterSpacing(0.035f);
+        labels.addView(name);
+
+        TextView description = pixelText(note, 9, textColor);
+        description.setAlpha(0.76f);
+        description.setPadding(0, dp(4), 0, 0);
+        labels.addView(description);
+
+        button.addView(labels, new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+        ));
+
+        TextView arrow = pixelText(">", 20, textColor);
+        arrow.setGravity(Gravity.CENTER);
+        button.addView(arrow, new LinearLayout.LayoutParams(dp(24), dp(46)));
+        return button;
+    }
+
+    private void openExternalLink'''
+
+          pattern = re.compile(
+              r"    private void showSupportDialog\(\) \{.*?"
+              r"\n\s*private void openExternalLink",
+              re.S,
+          )
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"Expected one support dialog, found {count}")
+          path.write_text(updated, encoding="utf-8")
+          PY
+
+      - name: Remove temporary workflow
+        run: rm -f .github/workflows/style-support-dialog-089.yml
+
+      - name: Validate and commit
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Style support dialog with Wise and PayPal branding"
+          git push origin HEAD:feature/minor-fixes-0.8.9

@@ -182,7 +182,9 @@ public final class PebbleAppInstaller {
         ByteBuffer install = ByteBuffer.allocate(5).order(ByteOrder.BIG_ENDIAN);
         install.put((byte) 0x05);
         install.putInt(cookie);
-        sendPutBytes(install.array(), cookie, partName + " install");
+        // Commit cleanup resets PebbleOS' active PutBytes token before the separate Install
+        // command is handled. A successful Install therefore responds with ACK token 0.
+        sendPutBytes(install.array(), 0, partName + " install");
         Thread.sleep(PART_SETTLE_MILLIS);
     }
 

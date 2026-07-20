@@ -1,0 +1,148 @@
+name: Finalize Pebblehertz 0.8.9 source
+
+on:
+  push:
+    branches: ["feature/minor-fixes-0.8.9"]
+    paths:
+      - ".github/workflows/finalize-089.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/minor-fixes-0.8.9
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Clean and format source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          service_path = Path("app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java")
+          service = service_path.read_text(encoding="utf-8")
+
+          for unused_import in (
+              "import android.app.Notification;\n",
+              "import android.app.NotificationChannel;\n",
+              "import android.app.NotificationManager;\n",
+              "import android.app.PendingIntent;\n",
+              "import android.content.pm.ServiceInfo;\n",
+              "import com.manufacttest.pebblereardisplay.R;\n",
+              "import com.manufacttest.pebblereardisplay.ui.MainActivity;\n",
+          ):
+              service = service.replace(unused_import, "")
+
+          service = service.replace(
+              '    private static final String CHANNEL_ID = "pebble_runtime";\n'
+              '    private static final int NOTIFICATION_ID = 4102;\n',
+              "",
+          )
+
+          method_lines = [
+              "    private void updateBatterySnapshot(Intent intent) {",
+              "        if (intent == null) {",
+              "            return;",
+              "        }",
+              "        String action = intent.getAction();",
+              "        if (Intent.ACTION_POWER_CONNECTED.equals(action)) {",
+              "            phoneChargerConnected = true;",
+              "            return;",
+              "        }",
+              "        if (Intent.ACTION_POWER_DISCONNECTED.equals(action)) {",
+              "            phoneChargerConnected = false;",
+              "            return;",
+              "        }",
+              "        if (!Intent.ACTION_BATTERY_CHANGED.equals(action)) {",
+              "            return;",
+              "        }",
+              "",
+              "        int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);",
+              "        int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);",
+              "        if (level >= 0 && scale > 0) {",
+              "            phoneBatteryPercentage = Math.max(",
+              "                    0,",
+              "                    Math.min(100, Math.round(level * 100f / scale))",
+              "            );",
+              "        }",
+              "        int status = intent.getIntExtra(",
+              "                BatteryManager.EXTRA_STATUS,",
+              "                BatteryManager.BATTERY_STATUS_UNKNOWN",
+              "        );",
+              "        int plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);",
+              "        phoneChargerConnected = plugged != 0",
+              "                || status == BatteryManager.BATTERY_STATUS_CHARGING",
+              "                || status == BatteryManager.BATTERY_STATUS_FULL;",
+              "    }",
+              "",
+              "    private void syncBatteryToRuntime() {",
+          ]
+          service, count = re.subn(
+              r"    private void updateBatterySnapshot\(Intent intent\) \{.*?"
+              r"\n\s*private void syncBatteryToRuntime\(\) \{",
+              "\n".join(method_lines),
+              service,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f"Battery method formatting failed: {count}")
+
+          notification_replacement = "\n".join([
+              "    private void updateNotification(String text) {",
+              "        // Runtime state is available in the app; Android shade notifications stay disabled.",
+              "    }",
+              "",
+              "    private static String safeMessage",
+          ])
+          service, count = re.subn(
+              r"    private void createNotificationChannel\(\) \{.*?"
+              r"\n    private static String safeMessage",
+              notification_replacement,
+              service,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f"Notification cleanup failed: {count}")
+
+          service_path.write_text(service, encoding="utf-8")
+
+          activity_path = Path("app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java")
+          activity = activity_path.read_text(encoding="utf-8")
+          for unused in (
+              "import android.Manifest;\n",
+              "import android.content.pm.PackageManager;\n",
+              "import android.text.InputType;\n",
+              "import android.widget.EditText;\n",
+              "    private static final int REQUEST_NOTIFICATIONS = 1002;\n",
+          ):
+              activity = activity.replace(unused, "")
+          activity_path.write_text(activity, encoding="utf-8")
+          PY
+
+      - name: Remove temporary patch helpers
+        run: |
+          rm -f scripts/apply_089_minor_fixes.py
+          rm -f .github/workflows/apply-089-minor-fixes.yml
+          rm -f .github/workflows/fix-089-battery-broadcasts.yml
+          rm -f .github/workflows/finalize-089.yml
+
+      - name: Validate and commit
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Finalize Pebblehertz 0.8.9 minor fixes"
+          git push origin HEAD:feature/minor-fixes-0.8.9

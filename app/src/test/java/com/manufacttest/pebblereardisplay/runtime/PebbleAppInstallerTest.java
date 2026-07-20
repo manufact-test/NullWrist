@@ -35,17 +35,18 @@ public final class PebbleAppInstallerTest {
     }
 
     @Test
-    public void putBytesResponseRejectsStaleCookie() {
-        byte[] response = ByteBuffer.allocate(5)
-                .order(ByteOrder.BIG_ENDIAN)
-                .put((byte) 1)
-                .putInt(0x11223344)
-                .array();
+    public void putBytesAcceptsMatchingAckAndTokenZeroBusyNack() {
+        byte[] ack = putBytesResponse(1, 0x11223344);
+        byte[] busy = putBytesResponse(2, 0);
+        byte[] staleAck = putBytesResponse(1, 0x55667788);
+        byte[] staleNack = putBytesResponse(2, 0x55667788);
 
-        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(response, null));
-        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(response, 0x11223344));
-        assertFalse(PebbleAppInstaller.isPutBytesResponseFor(response, 0x55667788));
-        assertEquals(0x11223344, PebbleAppInstaller.putBytesCookie(response));
+        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(ack, null));
+        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(ack, 0x11223344));
+        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(busy, 0x11223344));
+        assertFalse(PebbleAppInstaller.isPutBytesResponseFor(staleAck, 0x11223344));
+        assertFalse(PebbleAppInstaller.isPutBytesResponseFor(staleNack, 0x11223344));
+        assertEquals(0x11223344, PebbleAppInstaller.putBytesCookie(ack));
     }
 
     private static byte[] runState(int state, UUID uuid) {
@@ -54,6 +55,14 @@ public final class PebbleAppInstallerTest {
         payload.putLong(uuid.getMostSignificantBits());
         payload.putLong(uuid.getLeastSignificantBits());
         return payload.array();
+    }
+
+    private static byte[] putBytesResponse(int result, int token) {
+        return ByteBuffer.allocate(5)
+                .order(ByteOrder.BIG_ENDIAN)
+                .put((byte) result)
+                .putInt(token)
+                .array();
     }
 
     private static void assertCrc(long expectedUnsigned, byte[] value) {

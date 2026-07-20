@@ -31,7 +31,11 @@ public final class PebbleAppInstaller {
     private static final int TRANSFER_CHUNK_BYTES = 1000;
     private static final long TRANSFER_PACING_MILLIS = 4L;
     private static final long PUT_BYTES_TIMEOUT_MILLIS = 30_000L;
-    private static final long RUN_CONFIRM_TIMEOUT_MILLIS = 12_000L;
+    private static final long RUN_CONFIRM_TIMEOUT_MILLIS = 15_000L;
+    private static final long INSTALL_CONFIRM_TIMEOUT_MILLIS = 30_000L;
+    private static final long APP_FETCH_SETTLE_MILLIS = 250L;
+    private static final long RUN_STATUS_POLL_MILLIS = 2_000L;
+    private static final long RUN_RETRY_MILLIS = 5_000L;
 
     private static final AtomicInteger NEXT_TOKEN = new AtomicInteger(0x4100);
 
@@ -62,17 +66,15 @@ public final class PebbleAppInstaller {
         if (bundle.getWorker() != null) {
             sendPart(PART_WORKER, bundle.getWorker(), installId);
         }
-        awaitRunning(header.getUuid(), header.getAppName(), RUN_CONFIRM_TIMEOUT_MILLIS);
+        Thread.sleep(APP_FETCH_SETTLE_MILLIS);
         publish("Launching " + header.getAppName());
+        awaitRunning(header.getUuid(), header.getAppName(), INSTALL_CONFIRM_TIMEOUT_MILLIS);
     }
 
     /** Launches an app already present in Pebble AppDB/SPI flash and waits for its UUID. */
     public void launch(UUID uuid, String appName) throws IOException, InterruptedException {
         link.clearEndpoint(ENDPOINT_APP_RUN_STATE);
-        ByteBuffer start = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN);
-        start.put((byte) APP_RUN_STATE_RUN_COMMAND);
-        start.put(uuidBytes(uuid));
-        link.sendPebblePacket(ENDPOINT_APP_RUN_STATE, start.array());
+        sendRunCommand(uuid);
         awaitRunning(uuid, appName, RUN_CONFIRM_TIMEOUT_MILLIS);
     }
 
@@ -188,17 +190,24 @@ public final class PebbleAppInstaller {
 
     private void awaitRunning(UUID uuid, String appName, long timeoutMillis)
             throws IOException, InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        long started = System.nanoTime();
+        long deadline = started + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        long nextRunRetry = started + TimeUnit.MILLISECONDS.toNanos(RUN_RETRY_MILLIS);
+
+        // Do not clear this endpoint here. AppFetch completion and AppRunState callbacks are
+        // asynchronous; clearing between short polls can delete the exact UUID confirmation.
+        requestRunningStatus();
         while (System.nanoTime() < deadline) {
+            long now = System.nanoTime();
             long remaining = Math.max(
                     1L,
-                    TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
+                    TimeUnit.NANOSECONDS.toMillis(deadline - now)
             );
             try {
                 link.awaitEndpoint(
                         ENDPOINT_APP_RUN_STATE,
                         value -> isRunningStateFor(value, uuid),
-                        Math.min(650L, remaining)
+                        Math.min(RUN_STATUS_POLL_MILLIS, remaining)
                 );
                 return;
             } catch (IOException error) {
@@ -207,13 +216,30 @@ public final class PebbleAppInstaller {
                 }
             }
 
-            link.clearEndpoint(ENDPOINT_APP_RUN_STATE);
-            ByteBuffer status = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN);
-            status.put((byte) APP_RUN_STATE_STATUS_COMMAND);
-            status.put(new byte[16]);
-            link.sendPebblePacket(ENDPOINT_APP_RUN_STATE, status.array());
+            now = System.nanoTime();
+            if (now >= nextRunRetry) {
+                // AppFetch normally launches the downloaded app itself. Re-send RUN only as a
+                // recovery path after the fetch UI has had time to finish its transition.
+                sendRunCommand(uuid);
+                nextRunRetry = now + TimeUnit.MILLISECONDS.toNanos(RUN_RETRY_MILLIS);
+            }
+            requestRunningStatus();
         }
         throw new IOException("PebbleOS did not confirm " + appName + " as the running app");
+    }
+
+    private void sendRunCommand(UUID uuid) throws IOException {
+        ByteBuffer start = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN);
+        start.put((byte) APP_RUN_STATE_RUN_COMMAND);
+        start.put(uuidBytes(uuid));
+        link.sendPebblePacket(ENDPOINT_APP_RUN_STATE, start.array());
+    }
+
+    private void requestRunningStatus() throws IOException {
+        ByteBuffer status = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN);
+        status.put((byte) APP_RUN_STATE_STATUS_COMMAND);
+        status.put(new byte[16]);
+        link.sendPebblePacket(ENDPOINT_APP_RUN_STATE, status.array());
     }
 
     static boolean isRunningStateFor(byte[] value, UUID expectedUuid) {

@@ -15,7 +15,7 @@ Pebble Time watchfaces running natively on the rear display of the Unihertz Tita
 
 ## Current state
 
-Pebblehertz 0.8.5 repairs command ordering and thumbnail attribution exposed by the faster native-TCG runtime, and simplifies Night Mode setup.
+Pebblehertz 0.8.6 repairs imported-PBW completion after the stricter 0.8.5 AppRunState validation.
 
 Validated in CI:
 
@@ -34,6 +34,10 @@ Validated in CI:
 - automatic user-configurable Night Mode schedule;
 - charging override and below-15% minute-refresh battery saver;
 - sixteen real QEMU-rendered bundled previews.
+
+### 0.8.6 imported PBW completion repair
+
+AppFetch and AppRunState callbacks are asynchronous. Pebblehertz no longer clears the run-state response queue between short polls, waits up to 30 seconds for an imported app to finish, and retries the RUN command only after the fetch UI has had time to complete.
 
 ### 0.8.5 command and thumbnail repair
 

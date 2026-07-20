@@ -23,13 +23,16 @@ public final class PebbleAppInstaller {
     private static final int BLOB_STATUS_SUCCESS = 1;
     private static final int BLOB_STATUS_TRY_LATER = 0x0B;
     private static final int PUT_BYTES_ACK = 1;
+    private static final int PUT_BYTES_NACK = 2;
 
     private static final int PART_RESOURCES = 4;
     private static final int PART_BINARY = 5;
     private static final int PART_WORKER = 7;
     private static final int APP_INSTALL_FLAG = 0x80;
     private static final int TRANSFER_CHUNK_BYTES = 1000;
-    private static final long TRANSFER_PACING_MILLIS = 4L;
+    private static final int PUT_BYTES_BUSY_RETRIES = 10;
+    private static final long TRANSFER_PACING_MILLIS = 12L;
+    private static final long PART_SETTLE_MILLIS = 40L;
     private static final long PUT_BYTES_TIMEOUT_MILLIS = 30_000L;
     private static final long RUN_CONFIRM_TIMEOUT_MILLIS = 15_000L;
     private static final long INSTALL_CONFIRM_TIMEOUT_MILLIS = 30_000L;
@@ -59,12 +62,18 @@ public final class PebbleAppInstaller {
 
         insertAppMetadata(header);
         int installId = requestAppStart(header.getUuid());
-        sendPart(PART_BINARY, bundle.getApplication(), installId);
+
+        // PutBytes is strictly request/response ordered. Drain only once at the beginning of a
+        // fresh AppFetch transaction. Clearing before every packet can delete a delayed busy NACK
+        // or ACK and leaves the phone waiting forever while Android waits for a response it erased.
+        link.clearEndpoint(ENDPOINT_PUT_BYTES);
+
+        sendPart(PART_BINARY, bundle.getApplication(), installId, "application");
         if (bundle.getResources() != null) {
-            sendPart(PART_RESOURCES, bundle.getResources(), installId);
+            sendPart(PART_RESOURCES, bundle.getResources(), installId, "resources");
         }
         if (bundle.getWorker() != null) {
-            sendPart(PART_WORKER, bundle.getWorker(), installId);
+            sendPart(PART_WORKER, bundle.getWorker(), installId, "worker");
         }
         Thread.sleep(APP_FETCH_SETTLE_MILLIS);
         publish("Launching " + header.getAppName());
@@ -135,15 +144,17 @@ public final class PebbleAppInstaller {
         return ByteBuffer.wrap(fetch, 17, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
     }
 
-    private void sendPart(int partType, byte[] object, int installId)
+    private void sendPart(int partType, byte[] object, int installId, String partName)
             throws IOException, InterruptedException {
         ByteBuffer init = ByteBuffer.allocate(10).order(ByteOrder.BIG_ENDIAN);
         init.put((byte) 0x01);
         init.putInt(object.length);
         init.put((byte) (partType | APP_INSTALL_FLAG));
         init.putInt(installId);
-        int cookie = sendPutBytes(init.array(), null).cookie;
+        int cookie = sendPutBytes(init.array(), null, partName + " init").cookie;
 
+        int chunkCount = (object.length + TRANSFER_CHUNK_BYTES - 1) / TRANSFER_CHUNK_BYTES;
+        int chunkIndex = 0;
         for (int offset = 0; offset < object.length; offset += TRANSFER_CHUNK_BYTES) {
             int length = Math.min(TRANSFER_CHUNK_BYTES, object.length - offset);
             ByteBuffer put = ByteBuffer.allocate(9 + length).order(ByteOrder.BIG_ENDIAN);
@@ -151,7 +162,12 @@ public final class PebbleAppInstaller {
             put.putInt(cookie);
             put.putInt(length);
             put.put(object, offset, length);
-            sendPutBytes(put.array(), cookie);
+            chunkIndex++;
+            sendPutBytes(
+                    put.array(),
+                    cookie,
+                    partName + " chunk " + chunkIndex + "/" + chunkCount
+            );
             totalSent += length;
             publishProgress();
             Thread.sleep(TRANSFER_PACING_MILLIS);
@@ -161,31 +177,81 @@ public final class PebbleAppInstaller {
         commit.put((byte) 0x03);
         commit.putInt(cookie);
         commit.putInt(stm32Crc32(object));
-        sendPutBytes(commit.array(), cookie);
+        sendPutBytes(commit.array(), cookie, partName + " commit");
 
         ByteBuffer install = ByteBuffer.allocate(5).order(ByteOrder.BIG_ENDIAN);
         install.put((byte) 0x05);
         install.putInt(cookie);
-        sendPutBytes(install.array(), cookie);
+        sendPutBytes(install.array(), cookie, partName + " install");
+        Thread.sleep(PART_SETTLE_MILLIS);
     }
 
-    private PutBytesResponse sendPutBytes(byte[] payload, Integer expectedCookie)
+    private PutBytesResponse sendPutBytes(byte[] payload, Integer expectedCookie, String stage)
             throws IOException, InterruptedException {
-        link.clearEndpoint(ENDPOINT_PUT_BYTES);
-        link.sendPebblePacket(ENDPOINT_PUT_BYTES, payload);
-        byte[] response = link.awaitEndpoint(
-                ENDPOINT_PUT_BYTES,
-                value -> isPutBytesResponseFor(value, expectedCookie),
-                PUT_BYTES_TIMEOUT_MILLIS
-        );
-        int result = response[0] & 0xff;
-        int cookie = putBytesCookie(response);
-        if (result != PUT_BYTES_ACK) {
+        for (int attempt = 0; attempt <= PUT_BYTES_BUSY_RETRIES; attempt++) {
+            link.sendPebblePacket(ENDPOINT_PUT_BYTES, payload);
+            byte[] response = awaitPutBytesResponse(expectedCookie, stage);
+            int result = response[0] & 0xff;
+            int cookie = putBytesCookie(response);
+
+            if (result == PUT_BYTES_ACK) {
+                return new PutBytesResponse(cookie);
+            }
+
+            // PebbleOS sends a token-zero NACK when the PutBytes receiver is temporarily busy or
+            // could not take its short internal semaphore. The request was not accepted, so it is
+            // safe to retry it after a small backoff. 0.8.5/0.8.7 rejected this response by cookie
+            // and waited for 30 seconds, which is the stalled progress bar seen on Titan 2.
+            if (result == PUT_BYTES_NACK && cookie == 0 && attempt < PUT_BYTES_BUSY_RETRIES) {
+                Thread.sleep(Math.min(250L, 20L * (attempt + 1)));
+                continue;
+            }
+
             throw new IOException(
-                    "Pebble NACKed PutBytes for token " + Integer.toUnsignedString(cookie)
+                    "Pebble rejected " + stage + " (response=" + result
+                            + ", token=" + Integer.toUnsignedString(cookie) + ")"
             );
         }
-        return new PutBytesResponse(cookie);
+        throw new IOException("Pebble remained busy during " + stage);
+    }
+
+    private byte[] awaitPutBytesResponse(Integer expectedCookie, String stage)
+            throws IOException, InterruptedException {
+        long deadline = System.nanoTime()
+                + TimeUnit.MILLISECONDS.toNanos(PUT_BYTES_TIMEOUT_MILLIS);
+        while (System.nanoTime() < deadline) {
+            long remaining = Math.max(
+                    1L,
+                    TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
+            );
+            byte[] response;
+            try {
+                response = link.awaitEndpoint(
+                        ENDPOINT_PUT_BYTES,
+                        value -> value != null && value.length >= 5,
+                        remaining
+                );
+            } catch (IOException error) {
+                if (isEndpointTimeout(error)) {
+                    throw new IOException("Timed out during " + stage + " (" + link.diagnostics() + ")", error);
+                }
+                throw error;
+            }
+
+            int result = response[0] & 0xff;
+            int cookie = putBytesCookie(response);
+            if (isPutBytesResponseFor(response, expectedCookie)) {
+                return response;
+            }
+
+            // A response from an older completed transaction can still be queued after an app
+            // switch. Consume it and keep waiting. A token-zero NACK is never stale: it describes
+            // the request just sent and must be handled as a retryable busy response.
+            if (result == PUT_BYTES_NACK && cookie == 0) {
+                return response;
+            }
+        }
+        throw new IOException("Timed out during " + stage + " (" + link.diagnostics() + ")");
     }
 
     private void awaitRunning(UUID uuid, String appName, long timeoutMillis)
@@ -194,8 +260,6 @@ public final class PebbleAppInstaller {
         long deadline = started + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
         long nextRunRetry = started + TimeUnit.MILLISECONDS.toNanos(RUN_RETRY_MILLIS);
 
-        // Do not clear this endpoint here. AppFetch completion and AppRunState callbacks are
-        // asynchronous; clearing between short polls can delete the exact UUID confirmation.
         requestRunningStatus();
         while (System.nanoTime() < deadline) {
             long now = System.nanoTime();
@@ -218,8 +282,6 @@ public final class PebbleAppInstaller {
 
             now = System.nanoTime();
             if (now >= nextRunRetry) {
-                // AppFetch normally launches the downloaded app itself. Re-send RUN only as a
-                // recovery path after the fetch UI has had time to finish its transition.
                 sendRunCommand(uuid);
                 nextRunRetry = now + TimeUnit.MILLISECONDS.toNanos(RUN_RETRY_MILLIS);
             }
@@ -253,9 +315,14 @@ public final class PebbleAppInstaller {
     }
 
     static boolean isPutBytesResponseFor(byte[] value, Integer expectedCookie) {
-        return value != null
-                && value.length >= 5
-                && (expectedCookie == null || putBytesCookie(value) == expectedCookie);
+        if (value == null || value.length < 5) {
+            return false;
+        }
+        int result = value[0] & 0xff;
+        int cookie = putBytesCookie(value);
+        return (result == PUT_BYTES_NACK && cookie == 0)
+                || expectedCookie == null
+                || cookie == expectedCookie;
     }
 
     static int putBytesCookie(byte[] response) {

@@ -594,7 +594,7 @@ private EditText timeField(String value) {
 }
 
 private static int parseTime(String value) {
-    if (value == null || !value.matches("\d{1,2}:\d{2}")) {
+    if (value == null || !value.matches("\\d{1,2}:\\d{2}")) {
         return -1;
     }
     String[] parts = value.split(":", 2);

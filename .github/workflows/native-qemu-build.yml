@@ -57,7 +57,7 @@ jobs:
             .native-qemu-build/sources/pcre2-10.46
             .native-qemu-build/sources/glib-2.82.5
             .native-qemu-build/sources/pixman-0.44.2
-          key: pebble-qemu-android-deps-v2-${{ runner.os }}-ndk28
+          key: pebble-qemu-android-deps-v3-${{ runner.os }}-ndk28-${{ github.repository_id }}
 
       - name: Install Android NDK and host build tools
         run: |

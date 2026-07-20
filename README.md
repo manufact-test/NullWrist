@@ -6,7 +6,7 @@ Pebble Time watchfaces running natively on the rear display of the Unihertz Tita
 
 - The main display is a pixel-art watchface locker with real previews, `.pbw` import, selection and rear-display preview.
 - The selected Pebble Time face runs inside native ARM64 QEMU and switches without rebooting the emulator.
-- The locker distinguishes a UI selection from a face actually acknowledged by PebbleOS: `QUEUED` becomes `ACTIVE / ON AIR` only after runtime activation.
+- The locker distinguishes a UI selection from the exact UUID acknowledged by PebbleOS: `QUEUED` becomes `ACTIVE / ON AIR` only after runtime confirmation.
 - Bundled watchfaces are preinstalled in persistent Basalt SPI flash; imported PBWs are installed once and retained.
 - A foreground service keeps PebbleOS alive independently from the main Activity.
 - When the app opens in the Titan 2 compact rear window, it routes directly to the fullscreen Pebble framebuffer.
@@ -15,7 +15,7 @@ Pebble Time watchfaces running natively on the rear display of the Unihertz Tita
 
 ## Current state
 
-Pebblehertz 0.8.4 focuses on native runtime performance, battery control and reliable watchface switching.
+Pebblehertz 0.8.5 repairs command ordering and thumbnail attribution exposed by the faster native-TCG runtime, and simplifies Night Mode setup.
 
 Validated in CI:
 
@@ -26,13 +26,28 @@ Validated in CI:
 - real `144×168` PebbleOS framebuffer support;
 - FIFO-driven framebuffer events with a low-frequency safety fallback;
 - automatic PBW installation through BlobDB/AppFetch/PutBytes;
-- AppRunState switching confirmed by a real new framebuffer generation;
+- AppRunState switching confirmed against the exact running UUID;
+- paced PutBytes transfers with stale-response protection;
 - failed imported-PBW rollback without discarding the running QEMU process;
-- asynchronous thumbnail capture after activation;
+- cancellation and versioning of asynchronous imported thumbnail captures;
 - always-on foreground runtime lifecycle;
-- user-configurable 24-hour PebbleOS freeze schedule;
+- automatic user-configurable Night Mode schedule;
 - charging override and below-15% minute-refresh battery saver;
 - sixteen real QEMU-rendered bundled previews.
+
+### 0.8.5 command and thumbnail repair
+
+Native TCG can process frames much faster than the old interpreter. A normal seconds tick from the previous face could therefore arrive before PebbleOS completed an AppRunState command. Pebblehertz now queries endpoint `0x0034` and waits for PebbleOS to report the exact requested UUID before publishing `ACTIVE / ON AIR`.
+
+PBW transfer pacing is restored at the protocol boundary, PutBytes acknowledgements are matched to their expected cookie, stale endpoint responses are cleared before each transaction, and an unhealthy protocol socket is recreated without restarting QEMU.
+
+A new selection immediately cancels any pending thumbnail task. Imported preview keys include their stored PBW identity, old capture schemas are invalidated, and the hero card follows the actual active face rather than an unconfirmed UI selection.
+
+### 0.8.5 Night Mode and preview UI
+
+Night Mode no longer has a separate enable checkbox. The user sets `START SLEEP` and `END SLEEP`; the current watchface stays visible while PebbleOS is frozen in the background. Charging always keeps the emulator running.
+
+Main-screen preview mode displays a keyboard hint explaining that the phone Back key exits preview.
 
 ### 0.8.4 performance and power
 
@@ -40,13 +55,7 @@ The Android QEMU build uses native AArch64 TCG instead of the TCG interpreter. T
 
 The rear display waits for FIFO frame events from QEMU instead of polling the framebuffer every 50–250 ms. Pixel conversion runs outside the Android main thread, with a one-second sequence check retained as a recovery fallback.
 
-PebbleOS can be frozen on a user-defined `HH:mm` schedule. Charging always keeps the emulator active. Below 15% battery, PebbleOS wakes around the minute boundary, refreshes the face and freezes again.
-
-### 0.8.4 watchface switching
-
-A selected watchface becomes active only after PebbleOS produces a new framebuffer generation. Thumbnail capture is then scheduled separately, so it no longer delays the active state.
-
-If an imported PBW fails to install or launch, Pebblehertz relaunches the previous face without destroying the QEMU process. Per-chunk Android UI and notification progress text has been removed; the PebbleOS loading strip remains visible on the rear screen.
+Below 15% battery, PebbleOS wakes around the minute boundary, refreshes the face and freezes again.
 
 ### 0.8.1 runtime repair
 
@@ -107,7 +116,7 @@ python3 scripts/preseed_basalt_flash.py --help
 python3 scripts/generate_watchface_thumbnails.py --help
 ```
 
-Generated previews live in `app/src/main/assets/watchface-thumbnails/` and use the watchface UUID as the filename.
+Generated bundled previews live in `app/src/main/assets/watchface-thumbnails/` and use the watchface UUID as the filename.
 
 ## Development stack
 
@@ -134,14 +143,14 @@ The APK is generated at:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Physical-device validation for 0.8.4
+## Physical-device validation for 0.8.5
 
-1. Confirm native-TCG QEMU boots on Titan 2 and compare CPU/battery use against 0.8.3.
-2. Switch all sixteen bundled faces and confirm each reaches `ACTIVE / ON AIR`.
-3. Import several PBWs and verify activation, asynchronous thumbnails and failed-PBW rollback.
-4. Verify the configured overnight freeze and resume times.
-5. Verify charging override and below-15% minute refresh behavior.
-6. Verify static, seconds and animated faces with event-driven framebuffer delivery.
-7. Confirm fullscreen and input locking on the rear display remain unchanged.
+1. Rapidly switch among several bundled faces and confirm only the acknowledged face reaches `ACTIVE / ON AIR`.
+2. Import one PBW, switch to bundled faces, import another PBW, and continue switching without restarting PebbleOS.
+3. Re-import an updated PBW with the same UUID and confirm it replaces the previous copy.
+4. Confirm imported covers belong to the correct face after repeated and rapid selections.
+5. Open main-screen preview and exit with the physical keyboard Back key.
+6. Verify the styled Night Mode dialog, overnight freeze/resume and charging override.
+7. Verify below-15% minute refresh behavior and event-driven framebuffer delivery.
 
 Rollback point: `backup/pebblehertz-0.8.0-before-runtime-fix`.

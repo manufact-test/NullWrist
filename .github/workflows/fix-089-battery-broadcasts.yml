@@ -5,6 +5,9 @@ on:
     branches: ["feature/minor-fixes-0.8.9"]
     paths:
       - ".github/workflows/fix-089-battery-broadcasts.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/fix-089-battery-broadcasts.yml"
   workflow_dispatch:
 
 permissions:
@@ -27,32 +30,16 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path("app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java")
           text = path.read_text(encoding="utf-8")
-          old = '''    private void updateBatterySnapshot(Intent intent) {
-              if (intent == null) {
-                  return;
-              }
-              int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-              int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-              if (level >= 0 && scale > 0) {
-                  phoneBatteryPercentage = Math.max(
-                          0,
-                          Math.min(100, Math.round(level * 100f / scale))
-                  );
-              }
-              int status = intent.getIntExtra(
-                      BatteryManager.EXTRA_STATUS,
-                      BatteryManager.BATTERY_STATUS_UNKNOWN
-              );
-              int plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
-              phoneChargerConnected = plugged != 0
-                      || status == BatteryManager.BATTERY_STATUS_CHARGING
-                      || status == BatteryManager.BATTERY_STATUS_FULL;
-          }
-          '''
-          new = '''    private void updateBatterySnapshot(Intent intent) {
+          pattern = re.compile(
+              r"    private void updateBatterySnapshot\(Intent intent\) \{.*?"
+              r"\n    \}\n\n    private void syncBatteryToRuntime\(\) \{",
+              re.S,
+          )
+          replacement = '''    private void updateBatterySnapshot(Intent intent) {
               if (intent == null) {
                   return;
               }
@@ -86,10 +73,12 @@ jobs:
                       || status == BatteryManager.BATTERY_STATUS_CHARGING
                       || status == BatteryManager.BATTERY_STATUS_FULL;
           }
-          '''
-          if text.count(old) != 1:
-              raise SystemExit("Expected battery method was not found exactly once")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          private void syncBatteryToRuntime() {'''
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"Expected one battery method, found {count}")
+          path.write_text(updated, encoding="utf-8")
           PY
 
       - name: Validate and commit

@@ -38,7 +38,7 @@ public final class PebbleQemuProcess {
     private static final int MAGIC = 0x50424642;
     private static final String ASSET_ROOT = "pebble/basalt/";
     private static final String SPI_RECOVERY_PREFERENCES = "pebble_spi_recovery";
-    private static final String KEY_085_RECOVERY_COMPLETED = "recovery_085_completed";
+    private static final String KEY_088_RECOVERY_COMPLETED = "recovery_088_completed";
 
     private final Context context;
     private final File runtimeDirectory;
@@ -530,7 +530,7 @@ public final class PebbleQemuProcess {
         boolean recoveryCompleted = context.getSharedPreferences(
                 SPI_RECOVERY_PREFERENCES,
                 Context.MODE_PRIVATE
-        ).getBoolean(KEY_085_RECOVERY_COMPLETED, false);
+        ).getBoolean(KEY_088_RECOVERY_COMPLETED, false);
         boolean recoverStaleImportedApps = existingSpiFlash
                 && !recoveryCompleted
                 && hasImportedRegistryMismatch();
@@ -547,7 +547,7 @@ public final class PebbleQemuProcess {
         }
         context.getSharedPreferences(SPI_RECOVERY_PREFERENCES, Context.MODE_PRIVATE)
                 .edit()
-                .putBoolean(KEY_085_RECOVERY_COMPLETED, true)
+                .putBoolean(KEY_088_RECOVERY_COMPLETED, true)
                 .commit();
 
         closeFramebufferReader();

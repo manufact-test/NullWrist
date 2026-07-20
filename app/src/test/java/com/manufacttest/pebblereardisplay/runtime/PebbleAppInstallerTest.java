@@ -35,18 +35,21 @@ public final class PebbleAppInstallerTest {
     }
 
     @Test
-    public void putBytesAcceptsMatchingAckAndTokenZeroBusyNack() {
-        byte[] ack = putBytesResponse(1, 0x11223344);
-        byte[] busy = putBytesResponse(2, 0);
+    public void putBytesMatchesTransferTokensAndTokenZeroControlResponses() {
+        byte[] transferAck = putBytesResponse(1, 0x11223344);
+        byte[] installAck = putBytesResponse(1, 0);
+        byte[] busyNack = putBytesResponse(2, 0);
         byte[] staleAck = putBytesResponse(1, 0x55667788);
         byte[] staleNack = putBytesResponse(2, 0x55667788);
 
-        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(ack, null));
-        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(ack, 0x11223344));
-        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(busy, 0x11223344));
+        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(transferAck, null));
+        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(transferAck, 0x11223344));
+        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(installAck, 0));
+        assertTrue(PebbleAppInstaller.isPutBytesResponseFor(busyNack, 0x11223344));
+        assertFalse(PebbleAppInstaller.isPutBytesResponseFor(installAck, 0x11223344));
         assertFalse(PebbleAppInstaller.isPutBytesResponseFor(staleAck, 0x11223344));
         assertFalse(PebbleAppInstaller.isPutBytesResponseFor(staleNack, 0x11223344));
-        assertEquals(0x11223344, PebbleAppInstaller.putBytesCookie(ack));
+        assertEquals(0x11223344, PebbleAppInstaller.putBytesCookie(transferAck));
     }
 
     private static byte[] runState(int state, UUID uuid) {

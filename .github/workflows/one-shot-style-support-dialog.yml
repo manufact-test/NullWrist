@@ -208,3 +208,5 @@ jobs:
           git rm .github/workflows/one-shot-style-support-dialog.yml
           git commit -m "Remove one-shot support dialog workflow"
           git push origin HEAD:main
+
+# trigger-after-install

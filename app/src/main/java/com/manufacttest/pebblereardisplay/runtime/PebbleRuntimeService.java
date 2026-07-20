@@ -10,6 +10,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -72,6 +73,8 @@ public final class PebbleRuntimeService extends Service {
     private volatile boolean runtimeBusy;
     private volatile String activeStorageId;
     private volatile RuntimePowerPolicy.Mode powerMode = RuntimePowerPolicy.Mode.RUNNING;
+    private volatile int phoneBatteryPercentage = 100;
+    private volatile boolean phoneChargerConnected;
 
     private final Runnable policyTick = new Runnable() {
         @Override
@@ -118,6 +121,8 @@ public final class PebbleRuntimeService extends Service {
     private final BroadcastReceiver powerReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            updateBatterySnapshot(intent);
+            executor.execute(PebbleRuntimeService.this::syncBatteryToRuntime);
             policyHandler.removeCallbacks(policyTick);
             policyHandler.post(policyTick);
         }
@@ -184,19 +189,13 @@ public final class PebbleRuntimeService extends Service {
 
     private static void send(Context context, String action) {
         Intent intent = new Intent(context, PebbleRuntimeService.class).setAction(action);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
-        }
+        context.startService(intent);
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
         instance = this;
-        createNotificationChannel();
-        promoteToForeground(buildNotification("Pebble Time is starting"));
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_BATTERY_CHANGED);
         filter.addAction(Intent.ACTION_POWER_CONNECTED);
@@ -218,7 +217,6 @@ public final class PebbleRuntimeService extends Service {
         if (ACTION_STOP.equals(action)) {
             generation.incrementAndGet();
             stopRuntime();
-            stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -354,6 +352,7 @@ public final class PebbleRuntimeService extends Service {
             setStatus("Connecting to PebbleOS…");
             current.waitForFirmwareReady(40_000);
             ensureCurrent(requestedGeneration);
+            current.updateBatteryState(phoneBatteryPercentage, phoneChargerConnected);
 
             setStatus("Waiting for Pebble display…");
             if (!current.waitForFirstFrame(12_000)) {
@@ -555,6 +554,40 @@ public final class PebbleRuntimeService extends Service {
                 && current.isRunning();
     }
 
+    private void updateBatterySnapshot(Intent intent) {
+        if (intent == null) {
+            return;
+        }
+        int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+        int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+        if (level >= 0 && scale > 0) {
+            phoneBatteryPercentage = Math.max(
+                    0,
+                    Math.min(100, Math.round(level * 100f / scale))
+            );
+        }
+        int status = intent.getIntExtra(
+                BatteryManager.EXTRA_STATUS,
+                BatteryManager.BATTERY_STATUS_UNKNOWN
+        );
+        int plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
+        phoneChargerConnected = plugged != 0
+                || status == BatteryManager.BATTERY_STATUS_CHARGING
+                || status == BatteryManager.BATTERY_STATUS_FULL;
+    }
+
+    private void syncBatteryToRuntime() {
+        PebbleQemuProcess current = runtime;
+        if (current == null || !current.isRunning()) {
+            return;
+        }
+        try {
+            current.updateBatteryState(phoneBatteryPercentage, phoneChargerConnected);
+        } catch (IOException ignored) {
+            // The next sticky battery broadcast or runtime start will retry the sync.
+        }
+    }
+
     private void applyPowerPolicy() {
         RuntimePowerPolicy.Snapshot snapshot = RuntimePowerPolicy.evaluate(
                 this,
@@ -710,8 +743,7 @@ public final class PebbleRuntimeService extends Service {
     }
 
     private void updateNotification(String text) {
-        NotificationManager manager = getSystemService(NotificationManager.class);
-        manager.notify(NOTIFICATION_ID, buildNotification(text));
+        // Runtime state is shown inside Pebblehertz; Android shade notifications are disabled.
     }
 
     private Notification buildNotification(String text) {

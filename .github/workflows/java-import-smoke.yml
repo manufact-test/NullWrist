@@ -8,6 +8,12 @@ on:
       - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleProtocolLink.java"
       - "scripts/java_installer_smoke.py"
       - ".github/workflows/java-import-smoke.yml"
+  pull_request:
+    paths:
+      - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleAppInstaller.java"
+      - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleProtocolLink.java"
+      - "scripts/java_installer_smoke.py"
+      - ".github/workflows/java-import-smoke.yml"
   workflow_dispatch:
 
 permissions:
@@ -19,8 +25,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: feature/native-qemu-runtime
 
       - uses: actions/setup-python@v5
         with:

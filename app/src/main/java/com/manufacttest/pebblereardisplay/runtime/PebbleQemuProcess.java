@@ -37,6 +37,8 @@ public final class PebbleQemuProcess {
     private static final int SEQUENCE_OFFSET_BYTES = 24;
     private static final int MAGIC = 0x50424642;
     private static final String ASSET_ROOT = "pebble/basalt/";
+    private static final String SPI_RECOVERY_PREFERENCES = "pebble_spi_recovery";
+    private static final String KEY_085_RECOVERY_COMPLETED = "recovery_085_completed";
 
     private final Context context;
     private final File runtimeDirectory;
@@ -525,7 +527,13 @@ public final class PebbleQemuProcess {
         }
 
         boolean existingSpiFlash = spiFlash.isFile() && spiFlash.length() > 0;
-        boolean recoverStaleImportedApps = existingSpiFlash && hasImportedRegistryMismatch();
+        boolean recoveryCompleted = context.getSharedPreferences(
+                SPI_RECOVERY_PREFERENCES,
+                Context.MODE_PRIVATE
+        ).getBoolean(KEY_085_RECOVERY_COMPLETED, false);
+        boolean recoverStaleImportedApps = existingSpiFlash
+                && !recoveryCompleted
+                && hasImportedRegistryMismatch();
         copyAsset(ASSET_ROOT + "qemu_micro_flash.bin", microFlash, true);
         copyAsset(
                 ASSET_ROOT + "qemu_spi_flash.bin",
@@ -537,6 +545,10 @@ public final class PebbleQemuProcess {
             // known-good bundled image when 0.8.5 left imported bytes without a registry entry.
             new InstalledWatchfaceRegistry(context).clear();
         }
+        context.getSharedPreferences(SPI_RECOVERY_PREFERENCES, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_085_RECOVERY_COMPLETED, true)
+                .commit();
 
         closeFramebufferReader();
         if (framebuffer.exists() && !framebuffer.delete()) {

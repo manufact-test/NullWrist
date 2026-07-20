@@ -8,14 +8,14 @@ Pebble Time watchfaces running natively on the rear display of the Unihertz Tita
 - The selected Pebble Time face runs inside native ARM64 QEMU and switches without rebooting the emulator.
 - The locker distinguishes a UI selection from the exact UUID acknowledged by PebbleOS: `QUEUED` becomes `ACTIVE / ON AIR` only after runtime confirmation.
 - Bundled watchfaces are preinstalled in persistent Basalt SPI flash; imported PBWs are installed once and retained.
-- A foreground service keeps PebbleOS alive independently from the main Activity.
+- A notification-free Android service owns PebbleOS independently from the main Activity.
 - When the app opens in the Titan 2 compact rear window, it routes directly to the fullscreen Pebble framebuffer.
 - Rear mode consumes touch and generic motion input, blocks Back/predictive Back and requests full-window system-gesture exclusion.
 - Rear-mode detection uses both Android `displayId` and actual window pixel bounds because Titan firmware can expose the rear screen as display 0.
 
 ## Current state
 
-Pebblehertz 0.8.7 repairs imported-PBW completion and automatically recovers partial imports left by 0.8.5.
+Pebblehertz 0.8.9 adds native time selection, duplicate-import protection, real Titan 2 battery forwarding, notification-free runtime operation and optional project support links.
 
 Validated in CI:
 
@@ -30,10 +30,21 @@ Validated in CI:
 - paced PutBytes transfers with stale-response protection;
 - failed imported-PBW rollback without discarding the running QEMU process;
 - cancellation and versioning of asynchronous imported thumbnail captures;
-- always-on foreground runtime lifecycle;
+- notification-free runtime lifecycle;
 - automatic user-configurable Night Mode schedule;
 - charging override and below-15% minute-refresh battery saver;
+- real Titan 2 battery percentage and charging-state forwarding to PebbleOS;
 - sixteen real QEMU-rendered bundled previews.
+
+### 0.8.9 minor UX and runtime fixes
+
+`START SLEEP` and `END SLEEP` now open Android's native 24-hour time picker instead of accepting unrestricted text input.
+
+PBW imports are checked by Pebble UUID. Importing a watchface that is already present is rejected with a clear message instead of adding a duplicate locker card.
+
+Pebblehertz reads the Titan 2 battery percentage and charging state from Android and sends both values through QEMU's Pebble battery control protocol. Runtime state remains visible inside the app, while Android notification-shade status cards and the notification permission request are removed.
+
+A `SUPPORT PEBBLEHERTZ` button at the bottom of the locker offers Wise and PayPal.
 
 ### 0.8.7 stale imported-app recovery
 
@@ -151,14 +162,14 @@ The APK is generated at:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Physical-device validation for 0.8.5
+## Physical-device validation for 0.8.9
 
-1. Rapidly switch among several bundled faces and confirm only the acknowledged face reaches `ACTIVE / ON AIR`.
-2. Import one PBW, switch to bundled faces, import another PBW, and continue switching without restarting PebbleOS.
-3. Re-import an updated PBW with the same UUID and confirm it replaces the previous copy.
-4. Confirm imported covers belong to the correct face after repeated and rapid selections.
-5. Open main-screen preview and exit with the physical keyboard Back key.
-6. Verify the styled Night Mode dialog, overnight freeze/resume and charging override.
+1. Tap both Sleep Schedule fields and confirm that each opens a 24-hour time picker with no keyboard text entry.
+2. Import a PBW that already exists and confirm that Pebblehertz reports the existing face without adding another card.
+3. Compare a battery-aware watchface with the Titan 2 battery percentage, then connect and disconnect the charger.
+4. Run, switch, sleep and wake the runtime and confirm that no Pebblehertz status notification appears in the Android shade.
+5. Open `SUPPORT PEBBLEHERTZ` and verify both Wise and PayPal destinations.
+6. Rapidly switch among several bundled and imported faces and confirm only the acknowledged face reaches `ACTIVE / ON AIR`.
 7. Verify below-15% minute refresh behavior and event-driven framebuffer delivery.
 
 Rollback point: `backup/pebblehertz-0.8.0-before-runtime-fix`.

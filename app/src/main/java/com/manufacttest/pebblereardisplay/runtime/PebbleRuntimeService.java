@@ -307,6 +307,8 @@ public final class PebbleRuntimeService extends Service {
             if (selected.metadata.getStorageId().equals(activeStorageId)) {
                 return;
             }
+            // Cancel a pending capture before the framebuffer starts showing install/launch frames.
+            thumbnailGeneration.incrementAndGet();
             current.resume();
             activateSelected(current, selected);
         } catch (InterruptedException interrupted) {
@@ -393,12 +395,18 @@ public final class PebbleRuntimeService extends Service {
                 new InstalledWatchfaceRegistry(this),
                 null
         );
-        if (!waitForFrameAdvance(
+
+        // AppRunState has already confirmed the exact UUID. The framebuffer is now only a
+        // rendering check, never the command acknowledgement.
+        int frameAfterConfirmation = current.readFrameSequence();
+        boolean rendered = frameAfterConfirmation > 0
+                && frameAfterConfirmation != frameBeforeLaunch;
+        if (!rendered && !waitForFrameAdvance(
                 current,
-                frameBeforeLaunch,
+                frameAfterConfirmation,
                 installed ? 8_000 : 5_000
         )) {
-            throw new IOException("Selected watchface did not produce a new frame");
+            throw new IOException("Confirmed watchface did not render a framebuffer");
         }
 
         activeStorageId = selected.metadata.getStorageId();
@@ -463,10 +471,10 @@ public final class PebbleRuntimeService extends Service {
             WatchfaceMetadata metadata
     ) {
         WatchfaceThumbnailRepository thumbnails = new WatchfaceThumbnailRepository(this);
+        int token = thumbnailGeneration.incrementAndGet();
         if (thumbnails.hasCurrentThumbnail(metadata)) {
             return;
         }
-        int token = thumbnailGeneration.incrementAndGet();
         thumbnailExecutor.execute(() -> captureThumbnailWhenReady(
                 current,
                 metadata,

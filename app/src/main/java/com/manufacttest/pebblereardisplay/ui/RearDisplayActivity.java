@@ -2,11 +2,15 @@ package com.manufacttest.pebblereardisplay.ui;
 
 import android.app.Activity;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
@@ -27,12 +31,45 @@ public final class RearDisplayActivity extends Activity {
             TextView fallback = new TextView(this);
             fallback.setBackgroundColor(Color.BLACK);
             fallback.setTextColor(Color.WHITE);
-            fallback.setGravity(android.view.Gravity.CENTER);
+            fallback.setGravity(Gravity.CENTER);
             fallback.setText("Rear display could not be initialized\n"
                     + exception.getClass().getSimpleName());
             rearSurface = fallback;
         }
-        setContentView(rearSurface);
+
+        View content = rearSurface;
+        if (previewMode) {
+            FrameLayout preview = new FrameLayout(this);
+            preview.setBackgroundColor(Color.BLACK);
+            preview.addView(rearSurface, new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+            ));
+
+            TextView hint = new TextView(this);
+            hint.setText("PRESS THE PHONE'S BACK KEY TO EXIT PREVIEW");
+            hint.setTextColor(0xffffd84d);
+            hint.setTextSize(11);
+            hint.setTypeface(Typeface.create("monospace", Typeface.BOLD));
+            hint.setGravity(Gravity.CENTER);
+            hint.setPadding(dp(12), dp(9), dp(12), dp(9));
+            GradientDrawable hintBackground = new GradientDrawable();
+            hintBackground.setColor(0xe61b1b1b);
+            hintBackground.setStroke(dp(1), 0xffffd84d);
+            hintBackground.setCornerRadius(dp(2));
+            hint.setBackground(hintBackground);
+
+            FrameLayout.LayoutParams hintParams = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.BOTTOM
+            );
+            hintParams.setMargins(dp(12), dp(12), dp(12), dp(12));
+            preview.addView(hint, hintParams);
+            content = preview;
+        }
+
+        setContentView(content);
         rearSurface.setClickable(true);
         rearSurface.setFocusable(true);
         rearSurface.setFocusableInTouchMode(true);
@@ -120,5 +157,9 @@ public final class RearDisplayActivity extends Activity {
             RearUi.leaveImmersive(this);
         }
         super.onDestroy();
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 }

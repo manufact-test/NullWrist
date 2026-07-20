@@ -24,7 +24,7 @@ public final class WatchfaceThumbnailRepository {
     private static final String ASSET_DIRECTORY = "watchface-thumbnails";
     private static final String FILE_DIRECTORY = "watchface-thumbnails";
     private static final String CAPTURE_PREFERENCES = "watchface_thumbnail_captures";
-    private static final int CAPTURE_SCHEMA_VERSION = 2;
+    private static final int CAPTURE_SCHEMA_VERSION = 3;
 
     private final Context context;
     private final File directory;
@@ -151,6 +151,11 @@ public final class WatchfaceThumbnailRepository {
     }
 
     private static String fileName(WatchfaceMetadata metadata) {
+        if (!metadata.isBundled()) {
+            return "imported-"
+                    + Integer.toUnsignedString(metadata.getStorageId().hashCode(), 16)
+                    + ".png";
+        }
         String uuid = metadata.getUuid() == null ? "" : metadata.getUuid()
                 .toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9-]", "");

@@ -186,14 +186,28 @@ public final class PebbleQemuProcess {
         PebbleProtocolLink link = protocolLink(20_000);
         try (PebblePbwBundle bundle = new PebblePbwBundle(pbwFile)) {
             PebblePbwBundle.AppHeader header = bundle.getHeader();
-            PebbleAppInstaller installer = new PebbleAppInstaller(link, progressListener);
             if (registry.isInstalled(header.getUuid(), fingerprint)) {
-                installer.launch(header.getUuid(), header.getAppName());
+                try {
+                    new PebbleAppInstaller(link, progressListener).launch(
+                            header.getUuid(),
+                            header.getAppName()
+                    );
+                } catch (IOException firstFailure) {
+                    invalidateProtocolLink(link);
+                    link = protocolLink(8_000);
+                    new PebbleAppInstaller(link, progressListener).launch(
+                            header.getUuid(),
+                            header.getAppName()
+                    );
+                }
                 return false;
             }
-            installer.install(bundle);
+            new PebbleAppInstaller(link, progressListener).install(bundle);
             registry.markInstalled(header.getUuid(), fingerprint);
             return true;
+        } catch (IOException error) {
+            invalidateProtocolLink(link);
+            throw error;
         }
     }
 
@@ -435,10 +449,16 @@ public final class PebbleQemuProcess {
 
     private PebbleProtocolLink protocolLink(long timeoutMillis)
             throws IOException, InterruptedException {
+        PebbleProtocolLink stale = null;
         synchronized (this) {
-            if (protocolLink != null) {
+            if (protocolLink != null && protocolLink.isHealthy()) {
                 return protocolLink;
             }
+            stale = protocolLink;
+            protocolLink = null;
+        }
+        if (stale != null) {
+            stale.close();
         }
 
         PebbleProtocolLink candidate = PebbleProtocolLink.connect(
@@ -457,6 +477,17 @@ public final class PebbleQemuProcess {
                 candidate.close();
             }
             return protocolLink;
+        }
+    }
+
+    private void invalidateProtocolLink(PebbleProtocolLink expected) {
+        synchronized (this) {
+            if (protocolLink == expected) {
+                protocolLink = null;
+            }
+        }
+        if (expected != null) {
+            expected.close();
         }
     }
 

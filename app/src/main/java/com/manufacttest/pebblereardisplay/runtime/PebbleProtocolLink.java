@@ -144,6 +144,18 @@ public final class PebbleProtocolLink implements Closeable {
                 + ", lastEndpoint=" + endpoint;
     }
 
+    /** Drops stale asynchronous responses before beginning a new protocol transaction. */
+    public void clearEndpoint(int endpoint) {
+        endpointQueues.computeIfAbsent(
+                endpoint,
+                ignored -> new LinkedBlockingQueue<>()
+        ).clear();
+    }
+
+    public boolean isHealthy() {
+        return running && readerFailure == null && !socket.isClosed();
+    }
+
     @Override
     public void close() {
         running = false;

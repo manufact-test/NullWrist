@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.ActivityOptions;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -14,6 +15,7 @@ import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
@@ -22,10 +24,10 @@ import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.view.Window;
 import android.view.MotionEvent;
 import android.view.View;
 import android.text.InputType;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -393,22 +395,35 @@ public final class MainActivity extends Activity {
 private View buildPowerScheduleCard() {
     LinearLayout panel = new LinearLayout(this);
     panel.setOrientation(LinearLayout.VERTICAL);
-    panel.setPadding(dp(13), dp(12), dp(13), dp(12));
+    panel.setPadding(dp(14), dp(13), dp(14), dp(13));
     panel.setBackground(panelBackground(
             getColor(R.color.surface),
             getColor(R.color.ink),
             dp(1)
     ));
 
-    TextView title = pixelText("POWER SCHEDULE // 24H", 13, getColor(R.color.text_primary));
+    TextView title = pixelText(
+            "NIGHT MODE BATTERY SAVER",
+            14,
+            getColor(R.color.text_primary)
+    );
     panel.addView(title);
 
-    powerScheduleSummary = bodyText("", 12, getColor(R.color.text_secondary));
-    powerScheduleSummary.setPadding(0, dp(6), 0, dp(10));
+    TextView description = bodyText(
+            "Set your Night Mode hours. The watchface stays visible while PebbleOS sleeps "
+                    + "in the background to save battery. Charging keeps it running.",
+            12,
+            getColor(R.color.text_secondary)
+    );
+    description.setPadding(0, dp(7), 0, dp(9));
+    panel.addView(description);
+
+    powerScheduleSummary = pixelText("", 11, getColor(R.color.accent_coral));
+    powerScheduleSummary.setPadding(0, 0, 0, dp(11));
     panel.addView(powerScheduleSummary);
 
     TextView edit = pixelButton(
-            "EDIT SLEEP SCHEDULE",
+            "SLEEP SCHEDULE",
             getColor(R.color.paper),
             getColor(R.color.ink)
     );
@@ -425,84 +440,136 @@ private void refreshPowerScheduleSummary() {
     if (powerScheduleSummary == null || preferences == null) {
         return;
     }
-    if (preferences.isSleepScheduleEnabled()) {
-        powerScheduleSummary.setText(
-                "FREEZE "
-                        + AppPreferences.formatMinutes(preferences.getSleepStartMinutes())
-                        + "–"
-                        + AppPreferences.formatMinutes(preferences.getSleepEndMinutes())
-                        + "  /  CHARGING OVERRIDES  /  ≤15% MINUTE SAVER"
-        );
-    } else {
-        powerScheduleSummary.setText(
-                "SCHEDULE OFF  /  CHARGING ALWAYS ON  /  ≤15% MINUTE SAVER"
-        );
-    }
+    powerScheduleSummary.setText(
+            "SLEEP "
+                    + AppPreferences.formatMinutes(preferences.getSleepStartMinutes())
+                    + "–"
+                    + AppPreferences.formatMinutes(preferences.getSleepEndMinutes())
+    );
 }
 
 private void showPowerScheduleDialog() {
+    Dialog dialog = new Dialog(this);
+    dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
     LinearLayout form = new LinearLayout(this);
     form.setOrientation(LinearLayout.VERTICAL);
-    form.setPadding(dp(22), dp(8), dp(22), 0);
+    form.setPadding(dp(18), dp(17), dp(18), dp(18));
+    form.setBackground(panelBackground(
+            getColor(R.color.surface),
+            getColor(R.color.ink),
+            dp(2)
+    ));
 
-    CheckBox enabled = new CheckBox(this);
-    enabled.setText("Freeze PebbleOS on schedule");
-    enabled.setChecked(preferences.isSleepScheduleEnabled());
-    form.addView(enabled);
+    TextView title = pixelText("NIGHT MODE", 20, getColor(R.color.text_primary));
+    form.addView(title);
 
-    TextView startLabel = bodyText("Freeze from (HH:mm)", 13, getColor(R.color.text_secondary));
-    startLabel.setPadding(0, dp(10), 0, dp(4));
+    TextView note = bodyText(
+            "The current watchface stays on screen. PebbleOS pauses between these times "
+                    + "and resumes automatically.",
+            12,
+            getColor(R.color.text_secondary)
+    );
+    note.setPadding(0, dp(6), 0, dp(14));
+    form.addView(note);
+
+    TextView startLabel = pixelText("START SLEEP", 11, getColor(R.color.accent_coral));
+    startLabel.setPadding(0, 0, 0, dp(5));
     form.addView(startLabel);
     EditText start = timeField(AppPreferences.formatMinutes(
             preferences.getSleepStartMinutes()
     ));
-    form.addView(start);
+    form.addView(start, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(52)
+    ));
 
-    TextView endLabel = bodyText("Resume at (HH:mm)", 13, getColor(R.color.text_secondary));
-    endLabel.setPadding(0, dp(10), 0, dp(4));
+    TextView endLabel = pixelText("END SLEEP", 11, getColor(R.color.accent_coral));
+    endLabel.setPadding(0, dp(12), 0, dp(5));
     form.addView(endLabel);
     EditText end = timeField(AppPreferences.formatMinutes(
             preferences.getSleepEndMinutes()
     ));
-    form.addView(end);
+    form.addView(end, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(52)
+    ));
 
-    TextView note = bodyText(
-            "24-hour format. Charging always keeps PebbleOS running. "
-                    + "Below 15% battery it wakes once per minute to refresh the face.",
-            12,
+    TextView format = bodyText(
+            "24-HOUR TIME · EXAMPLE 23:30",
+            11,
             getColor(R.color.text_muted)
     );
-    note.setPadding(0, dp(12), 0, 0);
-    form.addView(note);
+    format.setPadding(0, dp(8), 0, dp(14));
+    form.addView(format);
 
-    AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("PebbleOS sleep schedule")
-            .setView(form)
-            .setPositiveButton("Save", null)
-            .setNegativeButton("Cancel", null)
-            .create();
-    dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            .setOnClickListener(view -> {
-                int startMinutes = parseTime(start.getText().toString());
-                int endMinutes = parseTime(end.getText().toString());
-                if (startMinutes < 0 || endMinutes < 0) {
-                    Toast.makeText(
-                            this,
-                            "Use 24-hour HH:mm format, for example 23:30",
-                            Toast.LENGTH_LONG
-                    ).show();
-                    return;
-                }
-                preferences.setSleepSchedule(
-                        enabled.isChecked(),
-                        startMinutes,
-                        endMinutes
-                );
-                refreshPowerScheduleSummary();
-                PebbleRuntimeService.refreshPowerPolicy(this);
-                dialog.dismiss();
-            }));
+    LinearLayout actions = new LinearLayout(this);
+    actions.setOrientation(LinearLayout.HORIZONTAL);
+
+    TextView cancel = pixelButton(
+            "CANCEL",
+            getColor(R.color.paper),
+            getColor(R.color.ink)
+    );
+    cancel.setOnClickListener(view -> dialog.dismiss());
+    LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(
+            0,
+            dp(48),
+            1f
+    );
+    cancelParams.rightMargin = dp(6);
+    actions.addView(cancel, cancelParams);
+
+    TextView save = pixelButton(
+            "SAVE",
+            getColor(R.color.accent_mint),
+            getColor(R.color.ink)
+    );
+    save.setOnClickListener(view -> {
+        int startMinutes = parseTime(start.getText().toString());
+        int endMinutes = parseTime(end.getText().toString());
+        if (startMinutes < 0 || endMinutes < 0) {
+            Toast.makeText(
+                    this,
+                    "Use 24-hour HH:mm format, for example 23:30",
+                    Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
+        if (startMinutes == endMinutes) {
+            Toast.makeText(
+                    this,
+                    "START SLEEP and END SLEEP must be different",
+                    Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
+        preferences.setSleepSchedule(startMinutes, endMinutes);
+        refreshPowerScheduleSummary();
+        PebbleRuntimeService.refreshPowerPolicy(this);
+        dialog.dismiss();
+    });
+    LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
+            0,
+            dp(48),
+            1f
+    );
+    saveParams.leftMargin = dp(6);
+    actions.addView(save, saveParams);
+    form.addView(actions);
+
+    dialog.setContentView(form);
+    dialog.setCanceledOnTouchOutside(true);
     dialog.show();
+    Window window = dialog.getWindow();
+    if (window != null) {
+        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        window.setLayout(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        window.getDecorView().setPadding(dp(18), 0, dp(18), 0);
+    }
 }
 
 private EditText timeField(String value) {
@@ -510,6 +577,16 @@ private EditText timeField(String value) {
     field.setSingleLine(true);
     field.setText(value);
     field.setSelectAllOnFocus(true);
+    field.setTextSize(18);
+    field.setTextColor(getColor(R.color.text_primary));
+    field.setTypeface(Typeface.create("monospace", Typeface.BOLD));
+    field.setGravity(Gravity.CENTER);
+    field.setPadding(dp(10), 0, dp(10), 0);
+    field.setBackground(panelBackground(
+            getColor(R.color.paper),
+            getColor(R.color.ink),
+            dp(1)
+    ));
     field.setInputType(
             InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME
     );
@@ -517,7 +594,7 @@ private EditText timeField(String value) {
 }
 
 private static int parseTime(String value) {
-    if (value == null || !value.matches("\\d{1,2}:\\d{2}")) {
+    if (value == null || !value.matches("\d{1,2}:\d{2}")) {
         return -1;
     }
     String[] parts = value.split(":", 2);
@@ -606,6 +683,7 @@ private static int parseTime(String value) {
         String activeId = PebbleRuntimeService.getActiveStorageId();
         renderedActiveStorageId = activeId;
         WatchfaceMetadata selected = null;
+        WatchfaceMetadata activeFace = null;
 
         View root = catalogContainer.getParent() instanceof View
                 ? (View) catalogContainer.getParent()
@@ -630,6 +708,9 @@ private static int parseTime(String value) {
             if (selectedInUi) {
                 selected = watchface;
             }
+            if (active) {
+                activeFace = watchface;
+            }
             catalogContainer.addView(
                     watchfaceCard(watchface, selectedInUi, active),
                     matchWidthWrapHeight(dp(11))
@@ -650,7 +731,7 @@ private static int parseTime(String value) {
             ));
             catalogContainer.addView(empty);
         }
-        updateHero(selected);
+        updateHero(activeFace != null ? activeFace : selected);
     }
 
     private View watchfaceCard(
@@ -929,6 +1010,7 @@ private static int parseTime(String value) {
 
         try {
             WatchfaceMetadata imported = repository.importFromUri(uri);
+            thumbnails.delete(imported);
             preferences.setSelectedWatchfaceId(imported.getStorageId());
             Toast.makeText(this, "Imported " + imported.getName(), Toast.LENGTH_SHORT).show();
             reloadCatalog();

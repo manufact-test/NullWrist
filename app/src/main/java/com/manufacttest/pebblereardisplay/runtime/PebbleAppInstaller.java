@@ -16,6 +16,9 @@ public final class PebbleAppInstaller {
     private static final int ENDPOINT_BLOB_DB = 0xB1DB;
     private static final int ENDPOINT_PUT_BYTES = 0xBEEF;
 
+    private static final int APP_RUN_STATE_RUNNING = 0x01;
+    private static final int APP_RUN_STATE_RUN_COMMAND = 0x01;
+    private static final int APP_RUN_STATE_STATUS_COMMAND = 0x03;
     private static final int BLOB_DATABASE_APP = 2;
     private static final int BLOB_STATUS_SUCCESS = 1;
     private static final int BLOB_STATUS_TRY_LATER = 0x0B;
@@ -26,7 +29,9 @@ public final class PebbleAppInstaller {
     private static final int PART_WORKER = 7;
     private static final int APP_INSTALL_FLAG = 0x80;
     private static final int TRANSFER_CHUNK_BYTES = 1000;
-    private static final long PUT_BYTES_TIMEOUT_MILLIS = 30_000;
+    private static final long TRANSFER_PACING_MILLIS = 4L;
+    private static final long PUT_BYTES_TIMEOUT_MILLIS = 30_000L;
+    private static final long RUN_CONFIRM_TIMEOUT_MILLIS = 12_000L;
 
     private static final AtomicInteger NEXT_TOKEN = new AtomicInteger(0x4100);
 
@@ -57,16 +62,18 @@ public final class PebbleAppInstaller {
         if (bundle.getWorker() != null) {
             sendPart(PART_WORKER, bundle.getWorker(), installId);
         }
+        awaitRunning(header.getUuid(), header.getAppName(), RUN_CONFIRM_TIMEOUT_MILLIS);
         publish("Launching " + header.getAppName());
     }
 
-    /** Launches an app already present in Pebble AppDB/SPI flash. */
-    public void launch(UUID uuid, String appName) throws IOException {
-        publish("Launching " + appName);
+    /** Launches an app already present in Pebble AppDB/SPI flash and waits for its UUID. */
+    public void launch(UUID uuid, String appName) throws IOException, InterruptedException {
+        link.clearEndpoint(ENDPOINT_APP_RUN_STATE);
         ByteBuffer start = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN);
-        start.put((byte) 0x01);
+        start.put((byte) APP_RUN_STATE_RUN_COMMAND);
         start.put(uuidBytes(uuid));
         link.sendPebblePacket(ENDPOINT_APP_RUN_STATE, start.array());
+        awaitRunning(uuid, appName, RUN_CONFIRM_TIMEOUT_MILLIS);
     }
 
     private void insertAppMetadata(PebblePbwBundle.AppHeader header)
@@ -85,6 +92,7 @@ public final class PebbleAppInstaller {
             payload.put(uuid);
             payload.putShort((short) metadata.length);
             payload.put(metadata);
+            link.clearEndpoint(ENDPOINT_BLOB_DB);
             link.sendPebblePacket(ENDPOINT_BLOB_DB, payload.array());
 
             byte[] response = link.awaitEndpoint(
@@ -106,17 +114,20 @@ public final class PebbleAppInstaller {
     }
 
     private int requestAppStart(UUID uuid) throws IOException, InterruptedException {
-        byte[] uuidBytes = uuidBytes(uuid);
+        byte[] rawUuid = uuidBytes(uuid);
+        link.clearEndpoint(ENDPOINT_APP_FETCH);
+        link.clearEndpoint(ENDPOINT_APP_RUN_STATE);
+
         ByteBuffer start = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN);
-        start.put((byte) 0x01);
-        start.put(uuidBytes);
+        start.put((byte) APP_RUN_STATE_RUN_COMMAND);
+        start.put(rawUuid);
         link.sendPebblePacket(ENDPOINT_APP_RUN_STATE, start.array());
 
         byte[] fetch = link.awaitEndpoint(
                 ENDPOINT_APP_FETCH,
                 value -> value.length >= 21
                         && (value[0] & 0xff) == 0x01
-                        && Arrays.equals(Arrays.copyOfRange(value, 1, 17), uuidBytes),
+                        && Arrays.equals(Arrays.copyOfRange(value, 1, 17), rawUuid),
                 15_000
         );
         return ByteBuffer.wrap(fetch, 17, 4).order(ByteOrder.LITTLE_ENDIAN).getInt();
@@ -129,8 +140,7 @@ public final class PebbleAppInstaller {
         init.putInt(object.length);
         init.put((byte) (partType | APP_INSTALL_FLAG));
         init.putInt(installId);
-        PutBytesResponse initResponse = sendPutBytes(init.array());
-        int cookie = initResponse.cookie;
+        int cookie = sendPutBytes(init.array(), null).cookie;
 
         for (int offset = 0; offset < object.length; offset += TRANSFER_CHUNK_BYTES) {
             int length = Math.min(TRANSFER_CHUNK_BYTES, object.length - offset);
@@ -139,39 +149,96 @@ public final class PebbleAppInstaller {
             put.putInt(cookie);
             put.putInt(length);
             put.put(object, offset, length);
-            sendPutBytes(put.array());
+            sendPutBytes(put.array(), cookie);
             totalSent += length;
             publishProgress();
+            Thread.sleep(TRANSFER_PACING_MILLIS);
         }
 
         ByteBuffer commit = ByteBuffer.allocate(9).order(ByteOrder.BIG_ENDIAN);
         commit.put((byte) 0x03);
         commit.putInt(cookie);
         commit.putInt(stm32Crc32(object));
-        sendPutBytes(commit.array());
+        sendPutBytes(commit.array(), cookie);
 
         ByteBuffer install = ByteBuffer.allocate(5).order(ByteOrder.BIG_ENDIAN);
         install.put((byte) 0x05);
         install.putInt(cookie);
-        sendPutBytes(install.array());
+        sendPutBytes(install.array(), cookie);
     }
 
-    private PutBytesResponse sendPutBytes(byte[] payload)
+    private PutBytesResponse sendPutBytes(byte[] payload, Integer expectedCookie)
             throws IOException, InterruptedException {
+        link.clearEndpoint(ENDPOINT_PUT_BYTES);
         link.sendPebblePacket(ENDPOINT_PUT_BYTES, payload);
         byte[] response = link.awaitEndpoint(
                 ENDPOINT_PUT_BYTES,
-                value -> value.length >= 5,
+                value -> isPutBytesResponseFor(value, expectedCookie),
                 PUT_BYTES_TIMEOUT_MILLIS
         );
         int result = response[0] & 0xff;
-        int cookie = ByteBuffer.wrap(response, 1, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+        int cookie = putBytesCookie(response);
         if (result != PUT_BYTES_ACK) {
             throw new IOException(
                     "Pebble NACKed PutBytes for token " + Integer.toUnsignedString(cookie)
             );
         }
         return new PutBytesResponse(cookie);
+    }
+
+    private void awaitRunning(UUID uuid, String appName, long timeoutMillis)
+            throws IOException, InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        while (System.nanoTime() < deadline) {
+            long remaining = Math.max(
+                    1L,
+                    TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
+            );
+            try {
+                link.awaitEndpoint(
+                        ENDPOINT_APP_RUN_STATE,
+                        value -> isRunningStateFor(value, uuid),
+                        Math.min(650L, remaining)
+                );
+                return;
+            } catch (IOException error) {
+                if (!isEndpointTimeout(error)) {
+                    throw error;
+                }
+            }
+
+            link.clearEndpoint(ENDPOINT_APP_RUN_STATE);
+            ByteBuffer status = ByteBuffer.allocate(17).order(ByteOrder.LITTLE_ENDIAN);
+            status.put((byte) APP_RUN_STATE_STATUS_COMMAND);
+            status.put(new byte[16]);
+            link.sendPebblePacket(ENDPOINT_APP_RUN_STATE, status.array());
+        }
+        throw new IOException("PebbleOS did not confirm " + appName + " as the running app");
+    }
+
+    static boolean isRunningStateFor(byte[] value, UUID expectedUuid) {
+        if (value == null || value.length < 17 || (value[0] & 0xff) != APP_RUN_STATE_RUNNING) {
+            return false;
+        }
+        return Arrays.equals(
+                Arrays.copyOfRange(value, 1, 17),
+                uuidBytes(expectedUuid)
+        );
+    }
+
+    static boolean isPutBytesResponseFor(byte[] value, Integer expectedCookie) {
+        return value != null
+                && value.length >= 5
+                && (expectedCookie == null || putBytesCookie(value) == expectedCookie);
+    }
+
+    static int putBytesCookie(byte[] response) {
+        return ByteBuffer.wrap(response, 1, 4).order(ByteOrder.BIG_ENDIAN).getInt();
+    }
+
+    private static boolean isEndpointTimeout(IOException error) {
+        String message = error.getMessage();
+        return message != null && message.startsWith("Timed out waiting for Pebble endpoint");
     }
 
     private void publishProgress() {

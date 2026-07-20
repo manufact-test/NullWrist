@@ -33,8 +33,9 @@ public final class AppPreferences {
         preferences.edit().remove(KEY_SELECTED_WATCHFACE).apply();
     }
 
+    /** Night Mode is intentionally always active; the chosen interval is the only setting. */
     public boolean isSleepScheduleEnabled() {
-        return preferences.getBoolean(KEY_SLEEP_SCHEDULE_ENABLED, false);
+        return true;
     }
 
     public int getSleepStartMinutes() {
@@ -51,12 +52,17 @@ public final class AppPreferences {
         ));
     }
 
-    public void setSleepSchedule(boolean enabled, int startMinutes, int endMinutes) {
+    public void setSleepSchedule(int startMinutes, int endMinutes) {
         preferences.edit()
-                .putBoolean(KEY_SLEEP_SCHEDULE_ENABLED, enabled)
+                .putBoolean(KEY_SLEEP_SCHEDULE_ENABLED, true)
                 .putInt(KEY_SLEEP_START_MINUTES, clampMinutes(startMinutes))
                 .putInt(KEY_SLEEP_END_MINUTES, clampMinutes(endMinutes))
                 .apply();
+    }
+
+    /** Compatibility overload for 0.8.4 callers and stored preferences. */
+    public void setSleepSchedule(boolean ignored, int startMinutes, int endMinutes) {
+        setSleepSchedule(startMinutes, endMinutes);
     }
 
     public static String formatMinutes(int minutes) {

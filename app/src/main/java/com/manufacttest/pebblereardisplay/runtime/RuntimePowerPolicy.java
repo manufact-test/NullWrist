@@ -22,8 +22,7 @@ public final class RuntimePowerPolicy {
 
         LocalTime now = LocalTime.now();
         int minuteOfDay = now.getHour() * 60 + now.getMinute();
-        if (preferences.isSleepScheduleEnabled()
-                && isInsideSchedule(
+        if (isInsideSchedule(
                 minuteOfDay,
                 preferences.getSleepStartMinutes(),
                 preferences.getSleepEndMinutes()

@@ -75,12 +75,15 @@ public final class WatchfaceRepository {
             throw exception;
         }
 
-        String safeName = sanitize(parsed.getName());
         String uuidPart = parsed.getUuid().replaceAll("[^A-Za-z0-9-]", "");
         if (uuidPart.isEmpty()) {
             uuidPart = UUID.randomUUID().toString();
         }
-        File destination = new File(watchfaceDirectory, safeName + "-" + uuidPart + ".pbw");
+        File destination = new File(
+                watchfaceDirectory,
+                "imported-" + uuidPart.toLowerCase(Locale.ROOT) + ".pbw"
+        );
+        removeOlderImportsWithUuid(parsed.getUuid(), destination);
         if (destination.exists() && !destination.delete()) {
             temporary.delete();
             throw new IOException("Cannot replace existing watchface");
@@ -127,6 +130,36 @@ public final class WatchfaceRepository {
                     .edit()
                     .putStringSet(KEY_HIDDEN_BUNDLED, hidden)
                     .apply();
+        }
+    }
+
+    private void removeOlderImportsWithUuid(String uuid, File keep) throws IOException {
+        String[] assetNames = context.getAssets().list(ASSET_DIRECTORY);
+        Set<String> bundledNames = new HashSet<>();
+        if (assetNames != null) {
+            for (String name : assetNames) {
+                bundledNames.add(name);
+            }
+        }
+        File[] files = watchfaceDirectory.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            if (!file.isFile()
+                    || file.equals(keep)
+                    || bundledNames.contains(file.getName())
+                    || !file.getName().toLowerCase(Locale.ROOT).endsWith(".pbw")) {
+                continue;
+            }
+            try (FileInputStream input = new FileInputStream(file)) {
+                WatchfaceMetadata existing = PbwParser.parse(input, file.getName(), false);
+                if (uuid.equalsIgnoreCase(existing.getUuid())) {
+                    file.delete();
+                }
+            } catch (IOException ignored) {
+                // Invalid leftovers do not block importing a valid replacement.
+            }
         }
     }
 

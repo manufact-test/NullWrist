@@ -555,28 +555,41 @@ public final class PebbleRuntimeService extends Service {
     }
 
     private void updateBatterySnapshot(Intent intent) {
-        if (intent == null) {
-            return;
-        }
-        int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-        int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-        if (level >= 0 && scale > 0) {
-            phoneBatteryPercentage = Math.max(
-                    0,
-                    Math.min(100, Math.round(level * 100f / scale))
-            );
-        }
-        int status = intent.getIntExtra(
-                BatteryManager.EXTRA_STATUS,
-                BatteryManager.BATTERY_STATUS_UNKNOWN
-        );
-        int plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
-        phoneChargerConnected = plugged != 0
-                || status == BatteryManager.BATTERY_STATUS_CHARGING
-                || status == BatteryManager.BATTERY_STATUS_FULL;
+    if (intent == null) {
+        return;
+    }
+    String action = intent.getAction();
+    if (Intent.ACTION_POWER_CONNECTED.equals(action)) {
+        phoneChargerConnected = true;
+        return;
+    }
+    if (Intent.ACTION_POWER_DISCONNECTED.equals(action)) {
+        phoneChargerConnected = false;
+        return;
+    }
+    if (!Intent.ACTION_BATTERY_CHANGED.equals(action)) {
+        return;
     }
 
-    private void syncBatteryToRuntime() {
+    int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+    int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+    if (level >= 0 && scale > 0) {
+        phoneBatteryPercentage = Math.max(
+                0,
+                Math.min(100, Math.round(level * 100f / scale))
+        );
+    }
+    int status = intent.getIntExtra(
+            BatteryManager.EXTRA_STATUS,
+            BatteryManager.BATTERY_STATUS_UNKNOWN
+    );
+    int plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
+    phoneChargerConnected = plugged != 0
+            || status == BatteryManager.BATTERY_STATUS_CHARGING
+            || status == BatteryManager.BATTERY_STATUS_FULL;
+}
+
+private void syncBatteryToRuntime() {
         PebbleQemuProcess current = runtime;
         if (current == null || !current.isRunning()) {
             return;

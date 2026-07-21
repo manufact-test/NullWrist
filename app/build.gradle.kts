@@ -22,8 +22,8 @@ android {
         applicationId = "com.manufacttest.pebblereardisplay"
         minSdk = 28
         targetSdk = 36
-        versionCode = 23
-        versionName = "0.8.9"
+        versionCode = 24
+        versionName = "0.8.10"
 
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
 
@@ -45,20 +45,12 @@ android {
                 storePassword = releaseKeystorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
-                enableV1Signing = true
-                enableV2Signing = true
-                enableV3Signing = true
-                enableV4Signing = true
             }
         }
     }
 
     buildTypes {
-        debug {
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
-        }
-        release {
+        getByName("release") {
             isMinifyEnabled = false
             if (releaseSigningAvailable) {
                 signingConfig = signingConfigs.getByName("release")
@@ -66,10 +58,9 @@ android {
         }
     }
 
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
-        }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     externalNativeBuild {
@@ -79,13 +70,13 @@ android {
         }
     }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("src/main/jniLibs")
+        }
     }
 }
 
-dependencies {
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.json:json:20260522")
+tasks.withType<Test>().configureEach {
+    useJUnit()
 }

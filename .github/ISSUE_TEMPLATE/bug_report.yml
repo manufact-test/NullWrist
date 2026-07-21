@@ -1,0 +1,108 @@
+name: Bug report
+description: Report a reproducible Pebblehertz or watchface problem
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping test Pebblehertz. Check COMPATIBILITY.md first, especially for watchfaces that need PebbleKit JS, configuration pages, weather or network access.
+
+  - type: input
+    id: version
+    attributes:
+      label: Pebblehertz version
+      placeholder: "0.8.9"
+    validations:
+      required: true
+
+  - type: input
+    id: android
+    attributes:
+      label: Titan 2 Android / firmware build
+      description: Find this in Android Settings → About phone.
+      placeholder: "Android version and build number"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: trigger
+    attributes:
+      label: When does the problem happen?
+      options:
+        - App or runtime startup
+        - Rear display opening
+        - Watchface switching
+        - PBW import
+        - After clearing recent apps
+        - After locking or unlocking the phone
+        - During charging or low battery
+        - After some time running
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: watchface
+    attributes:
+      label: Watchface details
+      description: Include the name, version, source link and Pebble UUID when available. Write “bundled” when it ships with Pebblehertz.
+      placeholder: |
+        Name:
+        Version:
+        Source:
+        UUID:
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Pebblehertz
+        2. Select or import ...
+        3. Lock the phone / clear recent apps / wait ...
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and exact error text
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or video
+      description: Drag files into this field. Remove private information first.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: setup
+    attributes:
+      label: Titan 2 background settings
+      options:
+        - label: Pebblehertz is excluded from battery optimization.
+        - label: Pebblehertz is allowed through DuraSpeed.
+        - label: Pebblehertz is excluded from the Titan 2 App blocker.
+        - label: I reproduced the problem on the latest available beta.
+          required: true
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I reviewed the attached material and removed passwords, tokens and private information.
+          required: true

@@ -90,28 +90,34 @@ public final class PebbleRuntimeService extends Service {
     private final Runnable policyTick = new Runnable() {
         @Override
         public void run() {
-            applyPowerPolicy();
+            schedulePowerPolicy();
             policyHandler.postDelayed(this, 60_000L);
         }
     };
 
-    private final Runnable lowBatteryPause = () -> {
+    private final Runnable lowBatteryPause = () ->
+            executor.execute(this::applyLowBatteryPause);
+
+    private final Runnable lowBatteryPulse = () ->
+            executor.execute(this::applyLowBatteryPulse);
+
+    private void applyLowBatteryPause() {
         if (powerMode != RuntimePowerPolicy.Mode.LOW_BATTERY_PULSE || runtimeBusy) {
             return;
         }
         PebbleQemuProcess current = runtime;
-        if (current != null && current.isRunning()) {
-            try {
-                current.pause();
-                updateNotification("Battery saver · updates each minute");
-                notifyListeners();
-            } catch (IOException error) {
-                reportFailure(error);
-            }
+        if (current == null || !current.isRunning()) {
+            return;
         }
-    };
+        try {
+            current.pause();
+            notifyListeners();
+        } catch (IOException error) {
+            reportFailure(error);
+        }
+    }
 
-    private final Runnable lowBatteryPulse = () -> {
+    private void applyLowBatteryPulse() {
         if (powerMode != RuntimePowerPolicy.Mode.LOW_BATTERY_PULSE || runtimeBusy) {
             return;
         }
@@ -127,7 +133,7 @@ public final class PebbleRuntimeService extends Service {
             reportFailure(error);
         }
         scheduleNextLowBatteryPulse();
-    };
+    }
 
     private final BroadcastReceiver powerReceiver = new BroadcastReceiver() {
         @Override
@@ -263,7 +269,7 @@ public final class PebbleRuntimeService extends Service {
         if (ACTION_SELECT.equals(action)) {
             scheduleSelection();
         } else if (ACTION_REFRESH_POWER.equals(action)) {
-            applyPowerPolicy();
+            schedulePowerPolicy();
         } else {
             scheduleRuntime(ACTION_RESTART.equals(action));
         }
@@ -310,7 +316,7 @@ public final class PebbleRuntimeService extends Service {
             return;
         }
         if (!forceRestart && healthyRuntime) {
-            applyPowerPolicy();
+            schedulePowerPolicy();
             notifyListeners();
             return;
         }
@@ -323,6 +329,10 @@ public final class PebbleRuntimeService extends Service {
         activeStorageId = null;
         setStatus("Starting PebbleOS…");
         executor.execute(() -> runRuntime(requestedGeneration, replaceExisting));
+    }
+
+    private void schedulePowerPolicy() {
+        executor.execute(this::applyPowerPolicy);
     }
 
     private void scheduleSelection() {
@@ -371,6 +381,8 @@ public final class PebbleRuntimeService extends Service {
             }
             SelectedWatchface selected = selectedWatchface();
             if (selected.metadata.getStorageId().equals(activeStorageId)) {
+                selectionQueuedForWake = false;
+                notifyListeners();
                 return;
             }
             // Cancel a pending capture before the framebuffer starts showing install/launch frames.
@@ -388,7 +400,7 @@ public final class PebbleRuntimeService extends Service {
             }
         } finally {
             runtimeBusy = false;
-            policyHandler.post(this::applyPowerPolicy);
+            schedulePowerPolicy();
         }
     }
 
@@ -446,7 +458,7 @@ public final class PebbleRuntimeService extends Service {
             }
         } finally {
             runtimeBusy = false;
-            policyHandler.post(this::applyPowerPolicy);
+            schedulePowerPolicy();
         }
     }
 

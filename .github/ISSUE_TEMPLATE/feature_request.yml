@@ -1,0 +1,65 @@
+name: Feature request
+description: Suggest a concrete improvement for Pebblehertz
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check ROADMAP.md before submitting. Describe the user problem and a concrete example rather than only naming a technology.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should this solve?
+      placeholder: "Explain what you are trying to do and what currently blocks you."
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Concrete example
+      description: Name the watchface, workflow, data source or device involved.
+      placeholder: |
+        Watchface / device / workflow:
+        Current result:
+        Desired result:
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Suggested behavior
+      description: Describe the result from the user's perspective. Technical implementation ideas are optional.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Who would benefit?
+      options:
+        - Most Titan 2 users
+        - Many imported watchfaces
+        - One specific watchface
+        - Users of another rear-screen device
+        - Developers / contributors
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References, screenshots or links
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: roadmap
+    attributes:
+      label: Roadmap check
+      options:
+        - label: I checked ROADMAP.md and this request is not already described clearly enough.
+          required: true

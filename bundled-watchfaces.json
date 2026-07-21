@@ -48,11 +48,85 @@
     "sha256": "70704f3e53265ebda5a78a4c7f9f98ee1d50521a9dde19731da7954c876038d4"
   },
   {
-    "file": "yweather-3.7.pbw",
-    "name": "YWeather",
-    "version": "3.7",
-    "page_url": "https://apps.repebble.com/yweather_52cc44e045ffdd31dd000180",
-    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/57f3f1a405e4b103e70000a9.pbw",
-    "sha256": "606dad45560f0371e503ce963fc61daba395c2d937020836840d7a8e5e5ca7ad"
+    "file": "polvtorogo.pbw",
+    "name": "polvtorogo",
+    "version": "0.1.1",
+    "page_url": "https://apps.repebble.com/polvtorogo_52f62660ee349e43430002f1",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/52f7bda8a374baf649000391.pbw",
+    "sha256": "057e78b8b29e15a5186d16db8c84c5125d353271030c66c909aa18cffa82c0c8"
+  },
+  {
+    "file": "enigma-1.1.pbw",
+    "name": "Enigma",
+    "version": "1.1",
+    "page_url": "https://apps.repebble.com/enigma_55558c2a44dad6b80f000088",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/555c330defc72feb4100006e.pbw",
+    "sha256": "da99f076b039ec444d9d5cf1616bbff8a089cd1d8f1cba1276555f672abdad95"
+  },
+  {
+    "file": "rosewright-a-5.1.0.pbw",
+    "name": "Rosewright A",
+    "version": "5.1.0",
+    "page_url": "https://apps.repebble.com/rosewright-a_52997231129af73409000033",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/13fc19c9-5e71-44a6-be3d-0ed06d51a756.pbw",
+    "sha256": "5310ed3837eedeb87d1a6a20e14a44f6ed40aac879e28870182c1f57fd8892c0"
+  },
+  {
+    "file": "electronika-5-1.0.pbw",
+    "name": "Electronika 5",
+    "version": "1.0",
+    "page_url": "https://apps.repebble.com/electronika-5-soviet-russia-watch_542aae37072ba27db80000dc",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/542aae5a0015be1e0800008b.pbw",
+    "sha256": "0794900890abfabfca59c51a47145fd763a6c8549774696d6e014d9a8d1cb186"
+  },
+  {
+    "file": "darth-time-4.0.pbw",
+    "name": "Darth Time",
+    "version": "4.0",
+    "page_url": "https://apps.repebble.com/darth-time_55e9493720f24c8f2e0000b5",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/4.0.pbw",
+    "sha256": "851aecf86caee72499de819782d96b32ce1568541359a2890c95300869ce08cd"
+  },
+  {
+    "file": "metro-watch-1.1.pbw",
+    "name": "Metro Watch",
+    "version": "1.1",
+    "page_url": "https://apps.repebble.com/metro-watch_5303d8bc7097ac4d3e000359",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/549839b7835244be3c0000e0.pbw",
+    "sha256": "a617124a051d9afaf5304c2c63569290da79dd2016c97cd7b756942993db31e7"
+  },
+  {
+    "file": "starfield-smooth-1.0.0.pbw",
+    "name": "Starfield Smooth",
+    "version": "1.0.0",
+    "page_url": "https://apps.repebble.com/starfield-smooth_52cd48ecc296577c6c00002f",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/1.0.0.pbw",
+    "sha256": "90e269e42ae03236c405d5176d9690a7defc4441ea52ae0f300646ab8ec350e5"
+  },
+  {
+    "file": "omega-seamaster-007-1.1.pbw",
+    "name": "Omega Seamaster 007",
+    "version": "1.1",
+    "page_url": "https://apps.repebble.com/omega-seamaster-007_547218ce95f74c03ba00007f",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/5479efbd3fd38815f4000077.pbw",
+    "repair_crc": true,
+    "source_sha256": "1713f6de874b2a9af510ce70353e8f35cfe4f3e810dad1b9082322d396ec0d8c",
+    "sha256": "a60e3a1bcb1359399afcaadad409fe689a497b694ef937f62d153214c80b5967"
+  },
+  {
+    "file": "code-cmd-1.0.pbw",
+    "name": "Code CMD",
+    "version": "1.0",
+    "page_url": "https://apps.repebble.com/code-cmd_55de277531f4896b4b00007c",
+    "sha256": "a7b06f5341f24d36724bcfd9f2bfee5ed6d9e911b3799cc4c5412deb109e77e1",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/55de277d785abd44a4000073.pbw"
+  },
+  {
+    "file": "studio-clock-6.03.pbw",
+    "name": "Studio Clock",
+    "version": "6.03",
+    "page_url": "https://apps.repebble.com/studio-clock_5299db40129af76761000087",
+    "sha256": "d4e21c2f2a4efef3aa62d604364d46724403314da4072fb68f5681d2e4f8657f",
+    "download_url": "https://appstore-api.repebble.com/api/assets/pbw/57164f77cd92a350c000000e.pbw"
   }
 ]

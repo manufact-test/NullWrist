@@ -1,0 +1,195 @@
+name: Preseed Pebble Time flash
+
+on:
+  push:
+    branches: ["feature/native-qemu-runtime"]
+    paths:
+      - "bundled-watchfaces.json"
+      - "app/src/main/assets/watchfaces/**"
+      - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleAppInstaller.java"
+      - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleProtocolLink.java"
+      - "scripts/fetch_bundled_watchfaces.py"
+      - "scripts/fetch_pebble_basalt_firmware.py"
+      - "scripts/build_pebble_qemu_host.sh"
+      - "scripts/patch_qemu_basalt_only.py"
+      - "scripts/patch_qemu_framebuffer.py"
+      - "scripts/preseed_basalt_flash.py"
+      - "scripts/java_installer_smoke.py"
+      - "scripts/generate_watchface_thumbnails.py"
+      - ".github/workflows/preseed-basalt-flash.yml"
+  pull_request:
+    paths:
+      - "bundled-watchfaces.json"
+      - "app/src/main/assets/watchfaces/**"
+      - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleAppInstaller.java"
+      - "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleProtocolLink.java"
+      - "scripts/fetch_bundled_watchfaces.py"
+      - "scripts/fetch_pebble_basalt_firmware.py"
+      - "scripts/build_pebble_qemu_host.sh"
+      - "scripts/patch_qemu_basalt_only.py"
+      - "scripts/patch_qemu_framebuffer.py"
+      - "scripts/preseed_basalt_flash.py"
+      - "scripts/java_installer_smoke.py"
+      - "scripts/generate_watchface_thumbnails.py"
+      - ".github/workflows/preseed-basalt-flash.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: preseed-pebble-time-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  preseed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install host QEMU build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential git ninja-build pkg-config python3-venv \
+            libglib2.0-dev libpixman-1-dev zlib1g-dev
+
+      - name: Restore host QEMU source cache
+        uses: actions/cache@v4
+        with:
+          path: .host-qemu-build/sources
+          key: host-pebble-qemu-source-v2-9ef633fa
+
+      - name: Fetch bundled PBW files
+        run: |
+          set -o pipefail
+          python3 scripts/fetch_bundled_watchfaces.py 2>&1 | tee fetch-watchfaces.log
+
+      - name: Fetch official Basalt firmware
+        env:
+          PEBBLE_SDK_VERSION: "4.17"
+        run: python3 scripts/fetch_pebble_basalt_firmware.py
+
+      - name: Build headless Pebble Time QEMU
+        env:
+          QEMU_HOST_WORK_DIR: ${{ github.workspace }}/.host-qemu-build
+          QEMU_HOST_OUTPUT_DIR: ${{ github.workspace }}/host-qemu-output
+          JOBS: "4"
+        run: |
+          set -o pipefail
+          bash scripts/build_pebble_qemu_host.sh 2>&1 | tee host-qemu-build.log
+
+      - name: Verify production Java PBW importer
+        run: |
+          set -o pipefail
+          python3 scripts/java_installer_smoke.py \
+            --qemu host-qemu-output/qemu-system-arm \
+            --micro app/src/main/assets/pebble/basalt/qemu_micro_flash.bin \
+            --base-spi .pebble-firmware-cache/basalt/qemu_spi_flash_base.bin \
+            --watchfaces app/src/main/assets/watchfaces \
+            --log java-installer-qemu.log \
+            2>&1 | tee java-installer-smoke.log
+
+      - name: Preinstall bundled watchfaces
+        run: |
+          set -o pipefail
+          python3 scripts/preseed_basalt_flash.py \
+            --qemu host-qemu-output/qemu-system-arm \
+            --micro app/src/main/assets/pebble/basalt/qemu_micro_flash.bin \
+            --base-spi .pebble-firmware-cache/basalt/qemu_spi_flash_base.bin \
+            --output-spi app/src/main/assets/pebble/basalt/qemu_spi_flash.bin \
+            --watchfaces app/src/main/assets/watchfaces \
+            --manifest-output app/src/main/assets/pebble/basalt/preseeded-watchfaces.json \
+            --log preseed-qemu.log \
+            2>&1 | tee preseed.log
+
+      - name: Render real watchface thumbnails
+        run: |
+          set -o pipefail
+          python3 scripts/generate_watchface_thumbnails.py \
+            --qemu host-qemu-output/qemu-system-arm \
+            --micro app/src/main/assets/pebble/basalt/qemu_micro_flash.bin \
+            --spi app/src/main/assets/pebble/basalt/qemu_spi_flash.bin \
+            --manifest app/src/main/assets/pebble/basalt/preseeded-watchfaces.json \
+            --output app/src/main/assets/watchface-thumbnails \
+            --log thumbnail-qemu.log \
+            2>&1 | tee thumbnail-render.log
+
+      - name: Verify preseed and previews
+        run: |
+          test "$(stat -c%s app/src/main/assets/pebble/basalt/qemu_spi_flash.bin)" -eq 16777216
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("app/src/main/assets/pebble/basalt/preseeded-watchfaces.json").read_text())
+          expected = json.loads(Path("bundled-watchfaces.json").read_text())
+          assert manifest["platform"] == "basalt"
+          assert len(manifest["watchfaces"]) == len(expected), (manifest, expected)
+          previews = Path("app/src/main/assets/watchface-thumbnails")
+          assert len(list(previews.glob("*.png"))) == len(expected)
+          print("Preseeded watchfaces and previews:")
+          for item in manifest["watchfaces"]:
+              preview = previews / f"{item['uuid'].lower()}.png"
+              assert preview.is_file() and preview.stat().st_size > 100, preview
+              print(f"  {item['name']} {item['uuid']} {preview.stat().st_size} bytes")
+          PY
+
+      - name: Refresh firmware metadata
+        env:
+          PEBBLE_SDK_VERSION: "4.17"
+        run: python3 scripts/fetch_pebble_basalt_firmware.py
+
+      - name: Upload preseed diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pebble-time-preseed-diagnostics
+          path: |
+            fetch-watchfaces.log
+            host-qemu-build.log
+            host-qemu-output/machine-help.txt
+            java-installer-smoke.log
+            java-installer-qemu.log
+            preseed.log
+            preseed-qemu.log
+            thumbnail-render.log
+            thumbnail-qemu.log
+            app/src/main/assets/pebble/basalt/preseeded-watchfaces.json
+            app/src/main/assets/watchface-thumbnails/*.png
+          if-no-files-found: warn
+
+      - name: Commit fetched PBWs, flash and previews
+        if: success() && github.event_name == 'push'
+        run: |
+          if [ "$(git log -1 --pretty=%ae)" = "41898282+github-actions[bot]@users.noreply.github.com" ]; then
+            echo "Skipping recursive asset commit for the automation commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          TARGET_BRANCH="${GITHUB_REF_NAME}"
+          git pull --rebase --autostash origin "${TARGET_BRANCH}"
+          if [ -z "$(git status --porcelain -- app/src/main/assets/watchfaces app/src/main/assets/pebble/basalt app/src/main/assets/watchface-thumbnails)" ]; then
+            echo "Bundled PBWs, flash and thumbnails are unchanged."
+            exit 0
+          fi
+          git add \
+            app/src/main/assets/watchfaces \
+            app/src/main/assets/pebble/basalt \
+            app/src/main/assets/watchface-thumbnails
+          git commit -m "Bundle sixteen Pebble Time faces and settled previews [skip ci]"
+          git push origin "HEAD:${TARGET_BRANCH}"

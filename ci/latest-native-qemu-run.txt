@@ -1,0 +1,3 @@
+run_id=29733124932
+head_sha=d146e05e578dbab0829bdea373f99eb34932e576
+artifact=pebble-qemu-android-arm64

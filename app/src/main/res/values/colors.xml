@@ -1,9 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background">#0E1116</color>
-    <color name="surface">#171C23</color>
-    <color name="surface_selected">#253A42</color>
-    <color name="text_primary">#F4F7FA</color>
-    <color name="text_secondary">#AAB4C0</color>
-    <color name="accent">#65D5C7</color>
+    <color name="background">#F1EBDD</color>
+    <color name="surface">#FFFDF5</color>
+    <color name="surface_warm">#F9E7C8</color>
+    <color name="surface_selected">#C8F4DF</color>
+    <color name="surface_pressed">#D8D2C4</color>
+    <color name="ink">#17202A</color>
+    <color name="paper">#FFFDF5</color>
+    <color name="text_primary">#17202A</color>
+    <color name="text_secondary">#59616D</color>
+    <color name="text_muted">#848A91</color>
+    <color name="accent">#4FD1AE</color>
+    <color name="accent_mint">#4FD1AE</color>
+    <color name="accent_coral">#FF5B4D</color>
+    <color name="accent_yellow">#FFD34E</color>
+    <color name="accent_blue">#5B91FF</color>
+    <color name="error">#D9363E</color>
 </resources>

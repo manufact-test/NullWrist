@@ -2,6 +2,7 @@ package com.manufacttest.pebblereardisplay.data;
 
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.res.AssetManager;
 import android.net.Uri;
 
@@ -23,6 +24,11 @@ import java.util.UUID;
 public final class WatchfaceRepository {
     private static final long MAX_PBW_BYTES = 20L * 1024L * 1024L;
     private static final String ASSET_DIRECTORY = "watchfaces";
+    private static final String LIBRARY_PREFERENCES = "watchface_library";
+    private static final String KEY_HIDDEN_BUNDLED = "hidden_bundled";
+    private static final String[] RETIRED_BUNDLED_FILES = {
+            "yweather-3.7.pbw"
+    };
 
     private final Context context;
     private final File watchfaceDirectory;
@@ -34,6 +40,7 @@ public final class WatchfaceRepository {
 
     public List<WatchfaceMetadata> loadAll() throws IOException {
         ensureDirectory();
+        removeRetiredBundledFiles();
         List<WatchfaceMetadata> result = new ArrayList<>();
         Set<String> seenStorageIds = new HashSet<>();
 
@@ -68,12 +75,15 @@ public final class WatchfaceRepository {
             throw exception;
         }
 
-        String safeName = sanitize(parsed.getName());
         String uuidPart = parsed.getUuid().replaceAll("[^A-Za-z0-9-]", "");
         if (uuidPart.isEmpty()) {
             uuidPart = UUID.randomUUID().toString();
         }
-        File destination = new File(watchfaceDirectory, safeName + "-" + uuidPart + ".pbw");
+        File destination = new File(
+                watchfaceDirectory,
+                "imported-" + uuidPart.toLowerCase(Locale.ROOT) + ".pbw"
+        );
+        removeOlderImportsWithUuid(parsed.getUuid(), destination);
         if (destination.exists() && !destination.delete()) {
             temporary.delete();
             throw new IOException("Cannot replace existing watchface");
@@ -104,6 +114,55 @@ public final class WatchfaceRepository {
         return new File(watchfaceDirectory, metadata.getStorageId());
     }
 
+    public void delete(WatchfaceMetadata metadata) throws IOException {
+        if (metadata == null) {
+            throw new IOException("No watchface was selected for deletion");
+        }
+        ensureDirectory();
+        File stored = fileFor(metadata);
+        if (stored.isFile() && !stored.delete()) {
+            throw new IOException("Cannot delete " + metadata.getName());
+        }
+        if (metadata.isBundled()) {
+            Set<String> hidden = hiddenBundledStorageIds();
+            hidden.add(metadata.getStorageId());
+            context.getSharedPreferences(LIBRARY_PREFERENCES, Context.MODE_PRIVATE)
+                    .edit()
+                    .putStringSet(KEY_HIDDEN_BUNDLED, hidden)
+                    .apply();
+        }
+    }
+
+    private void removeOlderImportsWithUuid(String uuid, File keep) throws IOException {
+        String[] assetNames = context.getAssets().list(ASSET_DIRECTORY);
+        Set<String> bundledNames = new HashSet<>();
+        if (assetNames != null) {
+            for (String name : assetNames) {
+                bundledNames.add(name);
+            }
+        }
+        File[] files = watchfaceDirectory.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File file : files) {
+            if (!file.isFile()
+                    || file.equals(keep)
+                    || bundledNames.contains(file.getName())
+                    || !file.getName().toLowerCase(Locale.ROOT).endsWith(".pbw")) {
+                continue;
+            }
+            try (FileInputStream input = new FileInputStream(file)) {
+                WatchfaceMetadata existing = PbwParser.parse(input, file.getName(), false);
+                if (uuid.equalsIgnoreCase(existing.getUuid())) {
+                    file.delete();
+                }
+            } catch (IOException ignored) {
+                // Invalid leftovers do not block importing a valid replacement.
+            }
+        }
+    }
+
     private void copyAndReadBundled(
             List<WatchfaceMetadata> output,
             Set<String> seenStorageIds
@@ -113,9 +172,11 @@ public final class WatchfaceRepository {
         if (names == null) {
             return;
         }
+        Set<String> hiddenBundled = hiddenBundledStorageIds();
 
         for (String name : names) {
-            if (!name.toLowerCase(Locale.ROOT).endsWith(".pbw")) {
+            if (!name.toLowerCase(Locale.ROOT).endsWith(".pbw")
+                    || hiddenBundled.contains(name)) {
                 continue;
             }
             File destination = new File(watchfaceDirectory, name);
@@ -140,16 +201,36 @@ public final class WatchfaceRepository {
         if (files == null) {
             return;
         }
+        Set<String> hiddenBundled = hiddenBundledStorageIds();
         for (File file : files) {
             if (!file.isFile()
                     || !file.getName().toLowerCase(Locale.ROOT).endsWith(".pbw")
-                    || seenStorageIds.contains(file.getName())) {
+                    || seenStorageIds.contains(file.getName())
+                    || hiddenBundled.contains(file.getName())) {
                 continue;
             }
             try (FileInputStream input = new FileInputStream(file)) {
                 output.add(PbwParser.parse(input, file.getName(), false));
             } catch (IOException ignored) {
                 // Invalid files stay out of the catalog; an import error is shown at import time.
+            }
+        }
+    }
+
+    private Set<String> hiddenBundledStorageIds() {
+        SharedPreferences preferences = context.getSharedPreferences(
+                LIBRARY_PREFERENCES,
+                Context.MODE_PRIVATE
+        );
+        Set<String> stored = preferences.getStringSet(KEY_HIDDEN_BUNDLED, null);
+        return stored == null ? new HashSet<>() : new HashSet<>(stored);
+    }
+
+    private void removeRetiredBundledFiles() {
+        for (String name : RETIRED_BUNDLED_FILES) {
+            File retired = new File(watchfaceDirectory, name);
+            if (retired.isFile()) {
+                retired.delete();
             }
         }
     }

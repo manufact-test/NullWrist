@@ -6,11 +6,36 @@ import android.content.SharedPreferences;
 import java.util.Locale;
 
 public final class AppPreferences {
+    public enum RuntimeMode {
+        RELIABLE("reliable"),
+        SILENT("silent");
+
+        private final String storedValue;
+
+        RuntimeMode(String storedValue) {
+            this.storedValue = storedValue;
+        }
+
+        String storedValue() {
+            return storedValue;
+        }
+
+        public static RuntimeMode fromStoredValue(String value) {
+            for (RuntimeMode mode : values()) {
+                if (mode.storedValue.equals(value)) {
+                    return mode;
+                }
+            }
+            return RELIABLE;
+        }
+    }
+
     private static final String FILE_NAME = "pebble_rear_display";
     private static final String KEY_SELECTED_WATCHFACE = "selected_watchface";
     private static final String KEY_SLEEP_SCHEDULE_ENABLED = "sleep_schedule_enabled";
     private static final String KEY_SLEEP_START_MINUTES = "sleep_start_minutes";
     private static final String KEY_SLEEP_END_MINUTES = "sleep_end_minutes";
+    private static final String KEY_RUNTIME_MODE = "runtime_mode";
 
     private static final int DEFAULT_SLEEP_START_MINUTES = 0;
     private static final int DEFAULT_SLEEP_END_MINUTES = 7 * 60;
@@ -31,6 +56,26 @@ public final class AppPreferences {
 
     public void clearSelectedWatchfaceId() {
         preferences.edit().remove(KEY_SELECTED_WATCHFACE).apply();
+    }
+
+    public boolean hasSavedWatchfaceSelection() {
+        return preferences.contains(KEY_SELECTED_WATCHFACE);
+    }
+
+    public RuntimeMode getRuntimeMode() {
+        return RuntimeMode.fromStoredValue(preferences.getString(
+                KEY_RUNTIME_MODE,
+                RuntimeMode.RELIABLE.storedValue()
+        ));
+    }
+
+    public boolean isReliableRuntime() {
+        return getRuntimeMode() == RuntimeMode.RELIABLE;
+    }
+
+    public void setRuntimeMode(RuntimeMode mode) {
+        RuntimeMode value = mode == null ? RuntimeMode.RELIABLE : mode;
+        preferences.edit().putString(KEY_RUNTIME_MODE, value.storedValue()).apply();
     }
 
     /** Night Mode is intentionally always active; the chosen interval is the only setting. */

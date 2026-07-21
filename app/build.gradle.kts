@@ -45,12 +45,20 @@ android {
                 storePassword = releaseKeystorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
             }
         }
     }
 
     buildTypes {
-        getByName("release") {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
+        release {
             isMinifyEnabled = false
             if (releaseSigningAvailable) {
                 signingConfig = signingConfigs.getByName("release")
@@ -58,9 +66,10 @@ android {
         }
     }
 
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     externalNativeBuild {
@@ -70,13 +79,13 @@ android {
         }
     }
 
-    sourceSets {
-        getByName("main") {
-            jniLibs.srcDirs("src/main/jniLibs")
-        }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 
-tasks.withType<Test>().configureEach {
-    useJUnit()
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20260522")
 }

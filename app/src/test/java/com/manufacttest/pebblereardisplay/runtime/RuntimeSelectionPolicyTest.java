@@ -27,7 +27,7 @@ public final class RuntimeSelectionPolicyTest {
     }
 
     @Test
-    public void queuedSelectionRunsOnceWhenScheduleSleepEnds() {
+    public void queuedSelectionRunsWheneverRuntimeIsAwake() {
         assertTrue(RuntimeSelectionPolicy.shouldApplyQueuedSelection(
                 RuntimePowerPolicy.Mode.SCHEDULED_FREEZE,
                 RuntimePowerPolicy.Mode.RUNNING,
@@ -38,14 +38,19 @@ public final class RuntimeSelectionPolicyTest {
                 RuntimePowerPolicy.Mode.LOW_BATTERY_PULSE,
                 true
         ));
+        assertTrue(RuntimeSelectionPolicy.shouldApplyQueuedSelection(
+                RuntimePowerPolicy.Mode.RUNNING,
+                RuntimePowerPolicy.Mode.RUNNING,
+                true
+        ));
         assertFalse(RuntimeSelectionPolicy.shouldApplyQueuedSelection(
                 RuntimePowerPolicy.Mode.SCHEDULED_FREEZE,
                 RuntimePowerPolicy.Mode.RUNNING,
                 false
         ));
         assertFalse(RuntimeSelectionPolicy.shouldApplyQueuedSelection(
-                RuntimePowerPolicy.Mode.RUNNING,
-                RuntimePowerPolicy.Mode.RUNNING,
+                RuntimePowerPolicy.Mode.SCHEDULED_FREEZE,
+                RuntimePowerPolicy.Mode.SCHEDULED_FREEZE,
                 true
         ));
     }

@@ -1,6 +1,7 @@
 name: Build Stage 1 stability test APK
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main

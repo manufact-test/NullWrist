@@ -2,11 +2,13 @@ name: Publish Pebblehertz release
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish or update the matching GitHub prerelease
+        required: true
+        default: false
+        type: boolean
   push:
-    branches:
-      - feature/minor-fixes-0.8.9
-    paths:
-      - .github/workflows/release.yml
     tags:
       - "v*"
 
@@ -34,6 +36,26 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.5.0"
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          test -n "$VERSION"
+
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [[ "$TAG_VERSION" != "$VERSION" ]]; then
+              echo "Tag version $TAG_VERSION does not match app version $VERSION" >&2
+              exit 1
+            fi
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "apk_name=Pebblehertz-$VERSION.apk" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=pebblehertz-$VERSION-signed-release" >> "$GITHUB_OUTPUT"
 
       - name: Validate signing secrets
         env:
@@ -80,41 +102,41 @@ jobs:
             | tee release-certificate.txt
 
       - name: Prepare release files
-        run: cp app/build/outputs/apk/release/app-release.apk Pebblehertz-0.8.9.apk
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          APK_NAME: ${{ steps.version.outputs.apk_name }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk "$APK_NAME"
+          CHANGELOG="CHANGELOG_${VERSION}.md"
+          if [[ -f "$CHANGELOG" ]]; then
+            cp "$CHANGELOG" release-notes.md
+          else
+            cat > release-notes.md <<EOF
+          # Pebblehertz $VERSION
+
+          Pebble watchfaces on the rear display of the Unihertz Titan 2 — no root required.
+          EOF
+          fi
 
       - name: Upload signed build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pebblehertz-0.8.9-signed-release
+          name: ${{ steps.version.outputs.artifact_name }}
           path: |
-            Pebblehertz-0.8.9.apk
+            ${{ steps.version.outputs.apk_name }}
             release-certificate.txt
+            release-notes.md
           if-no-files-found: error
 
-      - name: Publish GitHub Release
+      - name: Publish GitHub prerelease
+        if: github.ref_type == 'tag' || inputs.publish_release == true
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.8.9
+          tag_name: v${{ steps.version.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: Pebblehertz 0.8.9 Beta
+          name: Pebblehertz ${{ steps.version.outputs.version }} Beta
           prerelease: true
           make_latest: true
           fail_on_unmatched_files: true
-          files: Pebblehertz-0.8.9.apk
-          body: |
-            Pebble watchfaces on the rear display of the Unihertz Titan 2 — no root required.
-
-            ## What is new in 0.8.9
-
-            - Sleep Schedule now uses Android's native 24-hour time picker.
-            - Duplicate PBW imports are blocked by Pebble UUID.
-            - The Titan 2 battery percentage and charging state are forwarded to PebbleOS.
-            - Runtime status notifications have been removed from the Android notification shade.
-            - Notification permission is still requested for future Pebble notification features.
-            - A new support dialog includes Wise and PayPal options.
-
-            ## Important installation note
-
-            If you installed or tested Pebblehertz before July 21, 2026, uninstall the old version before installing 0.8.9. Future versions can be installed normally over this release.
-
-            This is a beta release intended for the Unihertz Titan 2.
+          files: ${{ steps.version.outputs.apk_name }}
+          body_path: release-notes.md

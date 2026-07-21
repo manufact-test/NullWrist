@@ -14,8 +14,10 @@ final class RuntimeSelectionPolicy {
             RuntimePowerPolicy.Mode currentMode,
             boolean selectionQueued
     ) {
+        // previousMode is intentionally not required here. A policy evaluation can observe
+        // the wake transition while the runtime is busy and record RUNNING before it is safe
+        // to apply the queued selection. The next serialized policy pass must still apply it.
         return selectionQueued
-                && previousMode == RuntimePowerPolicy.Mode.SCHEDULED_FREEZE
                 && currentMode != RuntimePowerPolicy.Mode.SCHEDULED_FREEZE;
     }
 }

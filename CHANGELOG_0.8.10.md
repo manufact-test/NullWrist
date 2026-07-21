@@ -11,4 +11,4 @@
 - New installations begin in Reliable mode automatically.
 - Android 14+ foreground-service type and permission declarations are included.
 
-Physical-device validation should cover Clear all, locking and unlocking, closing the main Activity, charging transitions, low-battery mode and repeated switching between Reliable and Silent modes.
+Physical-device validation should cover Clear all, locking and unlocking, closing the main Activity, notification permission denial, the notification Stop action, charging transitions, low-battery mode and repeated switching between Reliable and Silent modes.

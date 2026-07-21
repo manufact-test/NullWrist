@@ -1,0 +1,42 @@
+name: One-shot implement Reliable Always-On
+
+on:
+  push:
+    branches:
+      - agent/0.8.10-reliable-runtime
+    paths:
+      - .github/workflows/one-shot-stage1-reliable.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/0.8.10-reliable-runtime
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Patch runtime service and UI hooks
+        run: |
+          python3 .github/scripts/patch_stage1_service.py
+          python3 .github/scripts/patch_stage1_ui.py
+
+      - name: Commit implementation
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm \
+            .github/workflows/one-shot-stage1-reliable.yml \
+            .github/scripts/patch_stage1_service.py \
+            .github/scripts/patch_stage1_ui.py
+          git add app
+          git commit -m "Implement Reliable Always-On runtime mode"
+          git push origin HEAD:agent/0.8.10-reliable-runtime

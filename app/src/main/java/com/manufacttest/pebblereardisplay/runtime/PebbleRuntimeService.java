@@ -860,7 +860,6 @@ public final class PebbleRuntimeService extends Service {
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
-                .setSilent(true)
                 .addAction(R.drawable.ic_notification, "Stop", stop)
                 .build();
     }

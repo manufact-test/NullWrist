@@ -10,5 +10,10 @@
 - Existing 0.8.9 users receive a one-time explanation of the new default.
 - New installations begin in Reliable mode automatically.
 - Android 14+ foreground-service type and permission declarations are included.
+- Runtime mode selection now uses a custom Pebblehertz-styled dialog with Reliable visually recommended.
+- The service notification has no buttons, alerts or notification-permission prompt.
+- Reliable mode schedules a guarded restart after Titan 2 removes the app task.
+- Watchface changes during Schedule Sleep are queued and applied once after wake or charging.
+- Schedule Sleep sends only one QEMU pause command per sleep interval.
 
 Physical-device validation should cover Clear all, locking and unlocking, closing the main Activity, notification permission denial, the notification Stop action, charging transitions, low-battery mode and repeated switching between Reliable and Silent modes.

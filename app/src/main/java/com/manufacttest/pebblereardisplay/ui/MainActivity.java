@@ -1,6 +1,5 @@
 package com.manufacttest.pebblereardisplay.ui;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.ActivityOptions;
 import android.app.AlertDialog;
@@ -11,7 +10,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -48,7 +46,6 @@ import java.util.Locale;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_IMPORT_PBW = 1001;
-    private static final int REQUEST_NOTIFICATIONS = 1002;
     private static final String SETUP_PREFS = "background_setup";
     private static final String KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown";
 
@@ -67,6 +64,7 @@ public final class MainActivity extends Activity {
     private boolean redirectingToRear;
     private boolean listenersRegistered;
     private String renderedActiveStorageId;
+    private boolean renderedSelectionQueuedForWake;
 
     private final PebbleRuntimeService.Listener runtimeListener = (
             PebbleQemuProcess runtime,
@@ -75,7 +73,9 @@ public final class MainActivity extends Activity {
     ) -> runOnUiThread(() -> {
         updateRuntimeStatus(status, failure);
         String activeId = PebbleRuntimeService.getActiveStorageId();
-        if (!sameStorageId(renderedActiveStorageId, activeId)) {
+        boolean queuedForWake = PebbleRuntimeService.isSelectionQueuedForWake();
+        if (!sameStorageId(renderedActiveStorageId, activeId)
+                || renderedSelectionQueuedForWake != queuedForWake) {
             renderCatalog();
         }
     });
@@ -731,6 +731,7 @@ private static int parseTime(String value) {
         String selectedId = preferences.getSelectedWatchfaceId();
         String activeId = PebbleRuntimeService.getActiveStorageId();
         renderedActiveStorageId = activeId;
+        renderedSelectionQueuedForWake = PebbleRuntimeService.isSelectionQueuedForWake();
         WatchfaceMetadata selected = null;
         WatchfaceMetadata activeFace = null;
 
@@ -875,8 +876,17 @@ private static int parseTime(String value) {
         controls.setGravity(Gravity.CENTER_VERTICAL);
         controls.setPadding(0, dp(8), 0, 0);
 
+        boolean queuedForWake = selected
+                && !active
+                && PebbleRuntimeService.isSelectionQueuedForWake();
         TextView action = pixelText(
-                active ? "ON AIR" : selected ? "APPLYING..." : "TAP TO APPLY >",
+                active
+                        ? "ON AIR"
+                        : queuedForWake
+                        ? "QUEUED FOR WAKE"
+                        : selected
+                        ? "APPLYING..."
+                        : "TAP TO APPLY >",
                 11,
                 active
                         ? getColor(R.color.accent_coral)
@@ -1070,33 +1080,8 @@ private static int parseTime(String value) {
     }
 
     private void maybeRequestBackgroundSetup() {
-    getWindow().getDecorView().post(() -> {
-        if (preferences != null
-                && preferences.isReliableRuntime()
-                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(
-                    new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                    REQUEST_NOTIFICATIONS
-            );
-            return;
-        }
-        maybeShowBatteryPrompt();
-    });
-}
-
-@Override
-public void onRequestPermissionsResult(
-        int requestCode,
-        String[] permissions,
-        int[] grantResults
-) {
-    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-    if (requestCode == REQUEST_NOTIFICATIONS) {
-        maybeShowBatteryPrompt();
+        getWindow().getDecorView().post(this::maybeShowBatteryPrompt);
     }
-}
 
     private void maybeShowBatteryPrompt() {
         if (isIgnoringBatteryOptimizations()) {

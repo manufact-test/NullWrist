@@ -1,5 +1,6 @@
 package com.manufacttest.pebblereardisplay.runtime;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -15,6 +16,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 
 import com.manufacttest.pebblereardisplay.R;
 import com.manufacttest.pebblereardisplay.data.AppPreferences;
@@ -46,6 +48,8 @@ public final class PebbleRuntimeService extends Service {
             "com.manufacttest.pebblereardisplay.action.REFRESH_POWER_POLICY";
     private static final String ACTION_APPLY_RUNTIME_MODE =
             "com.manufacttest.pebblereardisplay.action.APPLY_RUNTIME_MODE";
+    private static final String ACTION_RECOVER_TASK =
+            "com.manufacttest.pebblereardisplay.action.RECOVER_AFTER_TASK_REMOVAL";
 
     public static final String ACTION_SELECTION_FAILED =
             "com.manufacttest.pebblereardisplay.action.SELECTION_FAILED";
@@ -57,6 +61,8 @@ public final class PebbleRuntimeService extends Service {
     private static final long LOW_BATTERY_AWAKE_MILLIS = 3_500L;
     private static final String NOTIFICATION_CHANNEL_ID = "pebblehertz_runtime";
     private static final int NOTIFICATION_ID = 168;
+    private static final int RECOVERY_REQUEST_CODE = 810;
+    private static final long RECOVERY_DELAY_MILLIS = 1_200L;
 
     private static final Set<Listener> LISTENERS = new CopyOnWriteArraySet<>();
     private static volatile PebbleRuntimeService instance;
@@ -77,7 +83,9 @@ public final class PebbleRuntimeService extends Service {
     private volatile int phoneBatteryPercentage = 100;
     private volatile boolean phoneChargerConnected;
     private volatile boolean foreground;
-    private volatile String notificationText = "Starting PebbleOS…";
+    private volatile String notificationText = "Rear watchface active";
+    private volatile boolean selectionQueuedForWake;
+    private volatile boolean schedulePaused;
 
     private final Runnable policyTick = new Runnable() {
         @Override
@@ -180,6 +188,11 @@ public final class PebbleRuntimeService extends Service {
         return null;
     }
 
+    public static boolean isSelectionQueuedForWake() {
+        PebbleRuntimeService current = instance;
+        return current != null && current.selectionQueuedForWake;
+    }
+
     public static void addListener(Listener listener) {
         LISTENERS.add(listener);
         PebbleRuntimeService current = instance;
@@ -230,6 +243,7 @@ public final class PebbleRuntimeService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? ACTION_START : intent.getAction();
         if (ACTION_STOP.equals(action)) {
+            cancelTaskRemovalRecovery();
             generation.incrementAndGet();
             stopRuntime();
             demoteFromForeground();
@@ -239,6 +253,11 @@ public final class PebbleRuntimeService extends Service {
         if (ACTION_APPLY_RUNTIME_MODE.equals(action)) {
             applyRuntimeModeInternal(notificationText);
             notifyListeners();
+            return START_STICKY;
+        }
+        if (ACTION_RECOVER_TASK.equals(action)) {
+            applyRuntimeModeInternal("Rear watchface active");
+            scheduleRuntime(false);
             return START_STICKY;
         }
         if (ACTION_SELECT.equals(action)) {
@@ -254,6 +273,12 @@ public final class PebbleRuntimeService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        scheduleTaskRemovalRecovery();
+        super.onTaskRemoved(rootIntent);
     }
 
     @Override
@@ -307,6 +332,22 @@ public final class PebbleRuntimeService extends Service {
 
     private void applyLatestSelection(int requestedGeneration) {
         if (requestedGeneration != generation.get()) {
+            return;
+        }
+
+        RuntimePowerPolicy.Snapshot snapshot = RuntimePowerPolicy.evaluate(
+                this,
+                new AppPreferences(this)
+        );
+        powerMode = snapshot.mode;
+        if (snapshot.batteryPercent >= 0) {
+            phoneBatteryPercentage = snapshot.batteryPercent;
+        }
+        phoneChargerConnected = snapshot.charging;
+        if (RuntimeSelectionPolicy.shouldQueue(snapshot.mode, snapshot.charging)) {
+            selectionQueuedForWake = true;
+            thumbnailGeneration.incrementAndGet();
+            notifyListeners();
             return;
         }
 
@@ -436,6 +477,8 @@ public final class PebbleRuntimeService extends Service {
         }
 
         activeStorageId = selected.metadata.getStorageId();
+        selectionQueuedForWake = false;
+        schedulePaused = false;
         starting = false;
         status = null;
         failure = null;
@@ -630,6 +673,10 @@ public final class PebbleRuntimeService extends Service {
         );
         RuntimePowerPolicy.Mode previousMode = powerMode;
         powerMode = snapshot.mode;
+        if (snapshot.batteryPercent >= 0) {
+            phoneBatteryPercentage = snapshot.batteryPercent;
+        }
+        phoneChargerConnected = snapshot.charging;
         policyHandler.removeCallbacks(lowBatteryPause);
         policyHandler.removeCallbacks(lowBatteryPulse);
 
@@ -639,34 +686,42 @@ public final class PebbleRuntimeService extends Service {
             return;
         }
 
+        boolean applyQueuedSelection = RuntimeSelectionPolicy.shouldApplyQueuedSelection(
+                previousMode,
+                snapshot.mode,
+                selectionQueuedForWake
+        );
         try {
-            if (snapshot.mode == RuntimePowerPolicy.Mode.RUNNING) {
-                current.resume();
-                if (previousMode != snapshot.mode) {
-                    updateNotification(activeStorageId == null
-                            ? "Pebble Time is running"
-                            : "Running selected watchface");
+            if (snapshot.mode == RuntimePowerPolicy.Mode.SCHEDULED_FREEZE) {
+                if (!schedulePaused) {
+                    thumbnailGeneration.incrementAndGet();
+                    current.pause();
+                    schedulePaused = true;
                 }
-            } else if (snapshot.mode == RuntimePowerPolicy.Mode.SCHEDULED_FREEZE) {
-                current.pause();
-                AppPreferences preferences = new AppPreferences(this);
-                updateNotification(
-                        "Sleeping until "
-                                + AppPreferences.formatMinutes(
-                                preferences.getSleepEndMinutes()
-                        )
-                );
             } else {
-                current.resume();
-                policyHandler.postDelayed(lowBatteryPause, LOW_BATTERY_AWAKE_MILLIS);
-                scheduleNextLowBatteryPulse();
-                updateNotification("Battery saver · updates each minute");
+                if (schedulePaused) {
+                    current.resume();
+                    schedulePaused = false;
+                }
+                if (snapshot.mode == RuntimePowerPolicy.Mode.LOW_BATTERY_PULSE) {
+                    current.resume();
+                    policyHandler.postDelayed(lowBatteryPause, LOW_BATTERY_AWAKE_MILLIS);
+                    scheduleNextLowBatteryPulse();
+                }
+                if (previousMode != snapshot.mode) {
+                    updateNotification("Rear watchface active");
+                }
             }
             status = null;
             failure = null;
             notifyListeners();
         } catch (IOException error) {
             reportFailure(error);
+            return;
+        }
+
+        if (applyQueuedSelection) {
+            scheduleSelection();
         }
     }
 
@@ -699,6 +754,8 @@ public final class PebbleRuntimeService extends Service {
                 toStop = runtime;
                 runtime = null;
                 activeStorageId = null;
+                selectionQueuedForWake = false;
+                schedulePaused = false;
             }
         }
         if (toStop != null) {
@@ -711,6 +768,8 @@ public final class PebbleRuntimeService extends Service {
         PebbleQemuProcess current = runtime;
         runtime = null;
         activeStorageId = null;
+        selectionQueuedForWake = false;
+        schedulePaused = false;
         starting = false;
         runtimeBusy = false;
         if (current != null) {
@@ -761,20 +820,59 @@ public final class PebbleRuntimeService extends Service {
         listener.onRuntimeState(runtime, status, failure);
     }
 
-    private void updateNotification(String text) {
-        notificationText = text == null || text.isBlank()
-                ? "Pebble Time is running"
-                : text;
-        if (!new AppPreferences(this).isReliableRuntime()) {
+    private void scheduleTaskRemovalRecovery() {
+        AppPreferences preferences = new AppPreferences(this);
+        if (!RuntimeRecoveryPolicy.shouldRecover(
+                preferences.getRuntimeMode(),
+                preferences.hasSavedWatchfaceSelection()
+        )) {
             return;
         }
-        if (!foreground) {
+
+        Intent recovery = new Intent(this, PebbleRuntimeService.class)
+                .setAction(ACTION_RECOVER_TASK);
+        PendingIntent pending = PendingIntent.getForegroundService(
+                this,
+                RECOVERY_REQUEST_CODE,
+                recovery,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        AlarmManager alarm = getSystemService(AlarmManager.class);
+        if (alarm != null) {
+            alarm.setAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + RECOVERY_DELAY_MILLIS,
+                    pending
+            );
+        }
+        try {
+            startForegroundService(recovery);
+        } catch (RuntimeException ignored) {
+            // AlarmManager remains as the fallback if immediate restart is restricted.
+        }
+    }
+
+    private void cancelTaskRemovalRecovery() {
+        PendingIntent pending = PendingIntent.getForegroundService(
+                this,
+                RECOVERY_REQUEST_CODE,
+                new Intent(this, PebbleRuntimeService.class).setAction(ACTION_RECOVER_TASK),
+                PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE
+        );
+        if (pending == null) {
+            return;
+        }
+        AlarmManager alarm = getSystemService(AlarmManager.class);
+        if (alarm != null) {
+            alarm.cancel(pending);
+        }
+        pending.cancel();
+    }
+
+    private void updateNotification(String ignoredText) {
+        notificationText = "Rear watchface active";
+        if (new AppPreferences(this).isReliableRuntime() && !foreground) {
             promoteToForeground(notificationText);
-            return;
-        }
-        NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager != null) {
-            manager.notify(NOTIFICATION_ID, buildNotification(notificationText));
         }
     }
 
@@ -786,11 +884,9 @@ public final class PebbleRuntimeService extends Service {
         }
     }
 
-    private void promoteToForeground(String text) {
-        notificationText = text == null || text.isBlank()
-                ? "Pebble Time is running"
-                : text;
-        Notification notification = buildNotification(notificationText);
+    private void promoteToForeground(String ignoredText) {
+        notificationText = "Rear watchface active";
+        Notification notification = buildNotification();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                     NOTIFICATION_ID,
@@ -813,17 +909,15 @@ public final class PebbleRuntimeService extends Service {
 
     private void createNotificationChannel() {
         NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager == null || manager.getNotificationChannel(NOTIFICATION_CHANNEL_ID) != null) {
+        if (manager == null) {
             return;
         }
         NotificationChannel channel = new NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
-                "Pebblehertz runtime",
+                "Pebblehertz",
                 NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription(
-                "Keeps the selected Pebble watchface active on the rear display."
-        );
+        channel.setDescription("Keeps the rear watchface active.");
         channel.setSound(null, null);
         channel.enableVibration(false);
         channel.enableLights(false);
@@ -831,37 +925,21 @@ public final class PebbleRuntimeService extends Service {
         manager.createNotificationChannel(channel);
     }
 
-    private Notification buildNotification(String text) {
-        Intent openIntent = new Intent(
-                this,
-                com.manufacttest.pebblereardisplay.ui.MainActivity.class
-        ).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent open = PendingIntent.getActivity(
-                this,
-                0,
-                openIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-        Intent stopIntent = new Intent(this, PebbleRuntimeService.class)
-                .setAction(ACTION_STOP);
-        PendingIntent stop = PendingIntent.getService(
-                this,
-                1,
-                stopIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-        return new Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
+    private Notification buildNotification() {
+        Notification.Builder builder = new Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("Pebblehertz is on air")
-                .setContentText(text)
-                .setContentIntent(open)
+                .setContentTitle("Pebblehertz")
+                .setContentText("Rear watchface active")
                 .setCategory(Notification.CATEGORY_SERVICE)
-                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setVisibility(Notification.VISIBILITY_SECRET)
+                .setLocalOnly(true)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
-                .setShowWhen(false)
-                .addAction(R.drawable.ic_notification, "Stop", stop)
-                .build();
+                .setShowWhen(false);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_DEFERRED);
+        }
+        return builder.build();
     }
 
     private static String safeMessage(Throwable error) {

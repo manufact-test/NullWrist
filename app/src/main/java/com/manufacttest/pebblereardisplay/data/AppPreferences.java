@@ -3,6 +3,8 @@ package com.manufacttest.pebblereardisplay.data;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import com.manufacttest.pebblereardisplay.runtime.RuntimeRecoveryScheduler;
+
 import java.util.Locale;
 
 public final class AppPreferences {
@@ -40,10 +42,12 @@ public final class AppPreferences {
     private static final int DEFAULT_SLEEP_START_MINUTES = 0;
     private static final int DEFAULT_SLEEP_END_MINUTES = 7 * 60;
 
+    private final Context applicationContext;
     private final SharedPreferences preferences;
 
     public AppPreferences(Context context) {
-        preferences = context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE);
+        applicationContext = context.getApplicationContext();
+        preferences = applicationContext.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE);
     }
 
     public String getSelectedWatchfaceId() {
@@ -76,6 +80,9 @@ public final class AppPreferences {
     public void setRuntimeMode(RuntimeMode mode) {
         RuntimeMode value = mode == null ? RuntimeMode.RELIABLE : mode;
         preferences.edit().putString(KEY_RUNTIME_MODE, value.storedValue()).apply();
+        if (value == RuntimeMode.SILENT) {
+            RuntimeRecoveryScheduler.cancel(applicationContext);
+        }
     }
 
     /** Night Mode is intentionally always active; the chosen interval is the only setting. */

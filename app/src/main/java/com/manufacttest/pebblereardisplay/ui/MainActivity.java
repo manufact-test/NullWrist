@@ -1071,7 +1071,9 @@ private static int parseTime(String value) {
 
     private void maybeRequestBackgroundSetup() {
     getWindow().getDecorView().post(() -> {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        if (preferences != null
+                && preferences.isReliableRuntime()
+                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(

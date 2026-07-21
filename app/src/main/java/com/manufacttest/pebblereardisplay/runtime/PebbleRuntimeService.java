@@ -1,16 +1,22 @@
 package com.manufacttest.pebblereardisplay.runtime;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ServiceInfo;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
+import com.manufacttest.pebblereardisplay.R;
 import com.manufacttest.pebblereardisplay.data.AppPreferences;
 import com.manufacttest.pebblereardisplay.data.WatchfaceRepository;
 import com.manufacttest.pebblereardisplay.data.WatchfaceThumbnailRepository;
@@ -38,6 +44,8 @@ public final class PebbleRuntimeService extends Service {
             "com.manufacttest.pebblereardisplay.action.STOP_RUNTIME";
     private static final String ACTION_REFRESH_POWER =
             "com.manufacttest.pebblereardisplay.action.REFRESH_POWER_POLICY";
+    private static final String ACTION_APPLY_RUNTIME_MODE =
+            "com.manufacttest.pebblereardisplay.action.APPLY_RUNTIME_MODE";
 
     public static final String ACTION_SELECTION_FAILED =
             "com.manufacttest.pebblereardisplay.action.SELECTION_FAILED";
@@ -47,6 +55,8 @@ public final class PebbleRuntimeService extends Service {
     private static final long THUMBNAIL_MAX_SETTLE_MILLIS = 8_000L;
     private static final long THUMBNAIL_QUIET_MILLIS = 650L;
     private static final long LOW_BATTERY_AWAKE_MILLIS = 3_500L;
+    private static final String NOTIFICATION_CHANNEL_ID = "pebblehertz_runtime";
+    private static final int NOTIFICATION_ID = 168;
 
     private static final Set<Listener> LISTENERS = new CopyOnWriteArraySet<>();
     private static volatile PebbleRuntimeService instance;
@@ -66,6 +76,8 @@ public final class PebbleRuntimeService extends Service {
     private volatile RuntimePowerPolicy.Mode powerMode = RuntimePowerPolicy.Mode.RUNNING;
     private volatile int phoneBatteryPercentage = 100;
     private volatile boolean phoneChargerConnected;
+    private volatile boolean foreground;
+    private volatile String notificationText = "Starting PebbleOS…";
 
     private final Runnable policyTick = new Runnable() {
         @Override
@@ -135,6 +147,10 @@ public final class PebbleRuntimeService extends Service {
         send(context, ACTION_REFRESH_POWER);
     }
 
+    public static void applyRuntimeMode(Context context) {
+        send(context, ACTION_APPLY_RUNTIME_MODE);
+    }
+
     public static void stop(Context context) {
         Intent intent = new Intent(context, PebbleRuntimeService.class).setAction(ACTION_STOP);
         context.startService(intent);
@@ -179,14 +195,22 @@ public final class PebbleRuntimeService extends Service {
     }
 
     private static void send(Context context, String action) {
-        Intent intent = new Intent(context, PebbleRuntimeService.class).setAction(action);
-        context.startService(intent);
+        Context application = context.getApplicationContext();
+        Intent intent = new Intent(application, PebbleRuntimeService.class).setAction(action);
+        boolean reliable = new AppPreferences(application).isReliableRuntime();
+        if (reliable && !ACTION_STOP.equals(action)) {
+            application.startForegroundService(intent);
+        } else {
+            application.startService(intent);
+        }
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
         instance = this;
+        createNotificationChannel();
+        applyRuntimeModeInternal(notificationText);
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_BATTERY_CHANGED);
         filter.addAction(Intent.ACTION_POWER_CONNECTED);
@@ -208,8 +232,14 @@ public final class PebbleRuntimeService extends Service {
         if (ACTION_STOP.equals(action)) {
             generation.incrementAndGet();
             stopRuntime();
+            demoteFromForeground();
             stopSelf();
             return START_NOT_STICKY;
+        }
+        if (ACTION_APPLY_RUNTIME_MODE.equals(action)) {
+            applyRuntimeModeInternal(notificationText);
+            notifyListeners();
+            return START_STICKY;
         }
         if (ACTION_SELECT.equals(action)) {
             scheduleSelection();
@@ -236,6 +266,7 @@ public final class PebbleRuntimeService extends Service {
         } catch (IllegalArgumentException ignored) {
         }
         stopRuntime();
+        demoteFromForeground();
         executor.shutdownNow();
         thumbnailExecutor.shutdownNow();
         instance = null;
@@ -731,7 +762,107 @@ public final class PebbleRuntimeService extends Service {
     }
 
     private void updateNotification(String text) {
-        // Runtime state is available in the app; Android shade notifications stay disabled.
+        notificationText = text == null || text.isBlank()
+                ? "Pebble Time is running"
+                : text;
+        if (!new AppPreferences(this).isReliableRuntime()) {
+            return;
+        }
+        if (!foreground) {
+            promoteToForeground(notificationText);
+            return;
+        }
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.notify(NOTIFICATION_ID, buildNotification(notificationText));
+        }
+    }
+
+    private void applyRuntimeModeInternal(String text) {
+        if (new AppPreferences(this).isReliableRuntime()) {
+            promoteToForeground(text);
+        } else {
+            demoteFromForeground();
+        }
+    }
+
+    private void promoteToForeground(String text) {
+        notificationText = text == null || text.isBlank()
+                ? "Pebble Time is running"
+                : text;
+        Notification notification = buildNotification(notificationText);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            );
+        } else {
+            startForeground(NOTIFICATION_ID, notification);
+        }
+        foreground = true;
+    }
+
+    private void demoteFromForeground() {
+        if (!foreground) {
+            return;
+        }
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        foreground = false;
+    }
+
+    private void createNotificationChannel() {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager == null || manager.getNotificationChannel(NOTIFICATION_CHANNEL_ID) != null) {
+            return;
+        }
+        NotificationChannel channel = new NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                "Pebblehertz runtime",
+                NotificationManager.IMPORTANCE_LOW
+        );
+        channel.setDescription(
+                "Keeps the selected Pebble watchface active on the rear display."
+        );
+        channel.setSound(null, null);
+        channel.enableVibration(false);
+        channel.enableLights(false);
+        channel.setShowBadge(false);
+        manager.createNotificationChannel(channel);
+    }
+
+    private Notification buildNotification(String text) {
+        Intent openIntent = new Intent(
+                this,
+                com.manufacttest.pebblereardisplay.ui.MainActivity.class
+        ).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent open = PendingIntent.getActivity(
+                this,
+                0,
+                openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        Intent stopIntent = new Intent(this, PebbleRuntimeService.class)
+                .setAction(ACTION_STOP);
+        PendingIntent stop = PendingIntent.getService(
+                this,
+                1,
+                stopIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        return new Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("Pebblehertz is on air")
+                .setContentText(text)
+                .setContentIntent(open)
+                .setCategory(Notification.CATEGORY_SERVICE)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setShowWhen(false)
+                .setSilent(true)
+                .addAction(R.drawable.ic_notification, "Stop", stop)
+                .build();
     }
 
     private static String safeMessage(Throwable error) {

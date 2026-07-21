@@ -20,6 +20,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.manufacttest.pebblereardisplay.ui.RuntimeModeUi;
+
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -38,6 +40,7 @@ public final class PebblehertzApplication extends Application
     @Override
     public void onCreate() {
         super.onCreate();
+        RuntimeModeUi.initializeMigration(this);
         registerActivityLifecycleCallbacks(this);
     }
 
@@ -48,11 +51,15 @@ public final class PebblehertzApplication extends Application
         }
         View decor = activity.getWindow().getDecorView();
         bindSupportButton(activity, decor);
+        RuntimeModeUi.bind(activity, decor);
+        RuntimeModeUi.scheduleMigrationIntro(activity, decor);
         if (layoutListeners.containsKey(activity)) {
             return;
         }
-        ViewTreeObserver.OnGlobalLayoutListener listener =
-                () -> bindSupportButton(activity, decor);
+        ViewTreeObserver.OnGlobalLayoutListener listener = () -> {
+            bindSupportButton(activity, decor);
+            RuntimeModeUi.bind(activity, decor);
+        };
         layoutListeners.put(activity, listener);
         decor.getViewTreeObserver().addOnGlobalLayoutListener(listener);
     }

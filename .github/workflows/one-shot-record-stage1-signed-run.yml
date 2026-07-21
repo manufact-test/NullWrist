@@ -1,0 +1,42 @@
+name: One-shot record signed Stage 1 run
+
+on:
+  push:
+    branches:
+      - agent/0.8.10-reliable-runtime
+    paths:
+      - .github/workflows/one-shot-record-stage1-signed-run.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/0.8.10-reliable-runtime
+          fetch-depth: 0
+
+      - name: Find signed test run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=agent%2F0.8.10-reliable-runtime&per_page=50" \
+            --jq '[.workflow_runs[] | select(.name == "One-shot signed Stage 1 test APK" and .conclusion == "success")][0].id')"
+          test -n "$run_id"
+          test "$run_id" != "null"
+          mkdir -p ci
+          printf 'run_id=%s\nartifact=pebblehertz-0.8.10-stage1-signed-test\n' "$run_id" \
+            > ci/latest-stage1-signed-run.txt
+
+      - name: Commit run marker
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-shot-record-stage1-signed-run.yml
+          git add ci/latest-stage1-signed-run.txt
+          git commit -m "Record signed Stage 1 test artifact"
+          git push origin HEAD:agent/0.8.10-reliable-runtime

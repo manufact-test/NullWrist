@@ -1,175 +1,132 @@
+<div align="center">
+
 # Pebblehertz
 
-Pebble Time watchfaces running natively on the rear display of the Unihertz Titan 2.
+**Pebble Time watchfaces on the rear display of the Unihertz Titan 2.**
 
-## Product behavior
+No root. Real PebbleOS. Native ARM64 QEMU.
 
-- The main display is a pixel-art watchface locker with real previews, `.pbw` import, selection and rear-display preview.
-- The selected Pebble Time face runs inside native ARM64 QEMU and switches without rebooting the emulator.
-- The locker distinguishes a UI selection from the exact UUID acknowledged by PebbleOS: `QUEUED` becomes `ACTIVE / ON AIR` only after runtime confirmation.
-- Bundled watchfaces are preinstalled in persistent Basalt SPI flash; imported PBWs are installed once and retained.
-- A notification-free Android service owns PebbleOS independently from the main Activity.
-- When the app opens in the Titan 2 compact rear window, it routes directly to the fullscreen Pebble framebuffer.
-- Rear mode consumes touch and generic motion input, blocks Back/predictive Back and requests full-window system-gesture exclusion.
-- Rear-mode detection uses both Android `displayId` and actual window pixel bounds because Titan firmware can expose the rear screen as display 0.
+[![Version](https://img.shields.io/badge/version-0.8.9_beta-f36f56)](https://github.com/manufact-test/Pebblehertz/releases/latest)
+[![Device](https://img.shields.io/badge/device-Unihertz_Titan_2-222222)](https://github.com/manufact-test/Pebblehertz)
+[![Android](https://img.shields.io/badge/Android-9%2B-3ddc84)](https://github.com/manufact-test/Pebblehertz)
+[![Root](https://img.shields.io/badge/root-not_required-6c9cff)](https://github.com/manufact-test/Pebblehertz)
 
-## Current state
+<img src="app/src/main/assets/watchface-thumbnails/13371337-d689-4a2b-a2fb-f602b46959a7.png" width="132" alt="Pebble watchface preview">
+<img src="app/src/main/assets/watchface-thumbnails/a49c82fd-830e-48b4-a82e-9cf8da77f4c5.png" width="132" alt="Pebble watchface preview">
+<img src="app/src/main/assets/watchface-thumbnails/84678888-13d8-41dc-ba56-47f88724dea5.png" width="132" alt="Pebble watchface preview">
+<img src="app/src/main/assets/watchface-thumbnails/65c08138-7700-4c31-8ddf-3c56b67159e8.png" width="132" alt="Pebble watchface preview">
 
-Pebblehertz 0.8.9 adds native time selection, duplicate-import protection, real Titan 2 battery forwarding, notification-free runtime operation and optional project support links.
+[Download the latest beta](https://github.com/manufact-test/Pebblehertz/releases/latest) · [Roadmap](ROADMAP.md) · [Compatibility](COMPATIBILITY.md) · [Report a bug](https://github.com/manufact-test/Pebblehertz/issues/new?template=bug_report.yml)
 
-Validated in CI:
+</div>
 
-- native AArch64 TCG Core Devices Pebble QEMU;
-- Pebble Time/Basalt-only machine registration;
-- official Pebble SDK 4.17 Basalt firmware;
-- persistent 16 MB SPI flash and 704 KB micro-flash;
-- real `144×168` PebbleOS framebuffer support;
-- FIFO-driven framebuffer events with a low-frequency safety fallback;
-- automatic PBW installation through BlobDB/AppFetch/PutBytes;
-- AppRunState switching confirmed against the exact running UUID;
-- paced PutBytes transfers with stale-response protection;
-- failed imported-PBW rollback without discarding the running QEMU process;
-- cancellation and versioning of asynchronous imported thumbnail captures;
-- notification-free runtime lifecycle;
-- automatic user-configurable Night Mode schedule;
-- charging override and below-15% minute-refresh battery saver;
-- real Titan 2 battery percentage and charging-state forwarding to PebbleOS;
-- sixteen real QEMU-rendered bundled previews.
+## What is Pebblehertz?
 
-### 0.8.9 minor UX and runtime fixes
+Pebblehertz turns the Titan 2 rear screen into a tiny Pebble Time. The selected `.pbw` watchface runs inside real PebbleOS firmware through a native ARM64 QEMU runtime, while Android handles the watchface library, imports, previews and rear-display routing.
 
-`START SLEEP` and `END SLEEP` now open Android's native 24-hour time picker instead of accepting unrestricted text input.
+This is not a visual imitation. Pebblehertz boots the Basalt firmware, installs Pebble packages through the original Pebble protocols and displays the real `144 × 168` framebuffer.
 
-PBW imports are checked by Pebble UUID. Importing a watchface that is already present is rejected with a clear message instead of adding a duplicate locker card.
+## Current beta: 0.8.9
 
-Pebblehertz reads the Titan 2 battery percentage and charging state from Android and sends both values through QEMU's Pebble battery control protocol. Runtime state remains visible inside the app, while Android notification-shade status cards and the notification permission request are removed.
+- 16 bundled Pebble Time watchfaces with real QEMU-rendered previews.
+- Import and retain additional `.pbw` watchfaces.
+- Switch faces without rebooting PebbleOS.
+- Confirm the exact active Pebble UUID before showing `ACTIVE / ON AIR`.
+- Forward the Titan 2 battery percentage and charging state to PebbleOS.
+- Night Mode schedule and a low-battery minute-refresh mode.
+- Duplicate import protection by Pebble UUID.
+- Optional Wise and PayPal project support links.
 
-A `SUPPORT PEBBLEHERTZ` button at the bottom of the locker offers Wise and PayPal.
+See [`CHANGELOG_0.8.9.md`](CHANGELOG_0.8.9.md) for the release details.
 
-### 0.8.7 stale imported-app recovery
+## Install
 
-On startup, Pebblehertz compares every stored imported PBW with the Android registry that mirrors PebbleOS SPI flash. If 0.8.5 transferred an app but timed out before recording it, the runtime restores the known-good bundled SPI image once. Imported PBW files remain in the locker and reinstall normally; clearing Android app data is not required.
+1. Download `Pebblehertz-0.8.9.apk` from the [latest release](https://github.com/manufact-test/Pebblehertz/releases/latest).
+2. Allow installation from the browser or file manager you used to download it.
+3. Open Pebblehertz and grant the requested background-operation access.
+4. In the Titan 2 secondary-screen settings, keep the rear display enabled as needed.
+5. Exclude Pebblehertz from battery optimization, DuraSpeed restrictions and the Titan 2 App blocker.
 
-### 0.8.6 imported PBW completion repair
+> **Clean-install note:** if you tested Pebblehertz before **July 21, 2026**, uninstall that older build before installing 0.8.9. Future versions can be installed over 0.8.9 normally.
 
-AppFetch and AppRunState callbacks are asynchronous. Pebblehertz no longer clears the run-state response queue between short polls, waits up to 30 seconds for an imported app to finish, and retries the RUN command only after the fetch UI has had time to complete.
+## Supported today
 
-### 0.8.5 command and thumbnail repair
+| Area | Current support |
+|---|---|
+| Phone | Unihertz Titan 2 |
+| Pebble platform | Basalt / Pebble Time |
+| Packages | Pebble Time watchfaces in `.pbw` format |
+| Root access | Not required |
+| Imported faces | Standalone faces work best |
+| Other rear-screen phones | Not yet tested or supported |
 
-Native TCG can process frames much faster than the old interpreter. A normal seconds tick from the previous face could therefore arrive before PebbleOS completed an AppRunState command. Pebblehertz now queries endpoint `0x0034` and waits for PebbleOS to report the exact requested UUID before publishing `ACTIVE / ON AIR`.
+Read [`COMPATIBILITY.md`](COMPATIBILITY.md) before reporting an imported face that needs phone-side JavaScript, configuration pages, weather or another online service.
 
-PBW transfer pacing is restored at the protocol boundary, PutBytes acknowledgements are matched to their expected cookie, stale endpoint responses are cleared before each transaction, and an unhealthy protocol socket is recreated without restarting QEMU.
+## Known limitations
 
-A new selection immediately cancels any pending thumbnail task. Imported preview keys include their stored PBW identity, old capture schemas are invalidated, and the hero card follows the actual active face rather than an unconfirmed UI selection.
+- The current silent background service can still be stopped by aggressive Android or Titan 2 process management.
+- PebbleKit JS, watchface configuration pages, network/weather bridges and phone notifications are not implemented yet.
+- Health data such as steps and heart rate is not available yet.
+- Pebble apps and games that depend on physical Pebble buttons are outside the current watchface-focused scope.
 
-### 0.8.5 Night Mode and preview UI
+The next release changes reliable always-on operation into the default mode. See the full [`ROADMAP.md`](ROADMAP.md).
 
-Night Mode no longer has a separate enable checkbox. The user sets `START SLEEP` and `END SLEEP`; the current watchface stays visible while PebbleOS is frozen in the background. Charging always keeps the emulator running.
+## Roadmap at a glance
 
-Main-screen preview mode displays a keyboard hint explaining that the phone Back key exits preview.
+- **0.8.10 — Stability & Diagnostics:** reliable foreground runtime by default, optional silent mode, restart recovery, diagnostic export and PBW capability labels.
+- **0.9.0 — Personal Face:** use a photo or GIF with configurable digital time overlays.
+- **0.10.0 — PebbleKit Compatibility:** JavaScript runtime, AppMessage, configuration pages and network/weather support.
+- **0.11.0 — Phone Data:** Health Connect, selected notifications, music and calendar data.
 
-### 0.8.4 performance and power
+Roadmap versions describe priorities rather than guaranteed dates.
 
-The Android QEMU build uses native AArch64 TCG instead of the TCG interpreter. The production runtime no longer opens a diagnostic serial console or continuously writes QEMU logs.
+## Reporting bugs
 
-The rear display waits for FIFO frame events from QEMU instead of polling the framebuffer every 50–250 ms. Pixel conversion runs outside the Android main thread, with a one-second sequence check retained as a recovery fallback.
+Use the [bug report form](https://github.com/manufact-test/Pebblehertz/issues/new?template=bug_report.yml) and include:
 
-Below 15% battery, PebbleOS wakes around the minute boundary, refreshes the face and freezes again.
+- Pebblehertz version;
+- Titan 2 firmware / Android build;
+- watchface name, source and UUID when available;
+- exact reproduction steps;
+- screenshot or short video;
+- whether the problem appears after clearing recent apps, locking the phone, charging or importing a PBW.
 
-### 0.8.1 runtime repair
+## Build from source
 
-PebbleOS readiness is determined by the actual phone-protocol handshake rather than by searching a diagnostic serial stream for a human-readable boot phrase.
+Requirements:
 
-A failed start stops and detaches the failed QEMU instance. A later app start or watchface selection creates a clean runtime while retaining the persistent SPI flash. Normal watchface changes use AppRunState without rebooting QEMU.
-
-The WebView/WebAssembly route was tested and rejected because Titan 2 WebView reported `crossOriginIsolated=false`, preventing the pthread-enabled QEMU build from obtaining `SharedArrayBuffer`. Pebblehertz therefore uses a native Android QEMU process and a file-backed framebuffer.
-
-## Bundled watchfaces
-
-The application ships with these pinned PBW packages, preinstalled in the packaged SPI image:
-
-- Big Shadow 2.00.5
-- Nyan Cat 8.9
-- Pip Boy 100 5.4
-- Modern Watchface 3.1.1
-- Mario Time 3.41
-- 91 Dub 4.0 version 4.21
-- polvtorogo 0.1.1
-- Enigma 1.1
-- Rosewright A 5.1.0
-- Electronika 5 1.0
-- Darth Time 4.0
-- Metro Watch 1.1
-- Starfield Smooth 1.0.0
-- CMD Time Typed 1.1
-- Omega Seamaster 007 1.1
-- Studio Clock 6.03
-
-Source pages and SHA-256 hashes are recorded in [`bundled-watchfaces.json`](bundled-watchfaces.json) and [`THIRD_PARTY_WATCHFACES.md`](THIRD_PARTY_WATCHFACES.md).
-
-## Reproducible assets
-
-Fetch pinned PBWs:
-
-```bash
-python3 scripts/fetch_bundled_watchfaces.py
-```
-
-Fetch official Basalt firmware:
-
-```bash
-PEBBLE_SDK_VERSION=4.17 python3 scripts/fetch_pebble_basalt_firmware.py
-```
-
-Build Basalt-only Android QEMU:
-
-```bash
-bash scripts/build_pebble_qemu_android.sh
-```
-
-Build host QEMU, preinstall all bundled faces and render real preview PNGs:
-
-```bash
-bash scripts/build_pebble_qemu_host.sh
-python3 scripts/preseed_basalt_flash.py --help
-python3 scripts/generate_watchface_thumbnails.py --help
-```
-
-Generated bundled previews live in `app/src/main/assets/watchface-thumbnails/` and use the watchface UUID as the filename.
-
-## Development stack
-
-- Android Gradle Plugin 9.3.0
-- Gradle 9.5.0
 - JDK 17
+- Android SDK 36
 - Android NDK 28
 - CMake 3.22.1
-- compile/target SDK 36
-- minimum SDK 28
-- arm64-v8a runtime target
-
-Build locally with:
+- Gradle 9.5.0
+- ARM64 Android target
 
 ```bash
 python3 scripts/fetch_bundled_watchfaces.py
 PEBBLE_SDK_VERSION=4.17 python3 scripts/fetch_pebble_basalt_firmware.py
-gradle :app:assembleDebug
+gradle :app:testDebugUnitTest :app:assembleDebug
 ```
 
-The APK is generated at:
+The debug APK is written to:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Physical-device validation for 0.8.9
+Architecture notes are available in [`docs/architecture.md`](docs/architecture.md). Contributions are described in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-1. Tap both Sleep Schedule fields and confirm that each opens a 24-hour time picker with no keyboard text entry.
-2. Import a PBW that already exists and confirm that Pebblehertz reports the existing face without adding another card.
-3. Compare a battery-aware watchface with the Titan 2 battery percentage, then connect and disconnect the charger.
-4. Run, switch, sleep and wake the runtime and confirm that no Pebblehertz status notification appears in the Android shade.
-5. Open `SUPPORT PEBBLEHERTZ` and verify both Wise and PayPal destinations.
-6. Rapidly switch among several bundled and imported faces and confirm only the acknowledged face reaches `ACTIVE / ON AIR`.
-7. Verify below-15% minute refresh behavior and event-driven framebuffer delivery.
+## Reproducible third-party assets
 
-Rollback point: `backup/pebblehertz-0.8.0-before-runtime-fix`.
+Bundled PBW source pages and pinned SHA-256 hashes are recorded in [`bundled-watchfaces.json`](bundled-watchfaces.json) and [`THIRD_PARTY_WATCHFACES.md`](THIRD_PARTY_WATCHFACES.md). Firmware and watchface fetch scripts verify pinned inputs before they are packaged.
+
+## Support the project
+
+Pebblehertz remains free. Support is optional and helps fund testing devices and future rear-screen ports.
+
+- [Wise](https://wise.com/pay/me/ilyas709)
+- [PayPal](https://www.paypal.me/myarrogantfox)
+
+## Disclaimer
+
+Pebblehertz is an independent community project and is not affiliated with Unihertz, Pebble, Google or the original watchface authors. Third-party names and trademarks belong to their respective owners.

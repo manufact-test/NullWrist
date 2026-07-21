@@ -1,0 +1,174 @@
+name: Serialize Pebble runtime control
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/run-stage1-serialization-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/0.8.10-reliable-runtime
+          fetch-depth: 0
+
+      - name: Serialize all QEMU control operations
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java')
+          text = path.read_text()
+
+          def once(old, new):
+              global text
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected one match, found {text.count(old)}: {old[:100]!r}')
+              text = text.replace(old, new, 1)
+
+          once(
+              '''    private final Runnable policyTick = new Runnable() {
+        @Override
+        public void run() {
+            applyPowerPolicy();
+            policyHandler.postDelayed(this, 60_000L);
+        }
+    };
+''',
+              '''    private final Runnable policyTick = new Runnable() {
+        @Override
+        public void run() {
+            schedulePowerPolicy();
+            policyHandler.postDelayed(this, 60_000L);
+        }
+    };
+'''
+          )
+
+          start = text.index('    private final Runnable lowBatteryPause = () -> {')
+          end = text.index('    private final BroadcastReceiver powerReceiver', start)
+          text = text[:start] + '''    private final Runnable lowBatteryPause = () ->
+            executor.execute(this::applyLowBatteryPause);
+
+    private final Runnable lowBatteryPulse = () ->
+            executor.execute(this::applyLowBatteryPulse);
+
+    private void applyLowBatteryPause() {
+        if (powerMode != RuntimePowerPolicy.Mode.LOW_BATTERY_PULSE || runtimeBusy) {
+            return;
+        }
+        PebbleQemuProcess current = runtime;
+        if (current == null || !current.isRunning()) {
+            return;
+        }
+        try {
+            current.pause();
+            notifyListeners();
+        } catch (IOException error) {
+            reportFailure(error);
+        }
+    }
+
+    private void applyLowBatteryPulse() {
+        if (powerMode != RuntimePowerPolicy.Mode.LOW_BATTERY_PULSE || runtimeBusy) {
+            return;
+        }
+        PebbleQemuProcess current = runtime;
+        if (current == null || !current.isRunning()) {
+            return;
+        }
+        try {
+            current.resume();
+            policyHandler.removeCallbacks(lowBatteryPause);
+            policyHandler.postDelayed(lowBatteryPause, LOW_BATTERY_AWAKE_MILLIS);
+        } catch (IOException error) {
+            reportFailure(error);
+        }
+        scheduleNextLowBatteryPulse();
+    }
+
+''' + text[end:]
+
+          once(
+              '''        if (ACTION_SELECT.equals(action)) {
+            scheduleSelection();
+        } else if (ACTION_REFRESH_POWER.equals(action)) {
+            applyPowerPolicy();
+        } else {
+''',
+              '''        if (ACTION_SELECT.equals(action)) {
+            scheduleSelection();
+        } else if (ACTION_REFRESH_POWER.equals(action)) {
+            schedulePowerPolicy();
+        } else {
+'''
+          )
+          once(
+              '''        if (!forceRestart && healthyRuntime) {
+            applyPowerPolicy();
+            notifyListeners();
+            return;
+        }
+''',
+              '''        if (!forceRestart && healthyRuntime) {
+            schedulePowerPolicy();
+            notifyListeners();
+            return;
+        }
+'''
+          )
+          once(
+              '''    private void scheduleSelection() {
+        int requestedGeneration = generation.get();
+        executor.execute(() -> applyLatestSelection(requestedGeneration));
+    }
+''',
+              '''    private void schedulePowerPolicy() {
+        executor.execute(this::applyPowerPolicy);
+    }
+
+    private void scheduleSelection() {
+        int requestedGeneration = generation.get();
+        executor.execute(() -> applyLatestSelection(requestedGeneration));
+    }
+'''
+          )
+          count = text.count('            policyHandler.post(this::applyPowerPolicy);')
+          if count != 2:
+              raise SystemExit(f'Expected two direct policy posts, found {count}')
+          text = text.replace(
+              '            policyHandler.post(this::applyPowerPolicy);',
+              '            schedulePowerPolicy();'
+          )
+          once(
+              '''            SelectedWatchface selected = selectedWatchface();
+            if (selected.metadata.getStorageId().equals(activeStorageId)) {
+                return;
+            }
+''',
+              '''            SelectedWatchface selected = selectedWatchface();
+            if (selected.metadata.getStorageId().equals(activeStorageId)) {
+                selectionQueuedForWake = false;
+                notifyListeners();
+                return;
+            }
+'''
+          )
+
+          path.write_text(text)
+          PY
+
+      - name: Commit serialized runtime control
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java
+          git commit -m "Serialize Pebble runtime control"
+          git push origin HEAD:agent/0.8.10-reliable-runtime

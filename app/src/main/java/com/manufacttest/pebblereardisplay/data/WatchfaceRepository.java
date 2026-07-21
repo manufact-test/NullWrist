@@ -75,6 +75,12 @@ public final class WatchfaceRepository {
             throw exception;
         }
 
+        WatchfaceMetadata duplicate = findDuplicateByUuid(parsed.getUuid());
+        if (duplicate != null) {
+            temporary.delete();
+            throw new DuplicateWatchfaceException(duplicate.getName());
+        }
+
         String uuidPart = parsed.getUuid().replaceAll("[^A-Za-z0-9-]", "");
         if (uuidPart.isEmpty()) {
             uuidPart = UUID.randomUUID().toString();
@@ -131,6 +137,18 @@ public final class WatchfaceRepository {
                     .putStringSet(KEY_HIDDEN_BUNDLED, hidden)
                     .apply();
         }
+    }
+
+    private WatchfaceMetadata findDuplicateByUuid(String uuid) throws IOException {
+        if (uuid == null || uuid.isBlank()) {
+            return null;
+        }
+        for (WatchfaceMetadata existing : loadAll()) {
+            if (uuid.equalsIgnoreCase(existing.getUuid())) {
+                return existing;
+            }
+        }
+        return null;
     }
 
     private void removeOlderImportsWithUuid(String uuid, File keep) throws IOException {
@@ -238,6 +256,12 @@ public final class WatchfaceRepository {
     private void ensureDirectory() throws IOException {
         if (!watchfaceDirectory.exists() && !watchfaceDirectory.mkdirs()) {
             throw new IOException("Cannot create watchface directory");
+        }
+    }
+
+    public static final class DuplicateWatchfaceException extends IOException {
+        public DuplicateWatchfaceException(String existingName) {
+            super("This watchface is already in Pebblehertz: " + existingName);
         }
     }
 

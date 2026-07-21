@@ -23,6 +23,7 @@ public final class PebbleProtocolLink implements Closeable {
     private static final int QEMU_FOOTER = 0xBEEF;
     private static final int QEMU_PROTOCOL_SPP = 1;
     private static final int QEMU_PROTOCOL_BLUETOOTH = 3;
+    private static final int QEMU_PROTOCOL_BATTERY = 5;
     private static final int MAX_QEMU_PAYLOAD = 2048;
 
     private static final int ENDPOINT_WATCH_VERSION = 0x0010;
@@ -104,6 +105,17 @@ public final class PebbleProtocolLink implements Closeable {
             int length = Math.min(MAX_QEMU_PAYLOAD, message.length - offset);
             sendQemuPacket(QEMU_PROTOCOL_SPP, Arrays.copyOfRange(message, offset, offset + length));
         }
+    }
+
+    public void setBatteryState(int percentage, boolean chargerConnected) throws IOException {
+        int safePercentage = Math.max(0, Math.min(100, percentage));
+        sendQemuPacket(
+                QEMU_PROTOCOL_BATTERY,
+                new byte[]{
+                        (byte) safePercentage,
+                        (byte) (chargerConnected ? 1 : 0)
+                }
+        );
     }
 
     public byte[] awaitEndpoint(

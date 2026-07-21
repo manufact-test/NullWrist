@@ -252,6 +252,17 @@ public final class PebbleQemuProcess {
         );
     }
 
+    public synchronized void updateBatteryState(
+            int percentage,
+            boolean chargerConnected
+    ) throws IOException {
+        PebbleProtocolLink current = protocolLink;
+        if (!isRunning() || current == null || !current.isHealthy()) {
+            return;
+        }
+        current.setBatteryState(percentage, chargerConnected);
+    }
+
     public synchronized boolean isRunning() {
         return process != null && process.isAlive();
     }

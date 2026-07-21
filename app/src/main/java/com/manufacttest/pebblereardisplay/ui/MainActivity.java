@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.ActivityOptions;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.app.TimePickerDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -27,8 +28,6 @@ import android.view.Gravity;
 import android.view.Window;
 import android.view.MotionEvent;
 import android.view.View;
-import android.text.InputType;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -271,11 +270,49 @@ public final class MainActivity extends Activity {
         catalogContainer.setOrientation(LinearLayout.VERTICAL);
         root.addView(catalogContainer, matchWidthWrapHeight(0));
 
+        root.addView(buildSupportButton(), matchWidthWrapHeight(dp(14)));
+
         TextView footer = pixelText("PEBBLE TIME / BASALT 144x168", 11, getColor(R.color.text_muted));
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(0, dp(16), 0, 0);
         root.addView(footer);
         return scroll;
+    }
+
+    private View buildSupportButton() {
+        TextView support = pixelButton(
+                "SUPPORT PEBBLEHERTZ",
+                getColor(R.color.accent_mint),
+                getColor(R.color.ink)
+        );
+        support.setOnClickListener(view -> showSupportDialog());
+        support.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(48)
+        ));
+        return support;
+    }
+
+    private void showSupportDialog() {
+    new AlertDialog.Builder(this)
+            .setTitle("Support Pebblehertz")
+            .setMessage("Choose a platform. Thank you for helping the project grow!")
+            .setPositiveButton("Wise", (dialog, which) -> openExternalLink(
+                    "https://wise.com/pay/me/ilyas709"
+            ))
+            .setNeutralButton("PayPal", (dialog, which) -> openExternalLink(
+                    "https://www.paypal.me/myarrogantfox"
+            ))
+            .setNegativeButton("Cancel", null)
+            .show();
+}
+
+    private void openExternalLink(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (RuntimeException exception) {
+            showError("Cannot open the donation page");
+        }
     }
 
     private View buildHeader() {
@@ -476,7 +513,7 @@ private void showPowerScheduleDialog() {
     TextView startLabel = pixelText("START SLEEP", 11, getColor(R.color.accent_coral));
     startLabel.setPadding(0, 0, 0, dp(5));
     form.addView(startLabel);
-    EditText start = timeField(AppPreferences.formatMinutes(
+    TextView start = timeField(AppPreferences.formatMinutes(
             preferences.getSleepStartMinutes()
     ));
     form.addView(start, new LinearLayout.LayoutParams(
@@ -487,7 +524,7 @@ private void showPowerScheduleDialog() {
     TextView endLabel = pixelText("END SLEEP", 11, getColor(R.color.accent_coral));
     endLabel.setPadding(0, dp(12), 0, dp(5));
     form.addView(endLabel);
-    EditText end = timeField(AppPreferences.formatMinutes(
+    TextView end = timeField(AppPreferences.formatMinutes(
             preferences.getSleepEndMinutes()
     ));
     form.addView(end, new LinearLayout.LayoutParams(
@@ -572,14 +609,8 @@ private void showPowerScheduleDialog() {
     }
 }
 
-private EditText timeField(String value) {
-    EditText field = new EditText(this);
-    field.setSingleLine(true);
-    field.setText(value);
-    field.setSelectAllOnFocus(true);
-    field.setTextSize(18);
-    field.setTextColor(getColor(R.color.text_primary));
-    field.setTypeface(Typeface.create("monospace", Typeface.BOLD));
+private TextView timeField(String value) {
+    TextView field = pixelText(value, 18, getColor(R.color.text_primary));
     field.setGravity(Gravity.CENTER);
     field.setPadding(dp(10), 0, dp(10), 0);
     field.setBackground(panelBackground(
@@ -587,9 +618,27 @@ private EditText timeField(String value) {
             getColor(R.color.ink),
             dp(1)
     ));
-    field.setInputType(
-            InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME
-    );
+    field.setClickable(true);
+    field.setFocusable(true);
+    field.setOnClickListener(view -> {
+        int current = parseTime(field.getText().toString());
+        if (current < 0) {
+            current = 0;
+        }
+        TimePickerDialog picker = new TimePickerDialog(
+                this,
+                (timePicker, hour, minute) -> field.setText(String.format(
+                        Locale.US,
+                        "%02d:%02d",
+                        hour,
+                        minute
+                )),
+                current / 60,
+                current % 60,
+                true
+        );
+        picker.show();
+    });
     return field;
 }
 
@@ -1021,31 +1070,31 @@ private static int parseTime(String value) {
     }
 
     private void maybeRequestBackgroundSetup() {
-        getWindow().getDecorView().post(() -> {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                    && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(
-                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                        REQUEST_NOTIFICATIONS
-                );
-                return;
-            }
-            maybeShowBatteryPrompt();
-        });
-    }
-
-    @Override
-    public void onRequestPermissionsResult(
-            int requestCode,
-            String[] permissions,
-            int[] grantResults
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_NOTIFICATIONS) {
-            maybeShowBatteryPrompt();
+    getWindow().getDecorView().post(() -> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                    REQUEST_NOTIFICATIONS
+            );
+            return;
         }
+        maybeShowBatteryPrompt();
+    });
+}
+
+@Override
+public void onRequestPermissionsResult(
+        int requestCode,
+        String[] permissions,
+        int[] grantResults
+) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    if (requestCode == REQUEST_NOTIFICATIONS) {
+        maybeShowBatteryPrompt();
     }
+}
 
     private void maybeShowBatteryPrompt() {
         if (isIgnoringBatteryOptimizations()) {

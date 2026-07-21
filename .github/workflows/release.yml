@@ -1,13 +1,17 @@
-name: Signed release APK
+name: Publish Pebblehertz release
 
 on:
   workflow_dispatch:
   push:
-    tags: ["v*"]
-  pull_request:
+    branches:
+      - feature/minor-fixes-0.8.9
+    paths:
+      - .github/workflows/release.yml
+    tags:
+      - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   release:
@@ -75,11 +79,42 @@ jobs:
             app/build/outputs/apk/release/app-release.apk \
             | tee release-certificate.txt
 
-      - name: Upload signed APK
+      - name: Prepare release files
+        run: cp app/build/outputs/apk/release/app-release.apk Pebblehertz-0.8.9.apk
+
+      - name: Upload signed build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pebble-rear-display-signed-release
+          name: pebblehertz-0.8.9-signed-release
           path: |
-            app/build/outputs/apk/release/app-release.apk
+            Pebblehertz-0.8.9.apk
             release-certificate.txt
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.8.9
+          target_commitish: ${{ github.sha }}
+          name: Pebblehertz 0.8.9 Beta
+          prerelease: true
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: Pebblehertz-0.8.9.apk
+          body: |
+            Pebble watchfaces on the rear display of the Unihertz Titan 2 — no root required.
+
+            ## What is new in 0.8.9
+
+            - Sleep Schedule now uses Android's native 24-hour time picker.
+            - Duplicate PBW imports are blocked by Pebble UUID.
+            - The Titan 2 battery percentage and charging state are forwarded to PebbleOS.
+            - Runtime status notifications have been removed from the Android notification shade.
+            - Notification permission is still requested for future Pebble notification features.
+            - A new support dialog includes Wise and PayPal options.
+
+            ## Important installation note
+
+            If you installed or tested Pebblehertz before July 21, 2026, uninstall the old version before installing 0.8.9. Future versions can be installed normally over this release.
+
+            This is a beta release intended for the Unihertz Titan 2.

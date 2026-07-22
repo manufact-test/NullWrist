@@ -1,3 +1,1 @@
-  File "/tmp/simplify-runtime.py", line 1348
-    '- The current silent background service can still be stopped by aggressive Android or Titan 2 process management.\n',
-IndentationError: unexpected indent
+Expected exactly one match in app/src/main/java/com/manufacttest/pebblereardisplay/PebblehertzApplication.java, found 2: '        RuntimeModeUi.bind(activity, decor);\n'

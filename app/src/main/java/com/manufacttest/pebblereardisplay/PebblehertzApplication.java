@@ -20,8 +20,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.manufacttest.pebblereardisplay.ui.RuntimeModeUi;
-
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -40,7 +38,6 @@ public final class PebblehertzApplication extends Application
     @Override
     public void onCreate() {
         super.onCreate();
-        RuntimeModeUi.initializeMigration(this);
         registerActivityLifecycleCallbacks(this);
     }
 

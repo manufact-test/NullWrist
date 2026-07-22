@@ -1,1 +1,1 @@
-python3: can't open file '/home/runner/work/Pebblehertz/Pebblehertz/tools/finish_one_mode.py': [Errno 2] No such file or directory
+Expected one regex match in app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleQemuProcess.java, found 0: '    public synchronized void updateBatteryState\\(.*?\\n    public synchronized boolean isRu'

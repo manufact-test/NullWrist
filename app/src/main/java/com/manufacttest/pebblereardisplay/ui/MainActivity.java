@@ -1,5 +1,6 @@
 package com.manufacttest.pebblereardisplay.ui;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.ActivityOptions;
 import android.app.AlertDialog;
@@ -7,6 +8,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -43,9 +45,10 @@ import java.util.Locale;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_IMPORT_PBW = 1001;
+    private static final int REQUEST_POST_NOTIFICATIONS = 1002;
     private static final String SETUP_PREFS = "background_setup";
-    private static final String KEY_REQUIRED_PERMISSION_REQUESTED =
-            "required_permission_requested_v1";
+    private static final String KEY_REQUIRED_ACCESS_REQUESTED =
+            "required_access_requested_v2";
 
     private WatchfaceRepository repository;
     private WatchfaceThumbnailRepository thumbnails;
@@ -433,35 +436,33 @@ public final class MainActivity extends Activity {
 
     private View buildReliabilityCard() {
         LinearLayout panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(14), dp(13), dp(14), dp(13));
-        panel.setBackground(panelBackground(
-                getColor(R.color.surface_warm),
-                getColor(R.color.ink),
-                dp(1)
-        ));
+        panel.setOrientation(LinearLayout.HORIZONTAL);
+        panel.setGravity(Gravity.CENTER_VERTICAL);
+        panel.setPadding(dp(12), dp(9), dp(10), dp(9));
+        panel.setMinimumHeight(dp(50));
         panel.setClickable(true);
         panel.setFocusable(true);
+        panel.setElevation(dp(2));
         panel.setOnClickListener(view -> openBackgroundSettings());
 
-        TextView title = pixelText(
-                "ALWAYS-ON STABILITY MODE",
-                14,
-                getColor(R.color.text_primary)
-        );
-        panel.addView(title);
+        TextView signal = pixelText("●", 13, getColor(R.color.ink));
+        signal.setGravity(Gravity.CENTER);
+        panel.addView(signal, new LinearLayout.LayoutParams(dp(24), dp(30)));
 
-        TextView description = bodyText(
-                "PebbleOS now runs continuously in one protected mode. Night schedules, "
-                        + "charging overrides and low-battery pauses are disabled.",
-                12,
-                getColor(R.color.text_secondary)
-        );
-        description.setPadding(0, dp(7), 0, dp(9));
-        panel.addView(description);
+        systemAccessStatus = pixelText("", 11, getColor(R.color.ink));
+        systemAccessStatus.setSingleLine(true);
+        systemAccessStatus.setLetterSpacing(0.015f);
+        systemAccessStatus.setPadding(dp(4), 0, dp(6), 0);
+        panel.addView(systemAccessStatus, new LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+        ));
 
-        systemAccessStatus = pixelText("", 11, getColor(R.color.accent_yellow));
-        panel.addView(systemAccessStatus);
+        TextView arrow = pixelText(">", 18, getColor(R.color.ink));
+        arrow.setGravity(Gravity.CENTER);
+        panel.addView(arrow, new LinearLayout.LayoutParams(dp(24), dp(30)));
+
         refreshSystemAccessStatus();
         return panel;
     }
@@ -470,13 +471,22 @@ public final class MainActivity extends Activity {
         if (systemAccessStatus == null) {
             return;
         }
-        boolean unrestricted = isIgnoringBatteryOptimizations();
-        systemAccessStatus.setText(unrestricted
-                ? "SYSTEM ACCESS: UNRESTRICTED"
-                : "SYSTEM ACCESS: ACTION REQUIRED · TAP TO FIX");
-        systemAccessStatus.setTextColor(getColor(
-                unrestricted ? R.color.accent_mint : R.color.accent_yellow
-        ));
+        boolean ready = isIgnoringBatteryOptimizations() && hasNotificationAccess();
+        systemAccessStatus.setText(ready
+                ? "ALWAYS-ON: ON · ALL GOOD"
+                : "ALWAYS-ON: ACTION REQUIRED");
+        systemAccessStatus.setTextColor(getColor(R.color.ink));
+
+        View parent = systemAccessStatus.getParent() instanceof View
+                ? (View) systemAccessStatus.getParent()
+                : null;
+        if (parent != null) {
+            parent.setBackground(interactivePanelBackground(
+                    getColor(ready ? R.color.accent_mint : R.color.accent_yellow),
+                    getColor(ready ? R.color.surface_selected : R.color.surface_warm),
+                    getColor(R.color.ink)
+            ));
+        }
     }
 
     private void openRearPreview() {
@@ -877,31 +887,71 @@ public final class MainActivity extends Activity {
 
     private void requestRequiredPermissionsOnFirstLaunch() {
         getWindow().getDecorView().postDelayed(() -> {
-            if (isFinishing() || isDestroyed() || rearMode || isIgnoringBatteryOptimizations()) {
-                refreshSystemAccessStatus();
+            if (isFinishing() || isDestroyed() || rearMode) {
                 return;
             }
             SharedPreferences setup = getSharedPreferences(SETUP_PREFS, MODE_PRIVATE);
-            if (setup.getBoolean(KEY_REQUIRED_PERMISSION_REQUESTED, false)) {
+            if (setup.getBoolean(KEY_REQUIRED_ACCESS_REQUESTED, false)) {
                 refreshSystemAccessStatus();
                 return;
             }
-            setup.edit().putBoolean(KEY_REQUIRED_PERMISSION_REQUESTED, true).commit();
-            requestBatteryExemption();
+            setup.edit().putBoolean(KEY_REQUIRED_ACCESS_REQUESTED, true).commit();
+            requestNextRequiredAccess();
         }, 450L);
     }
 
+    private void requestNextRequiredAccess() {
+        if (!hasNotificationAccess()) {
+            requestPermissions(
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                    REQUEST_POST_NOTIFICATIONS
+            );
+            return;
+        }
+        if (!isIgnoringBatteryOptimizations()) {
+            requestBatteryExemption();
+            return;
+        }
+        refreshSystemAccessStatus();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode,
+            String[] permissions,
+            int[] grantResults
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != REQUEST_POST_NOTIFICATIONS) {
+            return;
+        }
+        if (!isIgnoringBatteryOptimizations()) {
+            getWindow().getDecorView().postDelayed(this::requestBatteryExemption, 250L);
+        }
+        refreshSystemAccessStatus();
+    }
+
     private void openBackgroundSettings() {
+        if (!hasNotificationAccess()) {
+            openNotificationSettings();
+            return;
+        }
         if (!isIgnoringBatteryOptimizations()) {
             requestBatteryExemption();
             return;
         }
         Toast.makeText(
                 this,
-                "Battery access is unrestricted. Keep Pebblehertz allowed in DuraSpeed and out of App blocker.",
+                "Always-on access is ready. Keep Pebblehertz allowed in DuraSpeed and out of App blocker.",
                 Toast.LENGTH_LONG
         ).show();
         openAppDetails();
+    }
+
+    private boolean hasNotificationAccess() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED;
     }
 
     private boolean isIgnoringBatteryOptimizations() {
@@ -916,6 +966,16 @@ public final class MainActivity extends Activity {
                     Uri.parse("package:" + getPackageName())
             );
             startActivity(request);
+        } catch (RuntimeException error) {
+            openAppDetails();
+        }
+    }
+
+    private void openNotificationSettings() {
+        try {
+            Intent settings = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+            startActivity(settings);
         } catch (RuntimeException error) {
             openAppDetails();
         }

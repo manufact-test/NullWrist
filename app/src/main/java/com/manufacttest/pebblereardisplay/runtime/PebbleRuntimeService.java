@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.SystemClock;
 
 import com.manufacttest.pebblereardisplay.R;
@@ -287,6 +288,7 @@ public final class PebbleRuntimeService extends Service {
 
     private void runRuntime(int requestedGeneration, boolean replaceExisting) {
         PebbleQemuProcess current = null;
+        PowerManager.WakeLock startupWakeLock = acquireStartupWakeLock();
         try {
             if (replaceExisting) {
                 discardRuntime(null);
@@ -340,6 +342,27 @@ public final class PebbleRuntimeService extends Service {
             }
         } finally {
             runtimeBusy = false;
+            releaseWakeLock(startupWakeLock);
+        }
+    }
+
+    private PowerManager.WakeLock acquireStartupWakeLock() {
+        PowerManager manager = getSystemService(PowerManager.class);
+        if (manager == null) {
+            return null;
+        }
+        PowerManager.WakeLock wakeLock = manager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                getPackageName() + ":runtime-start"
+        );
+        wakeLock.setReferenceCounted(false);
+        wakeLock.acquire(90_000L);
+        return wakeLock;
+    }
+
+    private static void releaseWakeLock(PowerManager.WakeLock wakeLock) {
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
         }
     }
 

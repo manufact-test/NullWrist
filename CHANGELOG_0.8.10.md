@@ -10,7 +10,10 @@
 - Added guarded recovery after Recents task removal.
 - Added stale orphaned QEMU PID cleanup before startup.
 - Kept the foreground notification silent, button-free and non-interactive.
-- Battery-optimization exemption is requested immediately on first launch.
+- Notification access and battery-optimization exemption are requested in sequence on first launch.
+- Added boot/update restoration through `BOOT_COMPLETED` and `MY_PACKAGE_REPLACED`.
+- Added a bounded 90-second partial wake lock only while QEMU starts or recovers.
+- Replaced the large stability explanation with a compact, color-coded action card.
 - Removed runtime mode selection and Silent mode.
 - Active, selected and final remaining watchfaces cannot be deleted.
-- Version code 26; version name 0.8.10.
+- Version code 27; version name 0.8.10.

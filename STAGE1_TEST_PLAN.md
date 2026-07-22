@@ -11,9 +11,11 @@ The runtime has one operating mode. There are no sleep, charging or low-battery 
 
 ## First launch
 1. Install over 0.8.9 or an earlier 0.8.10 test build.
-2. Confirm Android immediately requests battery-optimization exemption when needed.
-3. Return and confirm SYSTEM ACCESS: UNRESTRICTED.
-4. Confirm there is no runtime-mode chooser, schedule card or notification permission prompt.
+2. Confirm Android requests notification access on Android 13+.
+3. Confirm the battery-optimization exemption screen follows when needed.
+4. Return and confirm the compact card reads `ALWAYS-ON: ON · ALL GOOD`.
+5. Deny either access and confirm the card reads `ALWAYS-ON: ACTION REQUIRED` and opens the missing setting.
+6. Confirm there is no runtime-mode chooser or schedule card.
 
 ## Continuous runtime
 1. Run one face for at least one hour.
@@ -43,4 +45,6 @@ The runtime has one operating mode. There are no sleep, charging or low-battery 
 3. Simulate native QEMU exit and verify watchdog restart/backoff.
 4. Reopen during recovery and confirm no duplicate QEMU.
 5. Verify stale PID cleanup before recovery.
-6. Android Task Manager Stop, Force stop and OEM App blocker remain terminal actions.
+6. Reboot the phone and confirm the selected face is restored after unlock.
+7. Install an update over the app and confirm the runtime is restored.
+8. Android Task Manager Stop, Force stop and OEM App blocker remain terminal actions.

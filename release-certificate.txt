@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): false
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=Pebble Rear Display, OU=Android, O=manufact-test, L=Wroclaw, ST=Lower Silesia, C=PL
+Signer #1 certificate SHA-256 digest: ba35e5500037e73197ee16c58d4aa67c93368a0121c62ae34d817e9dcf3e3c0c
+Signer #1 certificate SHA-1 digest: 8127869a09b56b1c63cfd45c8d06237530878c1d
+Signer #1 certificate MD5 digest: 028a0180cf4b7707813831d772dd3f81
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 4096
+Signer #1 public key SHA-256 digest: fc728aba017a8d36e0382814b18d448742346fa2bb1d62b8b4d480c3dc1f7545
+Signer #1 public key SHA-1 digest: d87a4d5b4ddf25762d002af6ee844b3018404c88
+Signer #1 public key MD5 digest: 7da78280fe120c3b5a90e46411eb6325

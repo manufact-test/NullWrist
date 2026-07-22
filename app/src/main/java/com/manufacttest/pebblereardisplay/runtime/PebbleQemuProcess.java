@@ -61,7 +61,6 @@ public final class PebbleQemuProcess {
     private int protocolPort;
     private int qemuPid = -1;
     private volatile boolean firmwareReady;
-    private volatile boolean paused;
 
     public PebbleQemuProcess(Context context) {
         this.context = context.getApplicationContext();
@@ -81,7 +80,6 @@ public final class PebbleQemuProcess {
         prepareFiles();
         protocolPort = chooseUnusedPort();
         firmwareReady = false;
-        paused = false;
         qemuPid = -1;
 
         File qemu = new File(
@@ -252,41 +250,8 @@ public final class PebbleQemuProcess {
         );
     }
 
-    public synchronized void updateBatteryState(
-            int percentage,
-            boolean chargerConnected
-    ) throws IOException {
-        PebbleProtocolLink current = protocolLink;
-        if (!isRunning() || current == null || !current.isHealthy()) {
-            return;
-        }
-        current.setBatteryState(percentage, chargerConnected);
-    }
-
     public synchronized boolean isRunning() {
         return process != null && process.isAlive();
-    }
-
-    public synchronized boolean isPaused() {
-        return paused && isRunning();
-    }
-
-    public synchronized boolean pause() throws IOException {
-        if (!isRunning() || paused) {
-            return isRunning();
-        }
-        signal(OsConstants.SIGSTOP, "freeze");
-        paused = true;
-        return true;
-    }
-
-    public synchronized boolean resume() throws IOException {
-        if (!isRunning() || !paused) {
-            return isRunning();
-        }
-        signal(OsConstants.SIGCONT, "resume");
-        paused = false;
-        return true;
     }
 
     public synchronized Integer exitCode() {
@@ -310,17 +275,8 @@ public final class PebbleQemuProcess {
         Process current = process;
         process = null;
         if (current == null) {
-            paused = false;
             qemuPid = -1;
             return;
-        }
-
-        if (paused && qemuPid > 0) {
-            try {
-                Os.kill(qemuPid, OsConstants.SIGCONT);
-            } catch (ErrnoException ignored) {
-            }
-            paused = false;
         }
 
         current.destroy();
@@ -445,18 +401,7 @@ public final class PebbleQemuProcess {
     }
 
     public String readLogTail(int maxBytes) {
-        return "QEMU diagnostics are disabled in the battery-optimized runtime.";
-    }
-
-    private void signal(int signal, String operation) throws IOException {
-        if (qemuPid <= 0) {
-            throw new IOException("QEMU PID is unavailable");
-        }
-        try {
-            Os.kill(qemuPid, signal);
-        } catch (ErrnoException error) {
-            throw new IOException("Could not " + operation + " PebbleOS", error);
-        }
+        return "QEMU diagnostics are not enabled in this build.";
     }
 
     private int awaitPid(long timeoutMillis) throws IOException {
@@ -561,6 +506,7 @@ public final class PebbleQemuProcess {
                 .putBoolean(KEY_088_RECOVERY_COMPLETED, true)
                 .commit();
 
+        terminateStaleQemuProcess();
         closeFramebufferReader();
         if (framebuffer.exists() && !framebuffer.delete()) {
             throw new IOException("Cannot reset framebuffer: " + framebuffer);
@@ -597,6 +543,58 @@ public final class PebbleQemuProcess {
             // A library read failure is reported by the UI; do not destroy a healthy SPI image.
         }
         return false;
+    }
+
+    private void terminateStaleQemuProcess() {
+        if (!pidFile.isFile()) {
+            return;
+        }
+        int stalePid;
+        try {
+            String value = new String(
+                    Files.readAllBytes(pidFile.toPath()),
+                    StandardCharsets.US_ASCII
+            ).trim();
+            stalePid = Integer.parseInt(value);
+        } catch (IOException | NumberFormatException ignored) {
+            return;
+        }
+        if (stalePid <= 0 || stalePid == qemuPid || !isPebbleQemuProcess(stalePid)) {
+            return;
+        }
+        try {
+            Os.kill(stalePid, OsConstants.SIGTERM);
+        } catch (ErrnoException ignored) {
+            return;
+        }
+        for (int attempt = 0; attempt < 10; attempt++) {
+            if (!new File("/proc/" + stalePid).exists()) {
+                return;
+            }
+            try {
+                Thread.sleep(30L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        try {
+            Os.kill(stalePid, OsConstants.SIGKILL);
+        } catch (ErrnoException ignored) {
+        }
+    }
+
+    private static boolean isPebbleQemuProcess(int pid) {
+        try {
+            String command = new String(
+                    Files.readAllBytes(new File("/proc/" + pid + "/cmdline").toPath()),
+                    StandardCharsets.UTF_8
+            );
+            return command.contains("libpebble_qemu_exec.so")
+                    || command.contains("pebble-qemu-launcher");
+        } catch (IOException ignored) {
+            return false;
+        }
     }
 
     private void prepareFrameEventPipe() throws IOException {

@@ -48,14 +48,11 @@ public final class PebblehertzApplication extends Application
         }
         View decor = activity.getWindow().getDecorView();
         bindSupportButton(activity, decor);
-        RuntimeModeUi.bind(activity, decor);
-        RuntimeModeUi.scheduleMigrationIntro(activity, decor);
         if (layoutListeners.containsKey(activity)) {
             return;
         }
         ViewTreeObserver.OnGlobalLayoutListener listener = () -> {
             bindSupportButton(activity, decor);
-            RuntimeModeUi.bind(activity, decor);
         };
         layoutListeners.put(activity, listener);
         decor.getViewTreeObserver().addOnGlobalLayoutListener(listener);

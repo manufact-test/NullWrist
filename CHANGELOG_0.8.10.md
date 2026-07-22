@@ -1,21 +1,16 @@
 # Pebblehertz 0.8.10
 
-## Stage 1 — Reliable Always-On
+## Stability-first runtime
 
-- Reliable Always-On is now the default runtime mode.
-- PebbleOS runs as an Android `specialUse` foreground service in Reliable mode.
-- The foreground-service notification is minimal, silent and contains no buttons or actions.
-- Pebblehertz no longer requests notification permission; Android may still expose the service through Active apps as required by the platform.
-- Silent Mode remains available as an optional less-reliable alternative.
-- Runtime mode can be changed without restarting QEMU or reinstalling the app.
-- Existing 0.8.9 users receive a one-time explanation of the new default.
-- New installations begin in Reliable mode automatically.
-- Android 14+ foreground-service type and permission declarations are included.
-- Runtime mode selection uses a custom Pebblehertz-styled dialog with Reliable visually marked as RECOMMENDED.
-- Reliable mode uses `onTaskRemoved` plus a guarded AlarmManager fallback after Titan 2 removes the app task.
-- Watchface changes during Schedule Sleep are queued and applied once after wake or charger connection.
-- Schedule Sleep sends only one QEMU pause command per sleep interval.
-- Runtime launch, watchface switching, battery sync, power policy, pause and resume operations are serialized through one executor.
-- Returning to the already active face during Schedule Sleep clears a stale queued selection.
-
-Physical-device validation is tracked in [`STAGE1_TEST_PLAN.md`](STAGE1_TEST_PLAN.md).
+- One continuous always-on runtime.
+- Removed Night Mode, sleep scheduling, charger overrides, battery forwarding and low-battery pulse mode.
+- Serialized all normal QEMU protocol work through one executor.
+- Coalesced rapid watchface taps so only the latest request is applied.
+- Added native-process watchdog recovery with bounded exponential backoff.
+- Added guarded recovery after Recents task removal.
+- Added stale orphaned QEMU PID cleanup before startup.
+- Kept the foreground notification silent, button-free and non-interactive.
+- Battery-optimization exemption is requested immediately on first launch.
+- Removed runtime mode selection and Silent mode.
+- Active, selected and final remaining watchfaces cannot be deleted.
+- Version code 26; version name 0.8.10.

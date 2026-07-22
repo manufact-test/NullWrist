@@ -32,8 +32,6 @@ This is not a visual imitation. Pebblehertz boots the Basalt firmware, installs 
 - Import and retain additional `.pbw` watchfaces.
 - Switch faces without rebooting PebbleOS.
 - Confirm the exact active Pebble UUID before showing `ACTIVE / ON AIR`.
-- Forward the Titan 2 battery percentage and charging state to PebbleOS.
-- Night Mode schedule and a low-battery minute-refresh mode.
 - Duplicate import protection by Pebble UUID.
 - Optional Wise and PayPal project support links.
 
@@ -64,16 +62,16 @@ Read [`COMPATIBILITY.md`](COMPATIBILITY.md) before reporting an imported face th
 
 ## Known limitations
 
-- The current silent background service can still be stopped by aggressive Android or Titan 2 process management.
+- Pebblehertz uses one continuous foreground runtime with automatic watchdog recovery. Android Force stop and the Titan 2 App blocker remain terminal system actions.
 - PebbleKit JS, watchface configuration pages, network/weather bridges and phone notifications are not implemented yet.
 - Health data such as steps and heart rate is not available yet.
 - Pebble apps and games that depend on physical Pebble buttons are outside the current watchface-focused scope.
 
-The next release changes reliable always-on operation into the default mode. See the full [`ROADMAP.md`](ROADMAP.md).
+The next release focuses on one stable always-on runtime and removes experimental power modes. See the full [`ROADMAP.md`](ROADMAP.md).
 
 ## Roadmap at a glance
 
-- **0.8.10 — Stability & Diagnostics:** reliable foreground runtime by default, optional silent mode, restart recovery, diagnostic export and PBW capability labels.
+- **0.8.10 — Stability & Diagnostics:** one protected foreground runtime, watchdog recovery, diagnostic export and PBW capability labels.
 - **0.9.0 — Personal Face:** use a photo or GIF with configurable digital time overlays.
 - **0.10.0 — PebbleKit Compatibility:** JavaScript runtime, AppMessage, configuration pages and network/weather support.
 - **0.11.0 — Phone Data:** Health Connect, selected notifications, music and calendar data.
@@ -89,7 +87,7 @@ Use the [bug report form](https://github.com/manufact-test/Pebblehertz/issues/ne
 - watchface name, source and UUID when available;
 - exact reproduction steps;
 - screenshot or short video;
-- whether the problem appears after clearing recent apps, locking the phone, charging or importing a PBW.
+- whether the problem appears after clearing recent apps, locking the phone, switching, importing or deleting a PBW.
 
 ## Build from source
 

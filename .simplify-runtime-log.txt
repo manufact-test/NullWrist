@@ -1,1 +1,0 @@
-Expected exactly one match in app/src/main/java/com/manufacttest/pebblereardisplay/PebblehertzApplication.java, found 2: '        RuntimeModeUi.bind(activity, decor);\n'

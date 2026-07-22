@@ -1,0 +1,36 @@
+name: Apply v27 notification repost safeguard
+
+on:
+  push:
+    branches:
+      - agent/0.8.10-reliable-runtime
+    paths:
+      - .github/workflows/apply-v27-notification-repost.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/0.8.10-reliable-runtime
+          fetch-depth: 0
+      - name: Apply safeguard
+        shell: bash
+        run: |
+          set +e
+          python3 tools/apply_v27_notification_repost.py > .apply-v27-repost-log.txt 2>&1
+          code=$?
+          printf 'exit_code=%s\nrun_id=%s\n' "$code" "$GITHUB_RUN_ID" > .apply-v27-repost-result.txt
+          if [[ "$code" == "0" ]]; then
+            rm -f tools/apply_v27_notification_repost.py .github/workflows/apply-v27-notification-repost.yml .apply-v27-repost-log.txt
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Repost foreground notification after access grant"
+          git push origin HEAD:agent/0.8.10-reliable-runtime
+          exit "$code"

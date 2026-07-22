@@ -1,0 +1,6 @@
+run_id=29915363922
+tag=v0.8.10
+asset=Pebblehertz-0.8.10.apk
+sha256=0939fd806ea796c7686c937bfaca8802f0028ea5a3e67bd326ea4671e32eca4d
+release_url=https://github.com/manufact-test/Pebblehertz/releases/tag/v0.8.10
+download_url=https://github.com/manufact-test/Pebblehertz/releases/download/v0.8.10/Pebblehertz-0.8.10.apk

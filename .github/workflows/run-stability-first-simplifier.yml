@@ -24,7 +24,7 @@ jobs:
         run: |
           set +e
           base64 --decode .github/scripts/simplify-runtime.py.gz.b64 | gzip --decompress > /tmp/simplify-runtime.py
-          python3 /tmp/simplify-runtime.py
+          python3 /tmp/simplify-runtime.py > .simplify-runtime-log.txt 2>&1
           code=$?
           printf 'exit_code=%s\nrun_id=%s\n' "$code" "$GITHUB_RUN_ID" > .simplify-runtime-result.txt
           if [[ "$code" == "0" ]]; then
@@ -37,4 +37,4 @@ jobs:
           git push origin HEAD:agent/0.8.10-reliable-runtime
           exit "$code"
 
-# Registered workflow trigger.
+# Capture simplifier diagnostics.

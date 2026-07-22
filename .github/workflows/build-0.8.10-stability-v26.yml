@@ -88,3 +88,5 @@ jobs:
           git add .stability-v26-run.txt
           git commit -m "Record stability-first v26 APK run [skip ci]"
           git push origin HEAD:agent/0.8.10-reliable-runtime
+
+# Registered signed-build trigger.

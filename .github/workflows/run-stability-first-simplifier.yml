@@ -23,9 +23,86 @@ jobs:
         shell: bash
         run: |
           set +e
-          base64 --decode .github/scripts/simplify-runtime.py.gz.b64 | gzip --decompress > /tmp/simplify-runtime.py
-          python3 /tmp/simplify-runtime.py > .simplify-runtime-log.txt 2>&1
+          base64 --decode .github/scripts/simplify-runtime.py.gz.b64 | gzip --decompress > /tmp/full-simplifier.py
+          head -n 1342 /tmp/full-simplifier.py > /tmp/core-simplifier.py
+          python3 -m py_compile /tmp/core-simplifier.py > .simplify-runtime-log.txt 2>&1
           code=$?
+          if [[ "$code" == "0" ]]; then
+            python3 /tmp/core-simplifier.py >> .simplify-runtime-log.txt 2>&1
+            code=$?
+          fi
+          if [[ "$code" == "0" ]]; then
+            python3 <<'PY' >> .simplify-runtime-log.txt 2>&1
+          from pathlib import Path
+
+          readme = Path('README.md').read_text()
+          for line in [
+              '- Forward the Titan 2 battery percentage and charging state to PebbleOS.\n',
+              '- Night Mode schedule and a low-battery minute-refresh mode.\n',
+          ]:
+              readme = readme.replace(line, '')
+          readme = readme.replace(
+              '- The current silent background service can still be stopped by aggressive Android or Titan 2 process management.\n',
+              '- Pebblehertz uses one continuous foreground runtime with automatic watchdog recovery. Android Force stop and the Titan 2 App blocker remain terminal system actions.\n'
+          )
+          readme = readme.replace(
+              'The next release changes reliable always-on operation into the default mode. See the full [`ROADMAP.md`](ROADMAP.md).',
+              'The next release focuses on one stable always-on runtime and removes experimental power modes. See the full [`ROADMAP.md`](ROADMAP.md).'
+          )
+          readme = readme.replace(
+              '- **0.8.10 — Stability & Diagnostics:** reliable foreground runtime by default, optional silent mode, restart recovery, diagnostic export and PBW capability labels.',
+              '- **0.8.10 — Stability & Diagnostics:** one protected foreground runtime, watchdog recovery, diagnostic export and PBW capability labels.'
+          )
+          readme = readme.replace('locking the phone, charging or importing', 'locking the phone, switching, importing or deleting')
+          Path('README.md').write_text(readme)
+
+          roadmap = Path('ROADMAP.md').read_text()
+          roadmap = roadmap.replace('- Titan 2 battery and charging-state forwarding.\n', '')
+          roadmap = roadmap.replace('- Night Mode schedule and low-battery minute refresh.\n', '')
+          roadmap = roadmap.replace(
+              '- Make **Reliable Always-On** the default operating mode.\n- Run PebbleOS as an Android foreground service with the smallest practical persistent notification.\n- Keep **Silent Mode** as an optional, less reliable alternative.\n- Recover the rear display after the main Activity is dismissed.\n',
+              '- Use one continuous protected runtime with no sleep, charging or low-battery execution modes.\n- Run PebbleOS as an Android foreground service with the smallest practical persistent notification.\n- Recover the rear display after the main Activity is dismissed.\n'
+          )
+          roadmap = roadmap.replace('- Make the active mode and its reliability trade-off explicit inside the app.\n', '- Request required background access on first launch and show its current status in the app.\n')
+          roadmap = roadmap.replace('runtime mode and power policy', 'runtime and recovery state')
+          Path('ROADMAP.md').write_text(roadmap)
+
+          Path('CHANGELOG_0.8.10.md').write_text('''# Pebblehertz 0.8.10\n\n## Stability-first runtime\n\n- One continuous always-on runtime.\n- Removed Night Mode, sleep scheduling, charger overrides, battery forwarding and low-battery pulse mode.\n- Serialized normal QEMU protocol work through one executor.\n- Coalesced rapid watchface taps so only the latest request is applied.\n- Added native-process watchdog recovery with bounded exponential backoff.\n- Added guarded recovery after Recents task removal.\n- Added stale orphaned QEMU PID cleanup before startup.\n- Kept the foreground notification silent, button-free and non-interactive.\n- Battery-optimization exemption is requested immediately on first launch.\n- Removed runtime mode selection and Silent mode.\n- Active, selected and final remaining watchfaces cannot be deleted.\n- Version code 26; version name 0.8.10.\n''')
+
+          Path('STAGE1_TEST_PLAN.md').write_text('''# Pebblehertz 0.8.10 stability test plan\n\nThe runtime has one operating mode. There are no sleep, charging or low-battery execution branches.\n\n## Automated checks\n- Bounded restart-backoff tests.\n- Destructive watchface-operation tests.\n- PBW parsing and duplicate UUID tests.\n- Signed ARM64 release compilation.\n- Native QEMU and Basalt firmware asset verification.\n\n## First launch\n1. Install over 0.8.9 or an earlier 0.8.10 test build.\n2. Confirm Android immediately requests battery-optimization exemption when needed.\n3. Return and confirm SYSTEM ACCESS: UNRESTRICTED.\n4. Confirm there is no runtime-mode chooser, schedule card or notification permission prompt.\n\n## Continuous runtime\n1. Run one face for at least one hour.\n2. Lock/unlock and open/close both Activities repeatedly.\n3. Use Recents Clear all and confirm the face stays active or recovers.\n4. Connect/disconnect charging and confirm nothing changes.\n5. Confirm no sleep or battery-saver state appears at any battery level.\n6. Confirm the notification is silent, ongoing, button-free and non-interactive.\n\n## Switching\n1. Switch normally between bundled faces.\n2. Rapidly tap five faces; only the final request should become ACTIVE.\n3. Tap the active face repeatedly; QEMU must not reboot.\n4. Switch while opening/closing the main Activity.\n5. A failed PBW should restore the previous face when the runtime remains healthy.\n\n## Import and deletion\n1. Import a valid standalone PBW.\n2. Reject duplicate UUID, invalid, cancelled and oversized imports without disrupting the active face.\n3. Block deleting the active or selected face.\n4. Delete an inactive imported face without touching QEMU.\n5. Block deleting the final remaining face.\n\n## Recovery\n1. Kill only the launcher Activity.\n2. Use Recents Clear all.\n3. Simulate native QEMU exit and verify watchdog restart/backoff.\n4. Reopen during recovery and confirm no duplicate QEMU.\n5. Verify stale PID cleanup before recovery.\n6. Android Task Manager Stop, Force stop and OEM App blocker remain terminal actions.\n''')
+
+          arch = Path('docs/architecture.md').read_text()
+          marker = '## Runtime stability model'
+          if marker not in arch:
+              arch += '\n\n## Runtime stability model\n\nPebblehertz uses one continuously running foreground service. Sleep schedules, charging overrides, battery forwarding and low-battery pause/resume modes are intentionally excluded. Watchface protocol commands are serialized, rapid selections are coalesced, and a watchdog restores an unexpectedly exited QEMU process with bounded backoff.\n'
+          Path('docs/architecture.md').write_text(arch)
+
+          obsolete = [
+              'app/src/main/java/com/manufacttest/pebblereardisplay/runtime/RuntimePowerPolicy.java',
+              'app/src/main/java/com/manufacttest/pebblereardisplay/runtime/RuntimeSelectionPolicy.java',
+              'app/src/main/java/com/manufacttest/pebblereardisplay/runtime/RuntimeRecoveryPolicy.java',
+              'app/src/main/java/com/manufacttest/pebblereardisplay/runtime/RuntimeRecoveryScheduler.java',
+              'app/src/main/java/com/manufacttest/pebblereardisplay/ui/RuntimeModeUi.java',
+              'app/src/test/java/com/manufacttest/pebblereardisplay/runtime/RuntimePowerPolicyTest.java',
+              'app/src/test/java/com/manufacttest/pebblereardisplay/runtime/RuntimeSelectionPolicyTest.java',
+              'app/src/test/java/com/manufacttest/pebblereardisplay/runtime/RuntimeRecoveryPolicyTest.java',
+              'app/src/test/java/com/manufacttest/pebblereardisplay/data/AppPreferencesRuntimeModeTest.java',
+          ]
+          for item in obsolete:
+              Path(item).unlink(missing_ok=True)
+
+          for item in [
+              'app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java',
+              'app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java',
+              'app/src/main/java/com/manufacttest/pebblereardisplay/data/AppPreferences.java',
+          ]:
+              text = Path(item).read_text()
+              for forbidden in ['SCHEDULE SLEEP', 'LOW_BATTERY_PULSE', 'getSleepStartMinutes', 'RuntimeModeUi']:
+                  if forbidden in text:
+                      raise SystemExit(f'Obsolete concept {forbidden!r} remains in {item}')
+          PY
+            code=$?
+          fi
           printf 'exit_code=%s\nrun_id=%s\n' "$code" "$GITHUB_RUN_ID" > .simplify-runtime-result.txt
           if [[ "$code" == "0" ]]; then
             rm -f .github/scripts/simplify-runtime.py.gz.b64
@@ -37,4 +114,4 @@ jobs:
           git push origin HEAD:agent/0.8.10-reliable-runtime
           exit "$code"
 
-# Capture simplifier diagnostics.
+# Execute core and documentation phases separately.

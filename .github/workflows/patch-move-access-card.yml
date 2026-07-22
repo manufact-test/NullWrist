@@ -1,0 +1,81 @@
+name: One-time move access card
+
+on:
+  push:
+    branches: ["feature/move-access-card"]
+    paths: [".github/workflows/patch-move-access-card.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/move-access-card
+
+      - name: Apply targeted UI patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java")
+          text = path.read_text(encoding="utf-8")
+
+          replacements = [
+              (
+                  """        root.addView(buildActionRow(), matchWidthWrapHeight(dp(10)));\n        root.addView(buildReliabilityCard(), matchWidthWrapHeight(dp(20)));""",
+                  """        root.addView(buildActionRow(), matchWidthWrapHeight(dp(20)));""",
+                  "main screen layout",
+              ),
+              (
+                  """        TextView settingsButton = pixelButton(\n                \"SYSTEM SETUP\",\n                getColor(R.color.paper),\n                getColor(R.color.ink)\n        );\n        settingsButton.setOnClickListener(view -> openBackgroundSettings());\n        row.addView(settingsButton, weightedButtonParams(0));""",
+                  """        row.addView(buildReliabilityCard(), weightedButtonParams(0));""",
+                  "action row",
+              ),
+          ]
+
+          for old, new, label in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one {label} match, found {count}")
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          ! grep -q 'SYSTEM SETUP' app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java
+          git diff --check
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK and NDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108" "cmake;3.22.1"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Fetch build assets
+        run: |
+          python3 scripts/fetch_bundled_watchfaces.py
+          PEBBLE_SDK_VERSION=4.17 python3 scripts/fetch_pebble_basalt_firmware.py
+
+      - name: Verify Android build
+        run: gradle :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Commit the targeted change
+        run: |
+          rm .github/workflows/patch-move-access-card.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java .github/workflows/patch-move-access-card.yml
+          git commit -m "Move access status into action row"
+          git push origin "HEAD:feature/move-access-card"

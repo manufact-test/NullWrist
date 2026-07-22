@@ -266,8 +266,7 @@ public final class MainActivity extends Activity {
 
         root.addView(buildHeader(), matchWidthWrapHeight(dp(14)));
         root.addView(buildHeroCard(), matchWidthWrapHeight(dp(12)));
-        root.addView(buildActionRow(), matchWidthWrapHeight(dp(10)));
-        root.addView(buildReliabilityCard(), matchWidthWrapHeight(dp(20)));
+        root.addView(buildActionRow(), matchWidthWrapHeight(dp(20)));
 
         TextView listTitle = pixelText("WATCHFACE LOCKER // 00", 16, getColor(R.color.text_primary));
         listTitle.setTag("locker-title");
@@ -426,13 +425,7 @@ public final class MainActivity extends Activity {
         importButton.setOnClickListener(view -> openPbwPicker());
         row.addView(importButton, weightedButtonParams(dp(6)));
 
-        TextView settingsButton = pixelButton(
-                "SYSTEM SETUP",
-                getColor(R.color.paper),
-                getColor(R.color.ink)
-        );
-        settingsButton.setOnClickListener(view -> openBackgroundSettings());
-        row.addView(settingsButton, weightedButtonParams(0));
+        row.addView(buildReliabilityCard(), weightedButtonParams(0));
         return row;
     }
 

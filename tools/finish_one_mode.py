@@ -1,0 +1,302 @@
+from pathlib import Path
+import re
+
+
+def sub_once(path: str, pattern: str, replacement: str) -> None:
+    file = Path(path)
+    text = file.read_text()
+    updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+    if count != 1:
+        raise SystemExit(
+            f"Expected one regex match in {path}, found {count}: {pattern[:90]!r}"
+        )
+    file.write_text(updated)
+
+
+application = Path(
+    "app/src/main/java/com/manufacttest/pebblereardisplay/PebblehertzApplication.java"
+)
+text = application.read_text()
+text = text.replace(
+    "import com.manufacttest.pebblereardisplay.ui.RuntimeModeUi;\n\n", ""
+)
+text = "\n".join(line for line in text.split("\n") if "RuntimeModeUi." not in line)
+application.write_text(text)
+
+qemu = "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleQemuProcess.java"
+file = Path(qemu)
+text = file.read_text()
+text = text.replace("    private volatile boolean paused;\n", "")
+text = re.sub(r"^\s*paused = false;\n", "", text, flags=re.M)
+file.write_text(text)
+
+sub_once(
+    qemu,
+    r"    public synchronized void updateBatteryState\(.*?\n"
+    r"    public synchronized boolean isRunning\(\) \{",
+    "    public synchronized boolean isRunning() {",
+)
+sub_once(
+    qemu,
+    r"\n    public synchronized boolean isPaused\(\) \{.*?\n"
+    r"    public synchronized Integer exitCode\(\) \{",
+    "\n    public synchronized Integer exitCode() {",
+)
+sub_once(
+    qemu,
+    r"        if \(current == null\) \{\n"
+    r"            qemuPid = -1;\n"
+    r"            return;\n"
+    r"        \}\n\n"
+    r"        if \(paused && qemuPid > 0\) \{.*?\n"
+    r"        \}\n\n",
+    "        if (current == null) {\n"
+    "            qemuPid = -1;\n"
+    "            return;\n"
+    "        }\n\n",
+)
+sub_once(
+    qemu,
+    r"\n    private void signal\(int signal, String operation\) throws IOException \{.*?\n"
+    r"    private int awaitPid",
+    "\n    private int awaitPid",
+)
+
+file = Path(qemu)
+text = file.read_text()
+text = text.replace(
+    "QEMU diagnostics are disabled in the battery-optimized runtime.",
+    "QEMU diagnostics are not enabled in this build.",
+)
+old = "        closeFramebufferReader();\n        if (framebuffer.exists() && !framebuffer.delete()) {"
+new = "        terminateStaleQemuProcess();\n        closeFramebufferReader();\n        if (framebuffer.exists() && !framebuffer.delete()) {"
+if old not in text:
+    raise SystemExit("QEMU preparation insertion point missing")
+text = text.replace(old, new, 1)
+marker = "    private void prepareFrameEventPipe() throws IOException {"
+helper = '''    private void terminateStaleQemuProcess() {
+        if (!pidFile.isFile()) {
+            return;
+        }
+        int stalePid;
+        try {
+            String value = new String(
+                    Files.readAllBytes(pidFile.toPath()),
+                    StandardCharsets.US_ASCII
+            ).trim();
+            stalePid = Integer.parseInt(value);
+        } catch (IOException | NumberFormatException ignored) {
+            return;
+        }
+        if (stalePid <= 0 || stalePid == qemuPid || !isPebbleQemuProcess(stalePid)) {
+            return;
+        }
+        try {
+            Os.kill(stalePid, OsConstants.SIGTERM);
+        } catch (ErrnoException ignored) {
+            return;
+        }
+        for (int attempt = 0; attempt < 10; attempt++) {
+            if (!new File("/proc/" + stalePid).exists()) {
+                return;
+            }
+            try {
+                Thread.sleep(30L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        try {
+            Os.kill(stalePid, OsConstants.SIGKILL);
+        } catch (ErrnoException ignored) {
+        }
+    }
+
+    private static boolean isPebbleQemuProcess(int pid) {
+        try {
+            String command = new String(
+                    Files.readAllBytes(new File("/proc/" + pid + "/cmdline").toPath()),
+                    StandardCharsets.UTF_8
+            );
+            return command.contains("libpebble_qemu_exec.so")
+                    || command.contains("pebble-qemu-launcher");
+        } catch (IOException ignored) {
+            return false;
+        }
+    }
+
+'''
+if "private void terminateStaleQemuProcess()" not in text:
+    if marker not in text:
+        raise SystemExit("QEMU helper insertion point missing")
+    text = text.replace(marker, helper + marker, 1)
+file.write_text(text)
+
+gradle = Path("app/build.gradle.kts")
+text = gradle.read_text().replace("        versionCode = 25\n", "        versionCode = 26\n")
+if "        versionCode = 26\n" not in text:
+    raise SystemExit("versionCode 26 was not applied")
+gradle.write_text(text)
+
+readme = Path("README.md").read_text()
+for line in [
+    "- Forward the Titan 2 battery percentage and charging state to PebbleOS.\n",
+    "- Night Mode schedule and a low-battery minute-refresh mode.\n",
+]:
+    readme = readme.replace(line, "")
+readme = readme.replace(
+    "- The current silent background service can still be stopped by aggressive Android or Titan 2 process management.\n",
+    "- Pebblehertz uses one continuous foreground runtime with automatic watchdog recovery. Android Force stop and the Titan 2 App blocker remain terminal system actions.\n",
+)
+readme = readme.replace(
+    "The next release changes reliable always-on operation into the default mode.",
+    "The next release focuses on one stable always-on runtime and removes experimental power modes.",
+)
+readme = readme.replace(
+    "reliable foreground runtime by default, optional silent mode, restart recovery",
+    "one protected foreground runtime, watchdog recovery",
+)
+readme = readme.replace(
+    "locking the phone, charging or importing",
+    "locking the phone, switching, importing or deleting",
+)
+Path("README.md").write_text(readme)
+
+roadmap = Path("ROADMAP.md").read_text()
+roadmap = roadmap.replace("- Titan 2 battery and charging-state forwarding.\n", "")
+roadmap = roadmap.replace("- Night Mode schedule and low-battery minute refresh.\n", "")
+roadmap = roadmap.replace(
+    "- Make **Reliable Always-On** the default operating mode.\n"
+    "- Run PebbleOS as an Android foreground service with the smallest practical persistent notification.\n"
+    "- Keep **Silent Mode** as an optional, less reliable alternative.\n",
+    "- Use one continuous protected runtime with no sleep, charging or low-battery execution modes.\n"
+    "- Run PebbleOS as an Android foreground service with the smallest practical persistent notification.\n",
+)
+roadmap = roadmap.replace(
+    "- Make the active mode and its reliability trade-off explicit inside the app.\n",
+    "- Request required background access on first launch and show its current status in the app.\n",
+)
+roadmap = roadmap.replace("runtime mode and power policy", "runtime and recovery state")
+Path("ROADMAP.md").write_text(roadmap)
+
+Path("CHANGELOG_0.8.10.md").write_text(
+    """# Pebblehertz 0.8.10
+
+## Stability-first runtime
+
+- One continuous always-on runtime.
+- Removed Night Mode, sleep scheduling, charger overrides, battery forwarding and low-battery pulse mode.
+- Serialized all normal QEMU protocol work through one executor.
+- Coalesced rapid watchface taps so only the latest request is applied.
+- Added native-process watchdog recovery with bounded exponential backoff.
+- Added guarded recovery after Recents task removal.
+- Added stale orphaned QEMU PID cleanup before startup.
+- Kept the foreground notification silent, button-free and non-interactive.
+- Battery-optimization exemption is requested immediately on first launch.
+- Removed runtime mode selection and Silent mode.
+- Active, selected and final remaining watchfaces cannot be deleted.
+- Version code 26; version name 0.8.10.
+"""
+)
+
+Path("STAGE1_TEST_PLAN.md").write_text(
+    """# Pebblehertz 0.8.10 stability test plan
+
+The runtime has one operating mode. There are no sleep, charging or low-battery execution branches.
+
+## Automated checks
+- Bounded restart-backoff tests.
+- Destructive watchface-operation tests.
+- PBW parsing and duplicate UUID tests.
+- Signed ARM64 release compilation.
+- Native QEMU and Basalt firmware asset verification.
+
+## First launch
+1. Install over 0.8.9 or an earlier 0.8.10 test build.
+2. Confirm Android immediately requests battery-optimization exemption when needed.
+3. Return and confirm SYSTEM ACCESS: UNRESTRICTED.
+4. Confirm there is no runtime-mode chooser, schedule card or notification permission prompt.
+
+## Continuous runtime
+1. Run one face for at least one hour.
+2. Lock/unlock and open/close both Activities repeatedly.
+3. Use Recents Clear all and confirm the face stays active or recovers.
+4. Connect/disconnect charging and confirm nothing changes.
+5. Confirm no sleep or battery-saver state appears at any battery level.
+6. Confirm the notification is silent, ongoing, button-free and non-interactive.
+
+## Switching
+1. Switch normally between bundled faces.
+2. Rapidly tap five faces; only the final request should become ACTIVE.
+3. Tap the active face repeatedly; QEMU must not reboot.
+4. Switch while opening/closing the main Activity.
+5. A failed PBW should restore the previous face when the runtime remains healthy.
+
+## Import and deletion
+1. Import a valid standalone PBW.
+2. Reject duplicate UUID, invalid, cancelled and oversized imports without disrupting the active face.
+3. Block deleting the active or selected face.
+4. Delete an inactive imported face without touching QEMU.
+5. Block deleting the final remaining face.
+
+## Recovery
+1. Kill only the launcher Activity.
+2. Use Recents Clear all.
+3. Simulate native QEMU exit and verify watchdog restart/backoff.
+4. Reopen during recovery and confirm no duplicate QEMU.
+5. Verify stale PID cleanup before recovery.
+6. Android Task Manager Stop, Force stop and OEM App blocker remain terminal actions.
+"""
+)
+
+architecture = Path("docs/architecture.md")
+text = architecture.read_text()
+if "## Runtime stability model" not in text:
+    text += (
+        "\n\n## Runtime stability model\n\n"
+        "Pebblehertz uses one continuously running foreground service. Sleep schedules, "
+        "charging overrides, battery forwarding and low-battery pause/resume modes are "
+        "intentionally excluded. Watchface protocol commands are serialized, rapid "
+        "selections are coalesced, and a watchdog restores an unexpectedly exited QEMU "
+        "process with bounded backoff.\n"
+    )
+architecture.write_text(text)
+
+obsolete = [
+    "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/RuntimePowerPolicy.java",
+    "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/RuntimeSelectionPolicy.java",
+    "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/RuntimeRecoveryPolicy.java",
+    "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/RuntimeRecoveryScheduler.java",
+    "app/src/main/java/com/manufacttest/pebblereardisplay/ui/RuntimeModeUi.java",
+    "app/src/test/java/com/manufacttest/pebblereardisplay/runtime/RuntimePowerPolicyTest.java",
+    "app/src/test/java/com/manufacttest/pebblereardisplay/runtime/RuntimeSelectionPolicyTest.java",
+    "app/src/test/java/com/manufacttest/pebblereardisplay/runtime/RuntimeRecoveryPolicyTest.java",
+    "app/src/test/java/com/manufacttest/pebblereardisplay/data/AppPreferencesRuntimeModeTest.java",
+    ".github/scripts/simplify-runtime.py.gz.b64",
+    ".simplify-runtime-result.txt",
+]
+for item in obsolete:
+    Path(item).unlink(missing_ok=True)
+
+for item in [
+    "app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java",
+    "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java",
+    "app/src/main/java/com/manufacttest/pebblereardisplay/data/AppPreferences.java",
+    "app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleQemuProcess.java",
+    "app/src/main/java/com/manufacttest/pebblereardisplay/PebblehertzApplication.java",
+]:
+    value = Path(item).read_text()
+    for token in [
+        "SCHEDULE SLEEP",
+        "LOW_BATTERY_PULSE",
+        "getSleepStartMinutes",
+        "RuntimeModeUi",
+        "updateBatteryState(",
+        ".pause()",
+        ".resume()",
+    ]:
+        if token in value:
+            raise SystemExit(f"Obsolete concept {token!r} remains in {item}")
+
+print("one-mode simplification complete")

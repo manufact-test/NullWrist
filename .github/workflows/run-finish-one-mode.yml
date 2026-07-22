@@ -33,3 +33,5 @@ jobs:
           git commit -m "Finish stability-first cleanup"
           git push origin HEAD:agent/0.8.10-reliable-runtime
           exit "$code"
+
+# Trigger registered cleanup runner.

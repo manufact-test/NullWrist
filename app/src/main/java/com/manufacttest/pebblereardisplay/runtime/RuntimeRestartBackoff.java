@@ -2,8 +2,8 @@ package com.manufacttest.pebblereardisplay.runtime;
 
 /** Pure restart-delay policy used by the runtime watchdog. */
 final class RuntimeRestartBackoff {
-    private static final long BASE_DELAY_MILLIS = 15_000L;
-    private static final long MAX_DELAY_MILLIS = 5L * 60L * 1_000L;
+    private static final long BASE_DELAY_MILLIS = 2_000L;
+    private static final long MAX_DELAY_MILLIS = 60_000L;
 
     private RuntimeRestartBackoff() {
     }

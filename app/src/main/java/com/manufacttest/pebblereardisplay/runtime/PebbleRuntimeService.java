@@ -52,7 +52,7 @@ public final class PebbleRuntimeService extends Service {
     private static final long THUMBNAIL_MAX_SETTLE_MILLIS = 8_000L;
     private static final long THUMBNAIL_QUIET_MILLIS = 650L;
     private static final long SELECTION_DEBOUNCE_MILLIS = 180L;
-    private static final long WATCHDOG_INTERVAL_MILLIS = 30_000L;
+    private static final long WATCHDOG_INTERVAL_MILLIS = 5_000L;
     private static final long RECOVERY_DELAY_MILLIS = 1_500L;
     private static final String NOTIFICATION_CHANNEL_ID = "pebblehertz_runtime";
     private static final int NOTIFICATION_ID = 168;
@@ -92,6 +92,8 @@ public final class PebbleRuntimeService extends Service {
             serviceHandler.postDelayed(this, WATCHDOG_INTERVAL_MILLIS);
         }
     };
+
+    private final Runnable selectionDebounce = this::dispatchLatestSelection;
 
     public static void start(Context context) {
         send(context, ACTION_START);
@@ -221,27 +223,18 @@ public final class PebbleRuntimeService extends Service {
     }
 
     private void scheduleSelection() {
-        int request = selectionRequest.incrementAndGet();
-        try {
-            executor.execute(() -> applyDebouncedSelection(request));
-        } catch (RejectedExecutionException ignored) {
-        }
+        selectionRequest.incrementAndGet();
+        serviceHandler.removeCallbacks(selectionDebounce);
+        serviceHandler.postDelayed(selectionDebounce, SELECTION_DEBOUNCE_MILLIS);
     }
 
-    private void applyDebouncedSelection(int request) {
-        if (request != selectionRequest.get()) {
-            return;
-        }
+    private void dispatchLatestSelection() {
+        int request = selectionRequest.get();
+        int requestedGeneration = generation.get();
         try {
-            Thread.sleep(SELECTION_DEBOUNCE_MILLIS);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            return;
+            executor.execute(() -> applyLatestSelection(requestedGeneration, request));
+        } catch (RejectedExecutionException ignored) {
         }
-        if (request != selectionRequest.get()) {
-            return;
-        }
-        applyLatestSelection(generation.get(), request);
     }
 
     private void applyLatestSelection(int requestedGeneration, int request) {

@@ -1,1 +1,1 @@
-Expected one regex match in app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleQemuProcess.java, found 0: '    public synchronized void updateBatteryState\\(.*?\\n    public synchronized boolean isRu'
+final runtime hardening applied

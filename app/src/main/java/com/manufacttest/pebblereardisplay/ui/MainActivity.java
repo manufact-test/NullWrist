@@ -4,19 +4,16 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.ActivityOptions;
 import android.app.AlertDialog;
-import android.app.Dialog;
-import android.app.TimePickerDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
@@ -25,7 +22,6 @@ import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.Gravity;
-import android.view.Window;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.LinearLayout;
@@ -35,6 +31,7 @@ import android.widget.Toast;
 
 import com.manufacttest.pebblereardisplay.R;
 import com.manufacttest.pebblereardisplay.data.AppPreferences;
+import com.manufacttest.pebblereardisplay.data.WatchfaceMutationPolicy;
 import com.manufacttest.pebblereardisplay.data.WatchfaceRepository;
 import com.manufacttest.pebblereardisplay.data.WatchfaceThumbnailRepository;
 import com.manufacttest.pebblereardisplay.model.WatchfaceMetadata;
@@ -48,9 +45,10 @@ import java.util.Locale;
 
 public final class MainActivity extends Activity {
     private static final int REQUEST_IMPORT_PBW = 1001;
-    private static final int REQUEST_NOTIFICATIONS = 1002;
+    private static final int REQUEST_POST_NOTIFICATIONS = 1002;
     private static final String SETUP_PREFS = "background_setup";
-    private static final String KEY_BATTERY_PROMPT_SHOWN = "battery_prompt_shown";
+    private static final String KEY_REQUIRED_ACCESS_REQUESTED =
+            "required_access_requested_v2";
 
     private WatchfaceRepository repository;
     private WatchfaceThumbnailRepository thumbnails;
@@ -61,7 +59,7 @@ public final class MainActivity extends Activity {
     private TextView heroMeta;
     private TextView runtimeStatusLabel;
     private TextView runtimeLed;
-    private TextView powerScheduleSummary;
+    private TextView systemAccessStatus;
     private List<WatchfaceMetadata> watchfaces = new ArrayList<>();
     private boolean rearMode;
     private boolean redirectingToRear;
@@ -110,6 +108,17 @@ public final class MainActivity extends Activity {
         super.onStart();
         if (!rearMode) {
             registerMainListeners();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (!rearMode) {
+            refreshSystemAccessStatus();
+            if (hasNotificationAccess()) {
+                PebbleRuntimeService.start(this);
+            }
         }
     }
 
@@ -201,7 +210,7 @@ public final class MainActivity extends Activity {
         reloadCatalog();
         registerMainListeners();
         PebbleRuntimeService.start(this);
-        maybeRequestBackgroundSetup();
+        requestRequiredPermissionsOnFirstLaunch();
         scheduleRearModeRecheck();
     }
 
@@ -258,7 +267,6 @@ public final class MainActivity extends Activity {
         root.addView(buildHeader(), matchWidthWrapHeight(dp(14)));
         root.addView(buildHeroCard(), matchWidthWrapHeight(dp(12)));
         root.addView(buildActionRow(), matchWidthWrapHeight(dp(10)));
-        root.addView(buildPowerScheduleCard(), matchWidthWrapHeight(dp(10)));
         root.addView(buildReliabilityCard(), matchWidthWrapHeight(dp(20)));
 
         TextView listTitle = pixelText("WATCHFACE LOCKER // 00", 16, getColor(R.color.text_primary));
@@ -429,263 +437,59 @@ public final class MainActivity extends Activity {
     }
 
 
-private View buildPowerScheduleCard() {
-    LinearLayout panel = new LinearLayout(this);
-    panel.setOrientation(LinearLayout.VERTICAL);
-    panel.setPadding(dp(14), dp(13), dp(14), dp(13));
-    panel.setBackground(panelBackground(
-            getColor(R.color.surface),
-            getColor(R.color.ink),
-            dp(1)
-    ));
-
-    TextView title = pixelText(
-            "NIGHT MODE BATTERY SAVER",
-            14,
-            getColor(R.color.text_primary)
-    );
-    panel.addView(title);
-
-    TextView description = bodyText(
-            "Set your Night Mode hours. The watchface stays visible while PebbleOS sleeps "
-                    + "in the background to save battery. Charging keeps it running.",
-            12,
-            getColor(R.color.text_secondary)
-    );
-    description.setPadding(0, dp(7), 0, dp(9));
-    panel.addView(description);
-
-    powerScheduleSummary = pixelText("", 11, getColor(R.color.accent_coral));
-    powerScheduleSummary.setPadding(0, 0, 0, dp(11));
-    panel.addView(powerScheduleSummary);
-
-    TextView edit = pixelButton(
-            "SLEEP SCHEDULE",
-            getColor(R.color.paper),
-            getColor(R.color.ink)
-    );
-    edit.setOnClickListener(view -> showPowerScheduleDialog());
-    panel.addView(edit, new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            dp(46)
-    ));
-    refreshPowerScheduleSummary();
-    return panel;
-}
-
-private void refreshPowerScheduleSummary() {
-    if (powerScheduleSummary == null || preferences == null) {
-        return;
-    }
-    powerScheduleSummary.setText(
-            "SLEEP "
-                    + AppPreferences.formatMinutes(preferences.getSleepStartMinutes())
-                    + "–"
-                    + AppPreferences.formatMinutes(preferences.getSleepEndMinutes())
-    );
-}
-
-private void showPowerScheduleDialog() {
-    Dialog dialog = new Dialog(this);
-    dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-
-    LinearLayout form = new LinearLayout(this);
-    form.setOrientation(LinearLayout.VERTICAL);
-    form.setPadding(dp(18), dp(17), dp(18), dp(18));
-    form.setBackground(panelBackground(
-            getColor(R.color.surface),
-            getColor(R.color.ink),
-            dp(2)
-    ));
-
-    TextView title = pixelText("NIGHT MODE", 20, getColor(R.color.text_primary));
-    form.addView(title);
-
-    TextView note = bodyText(
-            "The current watchface stays on screen. PebbleOS pauses between these times "
-                    + "and resumes automatically.",
-            12,
-            getColor(R.color.text_secondary)
-    );
-    note.setPadding(0, dp(6), 0, dp(14));
-    form.addView(note);
-
-    TextView startLabel = pixelText("START SLEEP", 11, getColor(R.color.accent_coral));
-    startLabel.setPadding(0, 0, 0, dp(5));
-    form.addView(startLabel);
-    TextView start = timeField(AppPreferences.formatMinutes(
-            preferences.getSleepStartMinutes()
-    ));
-    form.addView(start, new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            dp(52)
-    ));
-
-    TextView endLabel = pixelText("END SLEEP", 11, getColor(R.color.accent_coral));
-    endLabel.setPadding(0, dp(12), 0, dp(5));
-    form.addView(endLabel);
-    TextView end = timeField(AppPreferences.formatMinutes(
-            preferences.getSleepEndMinutes()
-    ));
-    form.addView(end, new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            dp(52)
-    ));
-
-    TextView format = bodyText(
-            "24-HOUR TIME · EXAMPLE 23:30",
-            11,
-            getColor(R.color.text_muted)
-    );
-    format.setPadding(0, dp(8), 0, dp(14));
-    form.addView(format);
-
-    LinearLayout actions = new LinearLayout(this);
-    actions.setOrientation(LinearLayout.HORIZONTAL);
-
-    TextView cancel = pixelButton(
-            "CANCEL",
-            getColor(R.color.paper),
-            getColor(R.color.ink)
-    );
-    cancel.setOnClickListener(view -> dialog.dismiss());
-    LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(
-            0,
-            dp(48),
-            1f
-    );
-    cancelParams.rightMargin = dp(6);
-    actions.addView(cancel, cancelParams);
-
-    TextView save = pixelButton(
-            "SAVE",
-            getColor(R.color.accent_mint),
-            getColor(R.color.ink)
-    );
-    save.setOnClickListener(view -> {
-        int startMinutes = parseTime(start.getText().toString());
-        int endMinutes = parseTime(end.getText().toString());
-        if (startMinutes < 0 || endMinutes < 0) {
-            Toast.makeText(
-                    this,
-                    "Use 24-hour HH:mm format, for example 23:30",
-                    Toast.LENGTH_LONG
-            ).show();
-            return;
-        }
-        if (startMinutes == endMinutes) {
-            Toast.makeText(
-                    this,
-                    "START SLEEP and END SLEEP must be different",
-                    Toast.LENGTH_LONG
-            ).show();
-            return;
-        }
-        preferences.setSleepSchedule(startMinutes, endMinutes);
-        refreshPowerScheduleSummary();
-        PebbleRuntimeService.refreshPowerPolicy(this);
-        dialog.dismiss();
-    });
-    LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
-            0,
-            dp(48),
-            1f
-    );
-    saveParams.leftMargin = dp(6);
-    actions.addView(save, saveParams);
-    form.addView(actions);
-
-    dialog.setContentView(form);
-    dialog.setCanceledOnTouchOutside(true);
-    dialog.show();
-    Window window = dialog.getWindow();
-    if (window != null) {
-        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        window.setLayout(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-        );
-        window.getDecorView().setPadding(dp(18), 0, dp(18), 0);
-    }
-}
-
-private TextView timeField(String value) {
-    TextView field = pixelText(value, 18, getColor(R.color.text_primary));
-    field.setGravity(Gravity.CENTER);
-    field.setPadding(dp(10), 0, dp(10), 0);
-    field.setBackground(panelBackground(
-            getColor(R.color.paper),
-            getColor(R.color.ink),
-            dp(1)
-    ));
-    field.setClickable(true);
-    field.setFocusable(true);
-    field.setOnClickListener(view -> {
-        int current = parseTime(field.getText().toString());
-        if (current < 0) {
-            current = 0;
-        }
-        TimePickerDialog picker = new TimePickerDialog(
-                this,
-                (timePicker, hour, minute) -> field.setText(String.format(
-                        Locale.US,
-                        "%02d:%02d",
-                        hour,
-                        minute
-                )),
-                current / 60,
-                current % 60,
-                true
-        );
-        picker.show();
-    });
-    return field;
-}
-
-private static int parseTime(String value) {
-    if (value == null || !value.matches("\\d{1,2}:\\d{2}")) {
-        return -1;
-    }
-    String[] parts = value.split(":", 2);
-    try {
-        int hour = Integer.parseInt(parts[0]);
-        int minute = Integer.parseInt(parts[1]);
-        if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-            return -1;
-        }
-        return hour * 60 + minute;
-    } catch (NumberFormatException ignored) {
-        return -1;
-    }
-}
-
     private View buildReliabilityCard() {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.HORIZONTAL);
         panel.setGravity(Gravity.CENTER_VERTICAL);
-        panel.setPadding(dp(13), dp(11), dp(13), dp(11));
-        panel.setBackground(panelBackground(
-                getColor(R.color.surface_warm),
-                getColor(R.color.ink),
-                dp(1)
-        ));
+        panel.setPadding(dp(12), dp(9), dp(10), dp(9));
+        panel.setMinimumHeight(dp(50));
+        panel.setClickable(true);
+        panel.setFocusable(true);
+        panel.setElevation(dp(2));
+        panel.setOnClickListener(view -> openBackgroundSettings());
 
-        TextView icon = pixelText("!", 20, getColor(R.color.accent_coral));
-        icon.setGravity(Gravity.CENTER);
-        panel.addView(icon, new LinearLayout.LayoutParams(dp(28), dp(38)));
+        TextView signal = pixelText("●", 13, getColor(R.color.ink));
+        signal.setGravity(Gravity.CENTER);
+        panel.addView(signal, new LinearLayout.LayoutParams(dp(24), dp(30)));
 
-        TextView hint = bodyText(
-                "For an always-on rear face: allow DuraSpeed, disable App blocker and use Unrestricted battery mode.",
-                12,
-                getColor(R.color.text_secondary)
-        );
-        hint.setPadding(dp(7), 0, 0, 0);
-        panel.addView(hint, new LinearLayout.LayoutParams(
+        systemAccessStatus = pixelText("", 11, getColor(R.color.ink));
+        systemAccessStatus.setSingleLine(true);
+        systemAccessStatus.setLetterSpacing(0.015f);
+        systemAccessStatus.setPadding(dp(4), 0, dp(6), 0);
+        panel.addView(systemAccessStatus, new LinearLayout.LayoutParams(
                 0,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 1f
         ));
+
+        TextView arrow = pixelText(">", 18, getColor(R.color.ink));
+        arrow.setGravity(Gravity.CENTER);
+        panel.addView(arrow, new LinearLayout.LayoutParams(dp(24), dp(30)));
+
+        refreshSystemAccessStatus();
         return panel;
+    }
+
+    private void refreshSystemAccessStatus() {
+        if (systemAccessStatus == null) {
+            return;
+        }
+        boolean ready = isIgnoringBatteryOptimizations() && hasNotificationAccess();
+        systemAccessStatus.setText(ready
+                ? "ALWAYS-ON: ON · ALL GOOD"
+                : "ALWAYS-ON: ACTION REQUIRED");
+        systemAccessStatus.setTextColor(getColor(R.color.ink));
+
+        View parent = systemAccessStatus.getParent() instanceof View
+                ? (View) systemAccessStatus.getParent()
+                : null;
+        if (parent != null) {
+            parent.setBackground(interactivePanelBackground(
+                    getColor(ready ? R.color.accent_mint : R.color.accent_yellow),
+                    getColor(ready ? R.color.surface_selected : R.color.surface_warm),
+                    getColor(R.color.ink)
+            ));
+        }
     }
 
     private void openRearPreview() {
@@ -851,7 +655,7 @@ private static int parseTime(String value) {
             badges.addView(js, jsParams);
         }
         if (selected && !active) {
-            TextView queuedBadge = badge("QUEUED", getColor(R.color.accent_yellow), getColor(R.color.ink));
+            TextView queuedBadge = badge("SELECTED", getColor(R.color.accent_yellow), getColor(R.color.ink));
             LinearLayout.LayoutParams queuedParams = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     dp(26)
@@ -876,7 +680,11 @@ private static int parseTime(String value) {
         controls.setPadding(0, dp(8), 0, 0);
 
         TextView action = pixelText(
-                active ? "ON AIR" : selected ? "APPLYING..." : "TAP TO APPLY >",
+                active
+                        ? "ON AIR"
+                        : selected
+                        ? "APPLYING..."
+                        : "TAP TO APPLY >",
                 11,
                 active
                         ? getColor(R.color.accent_coral)
@@ -934,12 +742,35 @@ private static int parseTime(String value) {
     }
 
     private void applyWatchface(WatchfaceMetadata watchface) {
+        if (sameStorageId(
+                PebbleRuntimeService.getActiveStorageId(),
+                watchface.getStorageId()
+        )) {
+            return;
+        }
         preferences.setSelectedWatchfaceId(watchface.getStorageId());
         renderCatalog();
         PebbleRuntimeService.select(this);
     }
 
     private void confirmDeleteWatchface(WatchfaceMetadata watchface) {
+        WatchfaceMutationPolicy.DeleteDecision decision = WatchfaceMutationPolicy.evaluate(
+                watchfaces.size(),
+                sameStorageId(preferences.getSelectedWatchfaceId(), watchface.getStorageId()),
+                sameStorageId(PebbleRuntimeService.getActiveStorageId(), watchface.getStorageId())
+        );
+        if (decision == WatchfaceMutationPolicy.DeleteDecision.KEEP_LAST) {
+            Toast.makeText(this, "Keep at least one watchface installed.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (decision == WatchfaceMutationPolicy.DeleteDecision.SWITCH_FIRST) {
+            Toast.makeText(
+                    this,
+                    "Switch to another watchface before deleting this one.",
+                    Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
         String message = watchface.isBundled()
                 ? "Remove this preinstalled watchface from your locker? "
                 + "It can be restored by clearing Pebblehertz app data or reinstalling the app."
@@ -953,14 +784,21 @@ private static int parseTime(String value) {
     }
 
     private void deleteWatchface(WatchfaceMetadata watchface) {
-        boolean wasSelected = sameStorageId(
-                preferences.getSelectedWatchfaceId(),
-                watchface.getStorageId()
+        WatchfaceMutationPolicy.DeleteDecision decision = WatchfaceMutationPolicy.evaluate(
+                watchfaces.size(),
+                sameStorageId(preferences.getSelectedWatchfaceId(), watchface.getStorageId()),
+                sameStorageId(PebbleRuntimeService.getActiveStorageId(), watchface.getStorageId())
         );
-        boolean wasActive = sameStorageId(
-                PebbleRuntimeService.getActiveStorageId(),
-                watchface.getStorageId()
-        );
+        if (decision != WatchfaceMutationPolicy.DeleteDecision.ALLOW) {
+            Toast.makeText(
+                    this,
+                    decision == WatchfaceMutationPolicy.DeleteDecision.KEEP_LAST
+                            ? "Keep at least one watchface installed."
+                            : "Switch to another watchface before deleting this one.",
+                    Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
         try {
             repository.delete(watchface);
             thumbnails.delete(watchface);
@@ -970,19 +808,6 @@ private static int parseTime(String value) {
                     "Deleted " + watchface.getName(),
                     Toast.LENGTH_SHORT
             ).show();
-            if (watchfaces.isEmpty()) {
-                PebbleRuntimeService.stop(this);
-            } else if (wasSelected || wasActive) {
-                WatchfaceMetadata replacement = watchfaces.get(0);
-                String selectedId = preferences.getSelectedWatchfaceId();
-                for (WatchfaceMetadata candidate : watchfaces) {
-                    if (candidate.getStorageId().equals(selectedId)) {
-                        replacement = candidate;
-                        break;
-                    }
-                }
-                PebbleRuntimeService.select(this);
-            }
         } catch (IOException exception) {
             showError("Delete failed: " + exception.getMessage());
         }
@@ -1003,14 +828,8 @@ private static int parseTime(String value) {
             runtimeLed.setTextColor(getColor(R.color.accent_yellow));
             runtimeStatusLabel.setText(shortStatus(status));
         } else {
-            String powerMode = PebbleRuntimeService.getPowerModeLabel();
-            if (powerMode != null) {
-                runtimeLed.setTextColor(getColor(R.color.accent_yellow));
-                runtimeStatusLabel.setText(powerMode);
-            } else {
-                runtimeLed.setTextColor(getColor(R.color.accent_mint));
-                runtimeStatusLabel.setText("RUNTIME ONLINE");
-            }
+            runtimeLed.setTextColor(getColor(R.color.accent_mint));
+            runtimeStatusLabel.setText("RUNTIME ONLINE");
         }
     }
 
@@ -1069,63 +888,74 @@ private static int parseTime(String value) {
         }
     }
 
-    private void maybeRequestBackgroundSetup() {
-    getWindow().getDecorView().post(() -> {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
+    private void requestRequiredPermissionsOnFirstLaunch() {
+        getWindow().getDecorView().postDelayed(() -> {
+            if (isFinishing() || isDestroyed() || rearMode) {
+                return;
+            }
+            SharedPreferences setup = getSharedPreferences(SETUP_PREFS, MODE_PRIVATE);
+            if (setup.getBoolean(KEY_REQUIRED_ACCESS_REQUESTED, false)) {
+                refreshSystemAccessStatus();
+                return;
+            }
+            setup.edit().putBoolean(KEY_REQUIRED_ACCESS_REQUESTED, true).commit();
+            requestNextRequiredAccess();
+        }, 450L);
+    }
+
+    private void requestNextRequiredAccess() {
+        if (!hasNotificationAccess()) {
             requestPermissions(
                     new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                    REQUEST_NOTIFICATIONS
+                    REQUEST_POST_NOTIFICATIONS
             );
             return;
         }
-        maybeShowBatteryPrompt();
-    });
-}
-
-@Override
-public void onRequestPermissionsResult(
-        int requestCode,
-        String[] permissions,
-        int[] grantResults
-) {
-    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-    if (requestCode == REQUEST_NOTIFICATIONS) {
-        maybeShowBatteryPrompt();
+        if (!isIgnoringBatteryOptimizations()) {
+            requestBatteryExemption();
+            return;
+        }
+        refreshSystemAccessStatus();
     }
-}
 
-    private void maybeShowBatteryPrompt() {
-        if (isIgnoringBatteryOptimizations()) {
+    @Override
+    public void onRequestPermissionsResult(
+            int requestCode,
+            String[] permissions,
+            int[] grantResults
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != REQUEST_POST_NOTIFICATIONS) {
             return;
         }
-        SharedPreferences setup = getSharedPreferences(SETUP_PREFS, MODE_PRIVATE);
-        if (setup.getBoolean(KEY_BATTERY_PROMPT_SHOWN, false)) {
-            return;
+        PebbleRuntimeService.start(this);
+        if (!isIgnoringBatteryOptimizations()) {
+            getWindow().getDecorView().postDelayed(this::requestBatteryExemption, 250L);
         }
-        setup.edit().putBoolean(KEY_BATTERY_PROMPT_SHOWN, true).apply();
-
-        new AlertDialog.Builder(this)
-                .setTitle("Keep Pebblehertz on air?")
-                .setMessage("Allow Pebblehertz to run without battery optimization. "
-                        + "This keeps the rear watchface alive after the main window is closed.")
-                .setPositiveButton("Allow", (dialog, which) -> requestBatteryExemption())
-                .setNegativeButton("Later", null)
-                .show();
+        refreshSystemAccessStatus();
     }
 
     private void openBackgroundSettings() {
+        if (!hasNotificationAccess()) {
+            openNotificationSettings();
+            return;
+        }
         if (!isIgnoringBatteryOptimizations()) {
             requestBatteryExemption();
             return;
         }
         Toast.makeText(
                 this,
-                "Also enable Pebblehertz in DuraSpeed and disable it in App blocker.",
+                "Always-on access is ready. Keep Pebblehertz allowed in DuraSpeed and out of App blocker.",
                 Toast.LENGTH_LONG
         ).show();
         openAppDetails();
+    }
+
+    private boolean hasNotificationAccess() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED;
     }
 
     private boolean isIgnoringBatteryOptimizations() {
@@ -1140,6 +970,16 @@ public void onRequestPermissionsResult(
                     Uri.parse("package:" + getPackageName())
             );
             startActivity(request);
+        } catch (RuntimeException error) {
+            openAppDetails();
+        }
+    }
+
+    private void openNotificationSettings() {
+        try {
+            Intent settings = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+            startActivity(settings);
         } catch (RuntimeException error) {
             openAppDetails();
         }

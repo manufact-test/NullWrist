@@ -51,8 +51,9 @@ public final class PebblehertzApplication extends Application
         if (layoutListeners.containsKey(activity)) {
             return;
         }
-        ViewTreeObserver.OnGlobalLayoutListener listener =
-                () -> bindSupportButton(activity, decor);
+        ViewTreeObserver.OnGlobalLayoutListener listener = () -> {
+            bindSupportButton(activity, decor);
+        };
         layoutListeners.put(activity, listener);
         decor.getViewTreeObserver().addOnGlobalLayoutListener(listener);
     }

@@ -20,8 +20,6 @@ This roadmap reflects the current project direction and community feedback. Vers
 - 16 bundled watchfaces and imported `.pbw` support.
 - AppRunState UUID confirmation before a face becomes `ACTIVE / ON AIR`.
 - Duplicate PBW protection by Pebble UUID.
-- Titan 2 battery and charging-state forwarding.
-- Night Mode schedule and low-battery minute refresh.
 - Optional Wise and PayPal support links.
 
 ## Next
@@ -32,19 +30,18 @@ The next release is a reliability release. New visual features wait until the ru
 
 #### Reliable runtime
 
-- Make **Reliable Always-On** the default operating mode.
+- Use one continuous protected runtime with no sleep, charging or low-battery execution modes.
 - Run PebbleOS as an Android foreground service with the smallest practical persistent notification.
-- Keep **Silent Mode** as an optional, less reliable alternative.
 - Recover the rear display after the main Activity is dismissed.
 - Restore the runtime after phone reboot when the user has enabled always-on operation.
 - Improve recovery after Android or Titan 2 kills the process.
-- Make the active mode and its reliability trade-off explicit inside the app.
+- Request required background access on first launch and show its current status in the app.
 
 #### Diagnostics
 
 - Add a bounded in-memory / on-disk ring log.
 - Add **REPORT A BUG** and **EXPORT DIAGNOSTICS** actions.
-- Export app version, Android build, device model, runtime mode and power policy.
+- Export app version, Android build, device model, runtime and recovery state.
 - Include the selected PBW name, UUID and import source when available.
 - Record AppFetch, PutBytes, AppRunState and QEMU failure stages without exposing personal data.
 - Produce a shareable text or ZIP report suitable for a GitHub issue.

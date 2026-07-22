@@ -58,3 +58,8 @@ The first executable target is Basalt:
 - system clock;
 - packaged resources;
 - no phone JavaScript, weather, health or timeline.
+
+
+## Runtime stability model
+
+Pebblehertz uses one continuously running foreground service. Sleep schedules, charging overrides, battery forwarding and low-battery pause/resume modes are intentionally excluded. Watchface protocol commands are serialized, rapid selections are coalesced, and a watchdog restores an unexpectedly exited QEMU process with bounded backoff.

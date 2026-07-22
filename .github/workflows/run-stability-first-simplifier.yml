@@ -36,3 +36,5 @@ jobs:
           git commit -m "Simplify Pebblehertz to one stable runtime"
           git push origin HEAD:agent/0.8.10-reliable-runtime
           exit "$code"
+
+# Registered workflow trigger.

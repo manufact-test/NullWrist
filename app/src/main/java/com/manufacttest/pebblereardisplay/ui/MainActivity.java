@@ -116,6 +116,9 @@ public final class MainActivity extends Activity {
         super.onResume();
         if (!rearMode) {
             refreshSystemAccessStatus();
+            if (hasNotificationAccess()) {
+                PebbleRuntimeService.start(this);
+            }
         }
     }
 
@@ -925,6 +928,7 @@ public final class MainActivity extends Activity {
         if (requestCode != REQUEST_POST_NOTIFICATIONS) {
             return;
         }
+        PebbleRuntimeService.start(this);
         if (!isIgnoringBatteryOptimizations()) {
             getWindow().getDecorView().postDelayed(this::requestBatteryExemption, 250L);
         }

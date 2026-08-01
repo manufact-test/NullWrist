@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">NullWrist icon</title>
+  <desc id="desc">A floating watchface display with a null symbol and disconnected wrist brackets.</desc>
+  <rect width="512" height="512" rx="112" fill="#0E1720"/>
+  <g fill="#52E0C4">
+    <rect x="181" y="42" width="150" height="32" rx="8"/>
+    <rect x="181" y="438" width="150" height="32" rx="8"/>
+    <rect x="42" y="181" width="32" height="150" rx="8"/>
+    <rect x="438" y="181" width="32" height="150" rx="8"/>
+  </g>
+  <path d="M160 86h192v32h42v276h-42v32H160v-32h-42V118h42z" fill="#1D2A36"/>
+  <rect x="160" y="128" width="192" height="256" rx="8" fill="#FFF7DF"/>
+  <circle cx="256" cy="256" r="88" fill="#17202A"/>
+  <circle cx="256" cy="256" r="44" fill="#FFF7DF"/>
+  <path d="M176 334 310 174h44L220 334z" fill="#FF665A"/>
+  <rect x="181" y="149" width="32" height="20" rx="4" fill="#17202A"/>
+  <rect x="299" y="343" width="32" height="20" rx="4" fill="#17202A"/>
+</svg>

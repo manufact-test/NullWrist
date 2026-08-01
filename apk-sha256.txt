@@ -1,1 +1,1 @@
-Pending signed NullWrist 0.8.11 release build.
+e694ebb4c77036294213664a8e7f511b4475c396f42191ee1c58213f306cf198  NullWrist-0.8.11.apk

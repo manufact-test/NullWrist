@@ -1,6 +1,6 @@
 # Compatibility
 
-Pebblehertz is currently a focused Unihertz Titan 2 beta. A PBW importing successfully does not always mean every phone-side feature used by that watchface is implemented.
+NullWrist is currently a focused Unihertz Titan 2 beta. A PBW importing successfully does not always mean every phone-side feature used by that watchface is implemented.
 
 ## Supported device
 
@@ -20,7 +20,7 @@ Pebblehertz is currently a focused Unihertz Titan 2 beta. A PBW importing succes
 | Diorite / Pebble 2 | Not supported |
 | Emery / Pebble Time 2 | Not supported |
 
-Pebblehertz uses the official Pebble SDK 4.17 Basalt firmware and a Basalt-only QEMU machine.
+NullWrist uses the official Pebble SDK 4.17 Basalt firmware and a Basalt-only QEMU machine.
 
 ## PBW compatibility
 
@@ -37,7 +37,7 @@ Typical examples:
 
 ### Partial or missing compatibility
 
-The following features are not implemented in 0.8.9:
+The following features are not implemented in 0.8.11:
 
 - PebbleKit JS;
 - AppMessage communication with Android;
@@ -52,25 +52,19 @@ A watchface that depends on one of these may still install and render its basic 
 
 ### Pebble apps and games
 
-Pebblehertz is currently watchface-focused. Apps and games that require the original Pebble hardware buttons, accelerometer gestures or interactive phone services are not considered supported even when their package can be parsed.
+NullWrist is currently watchface-focused. Apps and games that require the original Pebble hardware buttons, accelerometer gestures or interactive phone services are not considered supported even when their package can be parsed.
 
-## Runtime modes
+## Runtime
 
-### 0.8.9 silent runtime
+NullWrist 0.8.11 uses one continuous Android foreground service with watchdog recovery. It restores the selected runtime after phone reboot and application updates when always-on operation is enabled. The persistent notification is intentionally silent and non-interactive.
 
-The current beta uses a notification-free Android service. It is visually clean, but aggressive Android or Titan 2 process management can still stop it after clearing recent apps or under memory pressure.
-
-### Planned 0.8.10 runtime
-
-- **Reliable Always-On** will become the default foreground-service mode.
-- A minimal persistent Android notification will be the trade-off for stronger process survival.
-- **Silent Mode** will remain available as an explicitly less reliable option.
+Android Force stop and the Titan 2 App blocker remain terminal system actions and require the user to open NullWrist again.
 
 ## Titan 2 setup
 
 For the best current result:
 
-1. exclude Pebblehertz from Android battery optimization;
+1. exclude NullWrist from Android battery optimization;
 2. allow background operation;
 3. allow it through DuraSpeed;
 4. exclude it from the Titan 2 App blocker;
@@ -91,4 +85,4 @@ Include as much of the following as possible:
 - whether the problem appeared after locking the phone, clearing recent apps, charging or losing network access;
 - screenshot or short video.
 
-Use the repository's bug report form. Diagnostic export is planned for 0.8.10.
+Use the repository's bug report form and include the exact reproduction sequence.

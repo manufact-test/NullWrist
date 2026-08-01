@@ -1,4 +1,4 @@
-name: Publish Pebblehertz release
+name: Publish NullWrist release
 
 on:
   workflow_dispatch:
@@ -54,8 +54,8 @@ jobs:
           fi
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "apk_name=Pebblehertz-$VERSION.apk" >> "$GITHUB_OUTPUT"
-          echo "artifact_name=pebblehertz-$VERSION-signed-release" >> "$GITHUB_OUTPUT"
+          echo "apk_name=NullWrist-$VERSION.apk" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=nullwrist-$VERSION-signed-release" >> "$GITHUB_OUTPUT"
 
       - name: Validate signing secrets
         env:
@@ -73,9 +73,9 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/pebble-rear-display-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nullwrist-release.jks"
           keytool -list \
-            -keystore "$RUNNER_TEMP/pebble-rear-display-release.jks" \
+            -keystore "$RUNNER_TEMP/nullwrist-release.jks" \
             -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
             -alias "${{ secrets.ANDROID_KEY_ALIAS }}" >/dev/null
 
@@ -89,7 +89,7 @@ jobs:
 
       - name: Test and assemble signed release
         env:
-          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/pebble-rear-display-release.jks
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/nullwrist-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -112,11 +112,12 @@ jobs:
             cp "$CHANGELOG" release-notes.md
           else
             cat > release-notes.md <<EOF
-          # Pebblehertz $VERSION
+          # NullWrist $VERSION
 
           Pebble watchfaces on the rear display of the Unihertz Titan 2 — no root required.
           EOF
           fi
+          sha256sum "$APK_NAME" > apk-sha256.txt
 
       - name: Upload signed build artifact
         uses: actions/upload-artifact@v4
@@ -126,6 +127,7 @@ jobs:
             ${{ steps.version.outputs.apk_name }}
             release-certificate.txt
             release-notes.md
+            apk-sha256.txt
           if-no-files-found: error
 
       - name: Publish GitHub prerelease
@@ -134,7 +136,7 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.version }}
           target_commitish: ${{ github.sha }}
-          name: Pebblehertz ${{ steps.version.outputs.version }} Beta
+          name: NullWrist ${{ steps.version.outputs.version }} Beta
           prerelease: true
           make_latest: true
           fail_on_unmatched_files: true

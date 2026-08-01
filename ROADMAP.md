@@ -1,4 +1,4 @@
-# Pebblehertz roadmap
+# NullWrist roadmap
 
 This roadmap reflects the current project direction and community feedback. Version numbers describe the intended order of work, not guaranteed release dates.
 
@@ -12,8 +12,12 @@ This roadmap reflects the current project direction and community feedback. Vers
 
 ## Shipped
 
-### 0.8.9 — Current beta
+### 0.8.11 — Current beta
 
+- NullWrist name and visual identity across the Android app, documentation and release pipeline.
+- New floating null-watchface application icon.
+- One continuous PebbleOS foreground runtime with watchdog recovery.
+- Boot and application-update restoration.
 - Native Pebble Time / Basalt firmware running through ARM64 QEMU.
 - Persistent PebbleOS SPI storage.
 - Real `144 × 168` framebuffer on the Titan 2 rear display.
@@ -22,49 +26,11 @@ This roadmap reflects the current project direction and community feedback. Vers
 - Duplicate PBW protection by Pebble UUID.
 - Optional Wise and PayPal support links.
 
-## Next
-
-### 0.8.10 — Stability & Diagnostics
-
-The next release is a reliability release. New visual features wait until the runtime is easier to trust and diagnose.
-
-#### Reliable runtime
-
-- Use one continuous protected runtime with no sleep, charging or low-battery execution modes.
-- Run PebbleOS as an Android foreground service with the smallest practical persistent notification.
-- Recover the rear display after the main Activity is dismissed.
-- Restore the runtime after phone reboot when the user has enabled always-on operation.
-- Improve recovery after Android or Titan 2 kills the process.
-- Request required background access on first launch and show its current status in the app.
-
-#### Diagnostics
-
-- Add a bounded in-memory / on-disk ring log.
-- Add **REPORT A BUG** and **EXPORT DIAGNOSTICS** actions.
-- Export app version, Android build, device model, runtime and recovery state.
-- Include the selected PBW name, UUID and import source when available.
-- Record AppFetch, PutBytes, AppRunState and QEMU failure stages without exposing personal data.
-- Produce a shareable text or ZIP report suitable for a GitHub issue.
-
-#### PBW capability detection
-
-- Inspect PBW metadata and package contents during import.
-- Label known standalone watchfaces.
-- Label packages that appear to require PebbleKit JS.
-- Label packages that appear to require network access or a configuration page.
-- Show a useful compatibility warning before the user assumes the import itself is broken.
-
-#### Repository and release hygiene
-
-- Keep `main` as the complete, current public source tree.
-- Publish signed APKs through tagged GitHub releases.
-- Keep release notes, compatibility information and issue templates current.
-
 ## Planned
 
 ### 0.9.0 — Personal Face
 
-A native Pebblehertz mode for users who want a personal rear-screen clock without creating a PBW.
+A native NullWrist mode for users who want a personal rear-screen clock without creating a PBW.
 
 - Static image backgrounds.
 - Animated GIF backgrounds.
@@ -102,7 +68,7 @@ This milestone targets the largest remaining compatibility gap for imported Pebb
 
 ### Additional rear-screen phones
 
-Pebblehertz can theoretically be adapted to other Android devices with a secondary display, but each device has different display routing, process management and firmware behavior.
+NullWrist can theoretically be adapted to other Android devices with a secondary display, but each device has different display routing, process management and firmware behavior.
 
 A port starts only when:
 

@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  issues:
+    types:
+      - opened
 
 permissions:
   actions: write
@@ -11,7 +14,7 @@ permissions:
 
 jobs:
   rebrand:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && (github.event_name != 'issues' || github.event.issue.title == '[run-nullwrist-rebrand]')
     runs-on: ubuntu-latest
     timeout-minutes: 45
 

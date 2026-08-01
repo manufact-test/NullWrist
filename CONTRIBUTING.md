@@ -1,26 +1,25 @@
-# Contributing to Pebblehertz
+# Contributing to NullWrist
 
-Pebblehertz is a device-specific Android beta built around real PebbleOS firmware and a native QEMU runtime. Contributions are welcome, but reliability and reproducibility come before feature count.
+NullWrist is a device-specific Android beta built around real PebbleOS firmware and a native QEMU runtime. Contributions are welcome, but reliability and reproducibility come before feature count.
 
 ## Before opening an issue
 
 1. Check [`COMPATIBILITY.md`](COMPATIBILITY.md).
 2. Search existing issues for the same watchface, UUID or error.
 3. Confirm you are testing the latest beta.
-4. Reproduce the problem at least once after restarting Pebblehertz.
+4. Reproduce the problem at least once after restarting NullWrist.
 
 ## Bug reports
 
 Use the GitHub bug report form and include:
 
-- Pebblehertz version;
+- NullWrist version;
 - Titan 2 Android / firmware build;
-- selected runtime mode when applicable;
 - watchface name, version, source and UUID;
 - exact steps to reproduce;
 - expected and actual behavior;
 - screenshot or short video;
-- whether the issue followed PBW import, screen lock, clearing recent apps, charging, low battery or network loss.
+- whether the issue followed PBW import, screen lock, clearing recent apps, charging, process recovery or network loss.
 
 Do not publish private data, signing files, account tokens or full device dumps without reviewing them first.
 
@@ -97,7 +96,7 @@ Changes touching PBW installation or runtime switching should preserve:
 - cancellation of stale thumbnail work;
 - correct rear-display routing on Titan 2.
 
-Changes touching power behavior should test normal battery, charging, scheduled sleep and below-15% behavior.
+Changes touching runtime survival should test normal use, charging, screen lock, clearing Recents, process recovery and phone reboot.
 
 ## Communication
 

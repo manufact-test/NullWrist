@@ -1,4 +1,4 @@
-# Pebblehertz 0.8.9
+# NullWrist 0.8.9
 
 - Sleep Schedule uses Android's native 24-hour time picker.
 - Duplicate PBW imports are blocked by Pebble UUID.

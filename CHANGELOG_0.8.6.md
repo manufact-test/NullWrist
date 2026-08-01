@@ -1,4 +1,4 @@
-# Pebblehertz 0.8.6
+# NullWrist 0.8.6
 
 ## Imported PBW completion repair
 
@@ -10,4 +10,4 @@
 
 ## Regression addressed
 
-Pebblehertz 0.8.5 could successfully transfer an imported PBW but delete the delayed AppRunState confirmation from its own endpoint queue. The 12-second timeout then restored the previous watchface even though the PBW transfer had completed.
+NullWrist 0.8.5 could successfully transfer an imported PBW but delete the delayed AppRunState confirmation from its own endpoint queue. The 12-second timeout then restored the previous watchface even though the PBW transfer had completed.

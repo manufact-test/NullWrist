@@ -24,13 +24,13 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /** Installs the project-support dialog without coupling it to the watchface UI code. */
-public final class PebblehertzApplication extends Application
+public final class NullWristApplication extends Application
         implements Application.ActivityLifecycleCallbacks {
 
     private static final String MAIN_ACTIVITY =
             "com.manufacttest.pebblereardisplay.ui.MainActivity";
-    private static final String SUPPORT_LABEL = "SUPPORT PEBBLEHERTZ";
-    private static final String SUPPORT_BOUND_TAG = "pebblehertz-support-dialog-bound";
+    private static final String SUPPORT_LABEL = "SUPPORT NULLWRIST";
+    private static final String SUPPORT_BOUND_TAG = "nullwrist-support-dialog-bound";
 
     private final Map<Activity, ViewTreeObserver.OnGlobalLayoutListener> layoutListeners =
             new WeakHashMap<>();
@@ -129,7 +129,7 @@ public final class PebblehertzApplication extends Application
 
         TextView title = pixelText(
                 activity,
-                "SUPPORT PEBBLEHERTZ",
+                "SUPPORT NULLWRIST",
                 18,
                 activity.getColor(R.color.ink)
         );
@@ -143,7 +143,7 @@ public final class PebblehertzApplication extends Application
 
         TextView subtitle = bodyText(
                 activity,
-                "Pebblehertz stays free. Support is completely optional, "
+                "NullWrist stays free. Support is completely optional, "
                         + "but every contribution helps the project grow.",
                 13,
                 activity.getColor(R.color.text_secondary)

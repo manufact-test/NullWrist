@@ -62,4 +62,4 @@ The first executable target is Basalt:
 
 ## Runtime stability model
 
-Pebblehertz uses one continuously running foreground service. Sleep schedules, charging overrides, battery forwarding and low-battery pause/resume modes are intentionally excluded. Watchface protocol commands are serialized, rapid selections are coalesced, and a watchdog restores an unexpectedly exited QEMU process with bounded backoff.
+NullWrist uses one continuously running foreground service. Sleep schedules, charging overrides, battery forwarding and low-battery pause/resume modes are intentionally excluded. Watchface protocol commands are serialized, rapid selections are coalesced, and a watchdog restores an unexpectedly exited QEMU process with bounded backoff.

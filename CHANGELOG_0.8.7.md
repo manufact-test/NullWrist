@@ -1,4 +1,4 @@
-# Pebblehertz 0.8.7
+# NullWrist 0.8.7
 
 ## Imported PBW repair
 
@@ -8,6 +8,6 @@
 
 ## One-time recovery from 0.8.5
 
-Version 0.8.5 could finish writing a PBW into PebbleOS SPI flash but time out before recording that installation in the Android registry. On the first 0.8.7 runtime start, Pebblehertz detects this specific mismatch and restores the known-good bundled SPI image once.
+Version 0.8.5 could finish writing a PBW into PebbleOS SPI flash but time out before recording that installation in the Android registry. On the first 0.8.7 runtime start, NullWrist detects this specific mismatch and restores the known-good bundled SPI image once.
 
 Imported PBW files remain in the watchface locker and install normally when selected. Android application data does not need to be cleared. A migration marker prevents repeated SPI resets on later launches.

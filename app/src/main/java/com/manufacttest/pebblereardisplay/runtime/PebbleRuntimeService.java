@@ -55,7 +55,7 @@ public final class PebbleRuntimeService extends Service {
     private static final long SELECTION_DEBOUNCE_MILLIS = 180L;
     private static final long WATCHDOG_INTERVAL_MILLIS = 5_000L;
     private static final long RECOVERY_DELAY_MILLIS = 1_500L;
-    private static final String NOTIFICATION_CHANNEL_ID = "pebblehertz_runtime";
+    private static final String NOTIFICATION_CHANNEL_ID = "nullwrist_runtime";
     private static final int NOTIFICATION_ID = 168;
     private static final int RECOVERY_REQUEST_CODE = 810;
 
@@ -713,7 +713,7 @@ public final class PebbleRuntimeService extends Service {
         }
         NotificationChannel channel = new NotificationChannel(
                 NOTIFICATION_CHANNEL_ID,
-                "Pebblehertz",
+                "NullWrist",
                 NotificationManager.IMPORTANCE_LOW
         );
         channel.setDescription("Keeps the rear watchface active.");
@@ -727,7 +727,7 @@ public final class PebbleRuntimeService extends Service {
     private Notification buildNotification() {
         Notification.Builder builder = new Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("Pebblehertz")
+                .setContentTitle("NullWrist")
                 .setContentText("Rear watchface active")
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_SECRET)

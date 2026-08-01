@@ -1,4 +1,4 @@
-# Pebblehertz 0.8.10 stability test plan
+# NullWrist 0.8.10 stability test plan
 
 The runtime has one operating mode. There are no sleep, charging or low-battery execution branches.
 

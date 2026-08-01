@@ -1,4 +1,4 @@
-# Pebblehertz 0.8.5
+# NullWrist 0.8.5
 
 ## Command sequencing
 

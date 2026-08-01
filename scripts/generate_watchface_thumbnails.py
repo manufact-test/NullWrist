@@ -141,7 +141,7 @@ def main() -> int:
         old.unlink()
     args.log.parent.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.TemporaryDirectory(prefix="pebblehertz-thumbnails-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="nullwrist-thumbnails-") as temporary:
         temporary_dir = Path(temporary)
         working_spi = temporary_dir / "qemu_spi_flash.bin"
         framebuffer = temporary_dir / "framebuffer.bin"

@@ -4,12 +4,19 @@ on:
   push:
     branches:
       - refresh-nullwrist-release-history
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 permissions:
   contents: write
+  pull-requests: read
 
 jobs:
   refresh:
+    if: github.event_name == 'push' || github.event.pull_request.title == '[refresh-nullwrist-release-history]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -33,34 +40,11 @@ jobs:
             old_name="$(jq -r '.name // ""' <<<"$release")"
             jq -r '.body // ""' <<<"$release" > "$RUNNER_TEMP/old-body.txt"
 
-            new_name="$(python3 - "$old_name" <<'PY'
-          import sys
-          value = sys.argv[1]
-          for old, new in (
-              ("PebbleHertz", "NullWrist"),
-              ("Pebblehertz", "NullWrist"),
-              ("PEBBLEHERTZ", "NULLWRIST"),
-              ("pebblehertz", "nullwrist"),
-          ):
-              value = value.replace(old, new)
-          print(value)
-          PY
-            )"
+            new_name="$(python3 -c 'import sys; value=sys.argv[1]; replacements=(("PebbleHertz","NullWrist"),("Pebblehertz","NullWrist"),("PEBBLEHERTZ","NULLWRIST"),("pebblehertz","nullwrist")); [None for old,new in replacements if not (value:=value.replace(old,new))]; print(value)' "$old_name")"
 
-            python3 - "$RUNNER_TEMP/old-body.txt" "$RUNNER_TEMP/new-body.txt" <<'PY'
-          import sys
-          from pathlib import Path
-          source, destination = map(Path, sys.argv[1:])
-          value = source.read_text(encoding="utf-8")
-          for old, new in (
-              ("PebbleHertz", "NullWrist"),
-              ("Pebblehertz", "NullWrist"),
-              ("PEBBLEHERTZ", "NULLWRIST"),
-              ("pebblehertz", "nullwrist"),
-          ):
-              value = value.replace(old, new)
-          destination.write_text(value, encoding="utf-8")
-          PY
+            python3 -c 'import sys; from pathlib import Path; source=Path(sys.argv[1]); destination=Path(sys.argv[2]); value=source.read_text(encoding="utf-8"); replacements=(("PebbleHertz","NullWrist"),("Pebblehertz","NullWrist"),("PEBBLEHERTZ","NULLWRIST"),("pebblehertz","nullwrist"));
+          for old,new in replacements: value=value.replace(old,new)
+          destination.write_text(value, encoding="utf-8")' "$RUNNER_TEMP/old-body.txt" "$RUNNER_TEMP/new-body.txt"
 
             if [[ "$new_name" != "$old_name" ]] || ! cmp -s "$RUNNER_TEMP/old-body.txt" "$RUNNER_TEMP/new-body.txt"; then
               jq -n \
@@ -76,19 +60,9 @@ jobs:
               asset_id="$(jq -r '.id' <<<"$asset")"
               old_asset_name="$(jq -r '.name' <<<"$asset")"
               asset_api_url="$(jq -r '.url' <<<"$asset")"
-              new_asset_name="$(python3 - "$old_asset_name" <<'PY'
-          import sys
-          value = sys.argv[1]
-          for old, new in (
-              ("PebbleHertz", "NullWrist"),
-              ("Pebblehertz", "NullWrist"),
-              ("PEBBLEHERTZ", "NULLWRIST"),
-              ("pebblehertz", "nullwrist"),
-          ):
-              value = value.replace(old, new)
-          print(value)
-          PY
-              )"
+              new_asset_name="$(python3 -c 'import sys; value=sys.argv[1]; replacements=(("PebbleHertz","NullWrist"),("Pebblehertz","NullWrist"),("PEBBLEHERTZ","NULLWRIST"),("pebblehertz","nullwrist"));
+          for old,new in replacements: value=value.replace(old,new)
+          print(value)' "$old_asset_name")"
 
               if [[ "$new_asset_name" == "$old_asset_name" ]]; then
                 continue

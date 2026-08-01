@@ -1,17 +1,17 @@
 name: Bug report
-description: Report a reproducible Pebblehertz or watchface problem
+description: Report a reproducible NullWrist or watchface problem
 title: "[Bug]: "
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping test Pebblehertz. Check COMPATIBILITY.md first, especially for watchfaces that need PebbleKit JS, configuration pages, weather or network access.
+        Thanks for helping test NullWrist. Check COMPATIBILITY.md first, especially for watchfaces that need PebbleKit JS, configuration pages, weather or network access.
 
   - type: input
     id: version
     attributes:
-      label: Pebblehertz version
-      placeholder: "0.8.9"
+      label: NullWrist version
+      placeholder: "0.8.11"
     validations:
       required: true
 
@@ -45,7 +45,7 @@ body:
     id: watchface
     attributes:
       label: Watchface details
-      description: Include the name, version, source link and Pebble UUID when available. Write “bundled” when it ships with Pebblehertz.
+      description: Include the name, version, source link and Pebble UUID when available. Write “bundled” when it ships with NullWrist.
       placeholder: |
         Name:
         Version:
@@ -59,7 +59,7 @@ body:
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. Open Pebblehertz
+        1. Open NullWrist
         2. Select or import ...
         3. Lock the phone / clear recent apps / wait ...
         4. Observe ...
@@ -93,9 +93,9 @@ body:
     attributes:
       label: Titan 2 background settings
       options:
-        - label: Pebblehertz is excluded from battery optimization.
-        - label: Pebblehertz is allowed through DuraSpeed.
-        - label: Pebblehertz is excluded from the Titan 2 App blocker.
+        - label: NullWrist is excluded from battery optimization.
+        - label: NullWrist is allowed through DuraSpeed.
+        - label: NullWrist is excluded from the Titan 2 App blocker.
         - label: I reproduced the problem on the latest available beta.
           required: true
 

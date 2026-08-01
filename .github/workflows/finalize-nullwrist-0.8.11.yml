@@ -33,6 +33,17 @@ jobs:
           PY
           python3 scripts/rebrand_nullwrist.py
 
+      - name: Commit verified repository update
+        id: commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Complete NullWrist repository rebrand"
+          git push origin HEAD:main
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -87,17 +98,6 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs \
             app/build/outputs/apk/release/app-release.apk \
             | tee release-certificate.txt
-
-      - name: Commit verified repository update
-        id: commit
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Complete NullWrist repository rebrand"
-          git push origin HEAD:main
-          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Prepare release files
         run: |

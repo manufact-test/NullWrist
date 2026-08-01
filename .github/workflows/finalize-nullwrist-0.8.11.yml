@@ -2,7 +2,7 @@ name: Finalize NullWrist 0.8.11
 
 on:
   schedule:
-    - cron: "55 21 1 8 *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:

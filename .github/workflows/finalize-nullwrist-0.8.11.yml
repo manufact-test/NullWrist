@@ -1,0 +1,148 @@
+name: Finalize NullWrist 0.8.11
+
+on:
+  schedule:
+    - cron: "55 21 1 8 *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Finalize repository-wide rename
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/rebrand_nullwrist.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              "    normalize_version()\n    validate()\n    remove_obsolete_files()",
+              "    normalize_version()\n    remove_obsolete_files()\n    validate()",
+          )
+          path.write_text(text, encoding="utf-8")
+          PY
+          python3 scripts/rebrand_nullwrist.py
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK and NDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108" "cmake;3.22.1"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Restore release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nullwrist-release.jks"
+          keytool -list \
+            -keystore "$RUNNER_TEMP/nullwrist-release.jks" \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -alias "$KEY_ALIAS" >/dev/null
+
+      - name: Fetch pinned watchfaces
+        run: python3 scripts/fetch_bundled_watchfaces.py
+
+      - name: Verify pinned Pebble Time firmware
+        env:
+          PEBBLE_SDK_VERSION: "4.17"
+        run: python3 scripts/fetch_pebble_basalt_firmware.py
+
+      - name: Test and assemble signed release
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/nullwrist-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle :app:testDebugUnitTest :app:assembleRelease
+
+      - name: Verify APK certificate
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs \
+            app/build/outputs/apk/release/app-release.apk \
+            | tee release-certificate.txt
+
+      - name: Commit verified repository update
+        id: commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Complete NullWrist repository rebrand"
+          git push origin HEAD:main
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release files
+        run: |
+          set -euo pipefail
+          cp app/build/outputs/apk/release/app-release.apk NullWrist-0.8.11.apk
+          cp CHANGELOG_0.8.11.md release-notes.md
+          SHA256="$(sha256sum NullWrist-0.8.11.apk | awk '{print $1}')"
+          printf '%s  %s\n' "$SHA256" "NullWrist-0.8.11.apk" > apk-sha256.txt
+
+      - name: Upload signed build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nullwrist-0.8.11-signed-release
+          path: |
+            NullWrist-0.8.11.apk
+            release-certificate.txt
+            release-notes.md
+            apk-sha256.txt
+          if-no-files-found: error
+
+      - name: Publish GitHub prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.8.11
+          target_commitish: ${{ steps.commit.outputs.release_sha }}
+          name: NullWrist 0.8.11 Beta
+          prerelease: true
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: NullWrist-0.8.11.apk
+          body_path: release-notes.md
+
+      - name: Record checksum and remove one-time workflow
+        run: |
+          set -euo pipefail
+          rm .github/workflows/finalize-nullwrist-0.8.11.yml
+          git add apk-sha256.txt .github/workflows/finalize-nullwrist-0.8.11.yml
+          git commit -m "Record NullWrist 0.8.11 release checksum [skip ci]"
+          git push origin HEAD:main
+
+      - name: Update repository name and description
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}" \
+            -f name="NullWrist" \
+            -f description="Pebble watchfaces on the rear display of the Unihertz Titan 2."

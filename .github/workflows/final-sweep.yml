@@ -1,0 +1,119 @@
+name: Final repository sweep
+
+on:
+  issues:
+    types:
+      - opened
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+
+jobs:
+  sweep:
+    if: github.event.issue.title == '[final-repository-sweep]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Delete remaining non-main branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/branches?per_page=100" \
+            --jq '.[].name' | while IFS= read -r branch; do
+              [[ "$branch" == "main" ]] && continue
+              encoded="$(jq -rn --arg value "$branch" '$value|@uri')"
+              gh api --method DELETE \
+                "repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded}" \
+                >/dev/null 2>&1 || true
+            done
+
+      - name: Delete remaining caches and artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh cache delete --all --confirm || true
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[].id' | while IFS= read -r artifact_id; do
+              gh api --method DELETE \
+                "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" \
+                >/dev/null 2>&1 || true
+            done
+
+      - name: Keep only useful workflow history
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | [.id, .name, .status, (.conclusion // ""), (.head_branch // ""), .created_at] | @tsv' \
+            > "$RUNNER_TEMP/runs.tsv"
+
+          python3 - "$RUNNER_TEMP/runs.tsv" "$RUNNER_TEMP/delete-runs.txt" "$CURRENT_RUN_ID" <<'PY'
+          import sys
+          from collections import defaultdict
+          from pathlib import Path
+
+          source = Path(sys.argv[1])
+          destination = Path(sys.argv[2])
+          current_run = sys.argv[3]
+          keep_limits = {
+              "Android build": 3,
+              "Publish NullWrist release": 3,
+          }
+          kept = defaultdict(int)
+          delete = []
+
+          for line in source.read_text(encoding="utf-8").splitlines():
+              run_id, name, status, conclusion, head_branch, created_at = line.split("\t", 5)
+              if run_id == current_run or status != "completed":
+                  continue
+
+              limit = keep_limits.get(name, 0)
+              useful_android_run = name != "Android build" or head_branch == "main"
+              if conclusion == "success" and useful_android_run and kept[name] < limit:
+                  kept[name] += 1
+                  continue
+
+              delete.append(run_id)
+
+          destination.write_text("\n".join(delete) + ("\n" if delete else ""), encoding="utf-8")
+          PY
+
+          while IFS= read -r run_id; do
+            [[ -z "$run_id" ]] && continue
+            gh api --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" \
+              >/dev/null 2>&1 || true
+          done < "$RUNNER_TEMP/delete-runs.txt"
+
+      - name: Close maintenance issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh api --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER}" \
+            -f title="Maintenance: final repository sweep" \
+            -f body="One-time maintenance trigger used to remove stale branches, caches, artifacts and obsolete Actions history." \
+            -f state="closed" >/dev/null
+
+      - name: Remove one-time workflow
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/final-sweep.yml
+          git add .github/workflows/final-sweep.yml
+          git commit -m "Finish final repository sweep [skip ci]"
+          git push origin HEAD:main

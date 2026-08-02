@@ -4,13 +4,20 @@ on:
   push:
     branches:
       - cleanup-repository
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 permissions:
   actions: write
   contents: write
+  pull-requests: read
 
 jobs:
   cleanup:
+    if: github.event_name == 'push' || github.event.pull_request.title == '[cleanup-repository]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

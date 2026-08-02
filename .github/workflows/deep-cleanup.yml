@@ -31,9 +31,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
           gh api --method PATCH "repos/${GITHUB_REPOSITORY}" \
-            -F delete_branch_on_merge=true >/dev/null
+            -F delete_branch_on_merge=true >/dev/null 2>&1 || true
 
       - name: Delete all non-main branches
         env:

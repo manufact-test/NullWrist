@@ -1,0 +1,140 @@
+name: Rebuild NullWrist 0.8.10
+
+on:
+  push:
+    branches:
+      - agent/rebrand-nullwrist-v0.8.10
+    paths:
+      - .github/workflows/rebuild-nullwrist-v0.8.10.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out 0.8.10 rebuild branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply verified NullWrist application rebrand
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          git checkout v0.8.11 -- \
+            app/src/main/AndroidManifest.xml \
+            app/src/main/java/com/manufacttest/pebblereardisplay/NullWristApplication.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/data/WatchfaceRepository.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/runtime/PebbleRuntimeService.java \
+            app/src/main/java/com/manufacttest/pebblereardisplay/ui/MainActivity.java \
+            app/src/main/res/drawable/ic_launcher.xml \
+            app/src/main/res/values/strings.xml
+          rm -f app/src/main/java/com/manufacttest/pebblereardisplay/PebblehertzApplication.java
+
+          grep -F 'versionCode = 27' app/build.gradle.kts
+          grep -F 'versionName = "0.8.10"' app/build.gradle.kts
+          grep -F '<string name="app_name">NullWrist</string>' app/src/main/res/values/strings.xml
+          grep -F 'android:name=".NullWristApplication"' app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/com/manufacttest/pebblereardisplay/NullWristApplication.java
+          test ! -e app/src/main/java/com/manufacttest/pebblereardisplay/PebblehertzApplication.java
+          ! grep -RInE 'Pebblehertz|PebbleHertz|PEBBLEHERTZ|pebblehertz' app/src/main
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK and NDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.0.13004108" "cmake;3.22.1"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+
+      - name: Validate signing secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+
+      - name: Restore release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nullwrist-release.jks"
+          keytool -list \
+            -keystore "$RUNNER_TEMP/nullwrist-release.jks" \
+            -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+            -alias "${{ secrets.ANDROID_KEY_ALIAS }}" >/dev/null
+
+      - name: Fetch pinned watchfaces
+        run: python3 scripts/fetch_bundled_watchfaces.py
+
+      - name: Verify pinned Pebble Time firmware
+        env:
+          PEBBLE_SDK_VERSION: "4.17"
+        run: python3 scripts/fetch_pebble_basalt_firmware.py
+
+      - name: Test and assemble signed release
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/nullwrist-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle :app:testDebugUnitTest :app:assembleRelease
+
+      - name: Verify signed APK and NullWrist branding
+        run: |
+          set -euo pipefail
+          APK='app/build/outputs/apk/release/app-release.apk'
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK" | tee release-certificate.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt2" dump resources "$APK" | grep -F 'NullWrist'
+          cp "$APK" NullWrist-0.8.10.apk
+          sha256sum NullWrist-0.8.10.apk | tee NullWrist-0.8.10.sha256.txt
+
+      - name: Replace APK in the v0.8.10 GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v0.8.10 --repo "$GITHUB_REPOSITORY"
+          gh release view v0.8.10 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
+            | while IFS= read -r asset; do
+                case "$asset" in
+                  *.apk|*.sha256.txt)
+                    gh release delete-asset v0.8.10 "$asset" --repo "$GITHUB_REPOSITORY" -y
+                    ;;
+                esac
+              done
+          gh release upload v0.8.10 \
+            NullWrist-0.8.10.apk \
+            NullWrist-0.8.10.sha256.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+          gh release edit v0.8.10 \
+            --repo "$GITHUB_REPOSITORY" \
+            --title 'NullWrist 0.8.10 Beta' \
+            --notes-file CHANGELOG_0.8.10.md \
+            --prerelease
+
+      - name: Upload verification artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nullwrist-0.8.10-rebranded-signed-release
+          path: |
+            NullWrist-0.8.10.apk
+            NullWrist-0.8.10.sha256.txt
+            release-certificate.txt
+          if-no-files-found: error

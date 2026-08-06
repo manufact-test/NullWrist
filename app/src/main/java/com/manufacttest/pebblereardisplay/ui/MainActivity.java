@@ -266,8 +266,7 @@ public final class MainActivity extends Activity {
 
         root.addView(buildHeader(), matchWidthWrapHeight(dp(14)));
         root.addView(buildHeroCard(), matchWidthWrapHeight(dp(12)));
-        root.addView(buildActionRow(), matchWidthWrapHeight(dp(10)));
-        root.addView(buildReliabilityCard(), matchWidthWrapHeight(dp(20)));
+        root.addView(buildActionRow(), matchWidthWrapHeight(dp(20)));
 
         TextView listTitle = pixelText("WATCHFACE LOCKER // 00", 16, getColor(R.color.text_primary));
         listTitle.setTag("locker-title");
@@ -289,7 +288,7 @@ public final class MainActivity extends Activity {
 
     private View buildSupportButton() {
         TextView support = pixelButton(
-                "SUPPORT PEBBLEHERTZ",
+                "SUPPORT NULLWRIST",
                 getColor(R.color.accent_mint),
                 getColor(R.color.ink)
         );
@@ -303,7 +302,7 @@ public final class MainActivity extends Activity {
 
     private void showSupportDialog() {
     new AlertDialog.Builder(this)
-            .setTitle("Support Pebblehertz")
+            .setTitle("Support NullWrist")
             .setMessage("Choose a platform. Thank you for helping the project grow!")
             .setPositiveButton("Wise", (dialog, which) -> openExternalLink(
                     "https://wise.com/pay/me/ilyas709"
@@ -334,7 +333,7 @@ public final class MainActivity extends Activity {
         ));
         panel.setElevation(dp(3));
 
-        TextView title = pixelText("PEBBLEHERTZ", 30, getColor(R.color.paper));
+        TextView title = pixelText("NULLWRIST", 30, getColor(R.color.paper));
         title.setLetterSpacing(0.04f);
         panel.addView(title);
 
@@ -426,13 +425,7 @@ public final class MainActivity extends Activity {
         importButton.setOnClickListener(view -> openPbwPicker());
         row.addView(importButton, weightedButtonParams(dp(6)));
 
-        TextView settingsButton = pixelButton(
-                "SYSTEM SETUP",
-                getColor(R.color.paper),
-                getColor(R.color.ink)
-        );
-        settingsButton.setOnClickListener(view -> openBackgroundSettings());
-        row.addView(settingsButton, weightedButtonParams(0));
+        row.addView(buildReliabilityCard(), weightedButtonParams(0));
         return row;
     }
 
@@ -773,8 +766,8 @@ public final class MainActivity extends Activity {
         }
         String message = watchface.isBundled()
                 ? "Remove this preinstalled watchface from your locker? "
-                + "It can be restored by clearing Pebblehertz app data or reinstalling the app."
-                : "Permanently remove this imported PBW from Pebblehertz?";
+                + "It can be restored by clearing NullWrist app data or reinstalling the app."
+                : "Permanently remove this imported PBW from NullWrist?";
         new AlertDialog.Builder(this)
                 .setTitle("Delete " + watchface.getName() + "?")
                 .setMessage(message)
@@ -946,7 +939,7 @@ public final class MainActivity extends Activity {
         }
         Toast.makeText(
                 this,
-                "Always-on access is ready. Keep Pebblehertz allowed in DuraSpeed and out of App blocker.",
+                "Always-on access is ready. Keep NullWrist allowed in DuraSpeed and out of App blocker.",
                 Toast.LENGTH_LONG
         ).show();
         openAppDetails();

@@ -261,7 +261,7 @@ public final class WatchfaceRepository {
 
     public static final class DuplicateWatchfaceException extends IOException {
         public DuplicateWatchfaceException(String existingName) {
-            super("This watchface is already in Pebblehertz: " + existingName);
+            super("This watchface is already in NullWrist: " + existingName);
         }
     }
 

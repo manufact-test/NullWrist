@@ -138,3 +138,22 @@ jobs:
             NullWrist-0.8.10.sha256.txt
             release-certificate.txt
           if-no-files-found: error
+
+      - name: Record successful publication
+        run: |
+          set -euo pipefail
+          HASH="$(cut -d' ' -f1 NullWrist-0.8.10.sha256.txt)"
+          cat > REBUILD_NULLWRIST_0.8.10_STATUS.md <<EOF
+          # NullWrist 0.8.10 rebuild
+
+          Status: published
+          Asset: NullWrist-0.8.10.apk
+          SHA-256: $HASH
+          Source tag: v0.8.10 with verified NullWrist application rebrand from v0.8.11
+          Workflow run: $GITHUB_RUN_ID
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add REBUILD_NULLWRIST_0.8.10_STATUS.md
+          git commit -m "Record NullWrist 0.8.10 rebuilt release"
+          git push origin HEAD:agent/rebrand-nullwrist-v0.8.10

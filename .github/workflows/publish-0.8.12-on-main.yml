@@ -1,0 +1,35 @@
+name: Publish NullWrist 0.8.12 once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  dispatch-release:
+    if: github.repository == 'manufact-test/NullWrist'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify release version
+        run: |
+          set -euo pipefail
+          grep -q 'versionCode = 30' app/build.gradle.kts
+          grep -q 'versionName = "0.8.12"' app/build.gradle.kts
+
+      - name: Dispatch signed release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --ref main -f publish_release=true
+
+      - name: Remove one-shot publisher
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/publish-0.8.12-on-main.yml
+          git commit -m "Remove one-shot 0.8.12 release publisher [skip ci]"
+          git push origin HEAD:main

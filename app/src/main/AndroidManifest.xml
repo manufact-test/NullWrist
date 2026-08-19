@@ -12,8 +12,9 @@
     <application
         android:name=".NullWristApplication"
         android:allowBackup="true"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/nullwrist_launcher"
         android:label="@string/app_name"
+        android:roundIcon="@mipmap/nullwrist_launcher"
         android:resizeableActivity="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.PebbleRearDisplay">

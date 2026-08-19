@@ -23,7 +23,7 @@ android {
         minSdk = 28
         targetSdk = 36
         versionCode = 30
-        versionName = "0.8.12-iconfix"
+        versionName = "0.8.12"
 
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
 

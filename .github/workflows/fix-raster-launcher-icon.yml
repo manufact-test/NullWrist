@@ -1,0 +1,180 @@
+name: Fix raster launcher icon
+
+on:
+  push:
+    branches: ["feature/feedback-fixes-0.8.12"]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-icon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/feedback-fixes-0.8.12
+          fetch-depth: 0
+
+      - name: Generate valid raster launcher icon
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import binascii
+          import struct
+          import zlib
+
+          W = H = 512
+          pixels = bytearray(W * H * 4)
+
+          def set_px(x, y, rgba):
+              if 0 <= x < W and 0 <= y < H:
+                  i = (y * W + x) * 4
+                  pixels[i:i+4] = bytes(rgba)
+
+          def rounded_rect(x0, y0, x1, y1, r, color):
+              rr = r * r
+              for y in range(y0, y1 + 1):
+                  for x in range(x0, x1 + 1):
+                      inside = True
+                      if x < x0 + r and y < y0 + r:
+                          dx, dy = x - (x0 + r), y - (y0 + r)
+                          inside = dx*dx + dy*dy <= rr
+                      elif x > x1 - r and y < y0 + r:
+                          dx, dy = x - (x1 - r), y - (y0 + r)
+                          inside = dx*dx + dy*dy <= rr
+                      elif x < x0 + r and y > y1 - r:
+                          dx, dy = x - (x0 + r), y - (y1 - r)
+                          inside = dx*dx + dy*dy <= rr
+                      elif x > x1 - r and y > y1 - r:
+                          dx, dy = x - (x1 - r), y - (y1 - r)
+                          inside = dx*dx + dy*dy <= rr
+                      if inside:
+                          set_px(x, y, color)
+
+          def rect(x0, y0, x1, y1, color):
+              for y in range(y0, y1 + 1):
+                  for x in range(x0, x1 + 1):
+                      set_px(x, y, color)
+
+          def circle(cx, cy, r, color):
+              rr = r * r
+              for y in range(cy-r, cy+r+1):
+                  for x in range(cx-r, cx+r+1):
+                      dx, dy = x-cx, y-cy
+                      if dx*dx + dy*dy <= rr:
+                          set_px(x, y, color)
+
+          def polygon(points, color):
+              min_y = max(0, min(y for _, y in points))
+              max_y = min(H - 1, max(y for _, y in points))
+              n = len(points)
+              for y in range(min_y, max_y + 1):
+                  xs = []
+                  for i in range(n):
+                      x1, y1 = points[i]
+                      x2, y2 = points[(i + 1) % n]
+                      if (y1 <= y < y2) or (y2 <= y < y1):
+                          x = x1 + (y - y1) * (x2 - x1) / (y2 - y1)
+                          xs.append(x)
+                  xs.sort()
+                  for i in range(0, len(xs) - 1, 2):
+                      xa = max(0, int(xs[i] + 0.999999))
+                      xb = min(W - 1, int(xs[i + 1]))
+                      for x in range(xa, xb + 1):
+                          set_px(x, y, color)
+
+          DARK = (14, 23, 32, 255)
+          BODY = (29, 42, 54, 255)
+          MINT = (82, 224, 196, 255)
+          CREAM = (255, 247, 223, 255)
+          CORAL = (255, 102, 90, 255)
+
+          rounded_rect(0, 0, 511, 511, 96, DARK)
+          rect(181, 42, 331, 74, MINT)
+          rect(181, 438, 331, 470, MINT)
+          rect(74, 181, 106, 331, MINT)
+          rect(406, 181, 438, 331, MINT)
+          rounded_rect(139, 85, 373, 427, 24, BODY)
+          rect(160, 128, 352, 384, CREAM)
+          circle(256, 256, 85, DARK)
+          circle(256, 256, 43, CREAM)
+          polygon([(180, 330), (309, 170), (351, 170), (222, 330)], CORAL)
+          rect(181, 149, 213, 170, DARK)
+          rect(299, 341, 331, 362, DARK)
+
+          def chunk(kind, data):
+              return (
+                  struct.pack('>I', len(data))
+                  + kind
+                  + data
+                  + struct.pack('>I', binascii.crc32(kind + data) & 0xffffffff)
+              )
+
+          raw = bytearray()
+          stride = W * 4
+          for y in range(H):
+              raw.append(0)
+              raw.extend(pixels[y*stride:(y+1)*stride])
+
+          png = bytearray(b'\x89PNG\r\n\x1a\n')
+          png += chunk(b'IHDR', struct.pack('>IIBBBBB', W, H, 8, 6, 0, 0, 0))
+          png += chunk(b'IDAT', zlib.compress(bytes(raw), 9))
+          png += chunk(b'IEND', b'')
+
+          out = Path('app/src/main/res/mipmap-nodpi/nullwrist_launcher.png')
+          out.parent.mkdir(parents=True, exist_ok=True)
+          out.write_bytes(png)
+
+          # Self-validate the generated stream before Android sees it.
+          data = out.read_bytes()
+          assert data.startswith(b'\x89PNG\r\n\x1a\n')
+          pos = 8
+          idat = bytearray()
+          seen_iend = False
+          while pos < len(data):
+              length = struct.unpack('>I', data[pos:pos+4])[0]
+              kind = data[pos+4:pos+8]
+              payload = data[pos+8:pos+8+length]
+              crc = struct.unpack('>I', data[pos+8+length:pos+12+length])[0]
+              assert crc == (binascii.crc32(kind + payload) & 0xffffffff)
+              if kind == b'IDAT':
+                  idat.extend(payload)
+              if kind == b'IEND':
+                  seen_iend = True
+                  break
+              pos += 12 + length
+          assert seen_iend
+          decoded = zlib.decompress(bytes(idat))
+          assert len(decoded) == H * (1 + W * 4)
+          print(f'Generated valid {W}x{H} RGBA PNG: {out} ({len(data)} bytes)')
+
+          gradle = Path('app/build.gradle.kts')
+          text = gradle.read_text(encoding='utf-8')
+          text = text.replace('versionCode = 29', 'versionCode = 30')
+          text = text.replace('versionName = "0.8.12"', 'versionName = "0.8.12-iconfix"')
+          gradle.write_text(text, encoding='utf-8')
+
+          changelog = Path('CHANGELOG_0.8.12.md')
+          text = changelog.read_text(encoding='utf-8')
+          if 'Titan 2 launcher fallback' not in text:
+              text += '\n- Titan 2 launcher fallback: the application icon now uses a dedicated 512×512 raster PNG resource with a new resource ID, avoiding OEM vector/adaptive decoding fallbacks.\n'
+          changelog.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate generated PNG
+        run: |
+          file app/src/main/res/mipmap-nodpi/nullwrist_launcher.png
+          test -s app/src/main/res/mipmap-nodpi/nullwrist_launcher.png
+          grep -q 'android:icon="@mipmap/nullwrist_launcher"' app/src/main/AndroidManifest.xml
+          git diff --check
+
+      - name: Commit generated icon and remove one-shot workflow
+        run: |
+          rm -f .github/workflows/fix-raster-launcher-icon.yml
+          rm -f ci/raster-icon-trigger.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Regenerate NullWrist launcher icon as raster PNG"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

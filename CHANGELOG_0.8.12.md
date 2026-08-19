@@ -8,3 +8,5 @@
 - After repeated runtime failures, NullWrist rebuilds only PebbleOS SPI/AppDB state from the bundled known-good image while preserving the Android PBW library.
 - Automatic recovery is now bounded: after five consecutive failures it pauses instead of rebooting PebbleOS forever. Reopening NullWrist or explicitly selecting/restarting a watchface retries cleanly.
 - Version code 29; version name 0.8.12.
+
+- Titan 2 launcher fallback: the application icon now uses a dedicated 512×512 raster PNG resource with a new resource ID, avoiding OEM vector/adaptive decoding fallbacks.

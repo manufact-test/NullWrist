@@ -1,0 +1,45 @@
+name: Verify NullWrist 0.8.12 release once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  verify-and-clean:
+    if: github.repository == 'manufact-test/NullWrist'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify published release and APK asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view v0.8.12 --json tagName,name,isPrerelease,assets > release.json
+          python3 - <<'PY'
+          import json
+          data = json.load(open('release.json', encoding='utf-8'))
+          assert data['tagName'] == 'v0.8.12', data
+          assert data['isPrerelease'] is True, data
+          names = {asset['name'] for asset in data.get('assets', [])}
+          assert 'NullWrist-0.8.12.apk' in names, names
+          print('Release verified:', data['name'], sorted(names))
+          PY
+
+      - name: Remove verifier and retarget release tag to clean main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/verify-0.8.12-release-once.yml
+          git commit -m "Clean 0.8.12 release verification workflow [skip ci]"
+          git push origin HEAD:main
+          TARGET_SHA="$(git rev-parse HEAD)"
+          git tag -f v0.8.12 "$TARGET_SHA"
+          git push --force origin refs/tags/v0.8.12

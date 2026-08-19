@@ -55,6 +55,8 @@ public final class PebbleRuntimeService extends Service {
     private static final long SELECTION_DEBOUNCE_MILLIS = 180L;
     private static final long WATCHDOG_INTERVAL_MILLIS = 5_000L;
     private static final long RECOVERY_DELAY_MILLIS = 1_500L;
+    private static final int STATE_RESET_FAILURE_THRESHOLD = 2;
+    private static final int MAX_AUTOMATIC_FAILURES = 5;
     private static final String NOTIFICATION_CHANNEL_ID = "nullwrist_runtime";
     private static final int NOTIFICATION_ID = 168;
     private static final int RECOVERY_REQUEST_CODE = 810;
@@ -78,11 +80,13 @@ public final class PebbleRuntimeService extends Service {
     private volatile boolean foreground;
     private volatile long restartNotBeforeElapsed;
     private volatile int consecutiveFailures;
+    private volatile boolean persistentRecoveryPerformed;
+    private volatile boolean automaticRecoveryPaused;
 
     private final Runnable watchdogTick = new Runnable() {
         @Override
         public void run() {
-            if (shouldHaveRuntime()) {
+            if (shouldHaveRuntime() && !automaticRecoveryPaused) {
                 PebbleQemuProcess current = runtime;
                 if (!starting
                         && (current == null || !current.isRunning())
@@ -151,7 +155,18 @@ public final class PebbleRuntimeService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         promoteToForeground();
-        String action = intent == null ? ACTION_START : intent.getAction();
+        String action = intent == null ? ACTION_RECOVER_TASK : intent.getAction();
+
+        // Explicit user/app requests may reopen a circuit that was intentionally paused after
+        // repeated failures. A START_STICKY restart has a null Intent and must not do that.
+        if (intent != null && (ACTION_RESTART.equals(action) || ACTION_SELECT.equals(action))) {
+            resetRecoveryCircuit();
+        } else if (intent != null
+                && ACTION_START.equals(action)
+                && automaticRecoveryPaused) {
+            resetRecoveryCircuit();
+        }
+
         if (ACTION_SELECT.equals(action)) {
             scheduleSelection();
         } else {
@@ -197,6 +212,10 @@ public final class PebbleRuntimeService extends Service {
                 && failure == null;
 
         if (starting) {
+            notifyListeners();
+            return;
+        }
+        if (!forceRestart && automaticRecoveryPaused) {
             notifyListeners();
             return;
         }
@@ -295,6 +314,11 @@ public final class PebbleRuntimeService extends Service {
             }
             ensureCurrent(requestedGeneration);
 
+            // Clean up an orphan left behind if Android killed the Java/service process without
+            // giving PebbleQemuProcess.stop() a chance to run.
+            PebbleRuntimeRecovery.prepareBeforeStart(this);
+            ensureCurrent(requestedGeneration);
+
             current = new PebbleQemuProcess(this);
             synchronized (this) {
                 ensureCurrent(requestedGeneration);
@@ -325,6 +349,8 @@ public final class PebbleRuntimeService extends Service {
             starting = false;
             consecutiveFailures = 0;
             restartNotBeforeElapsed = 0L;
+            persistentRecoveryPerformed = false;
+            automaticRecoveryPaused = false;
         } catch (CancellationException cancelled) {
             discardRuntime(current);
         } catch (InterruptedException interrupted) {
@@ -396,6 +422,8 @@ public final class PebbleRuntimeService extends Service {
         failure = null;
         consecutiveFailures = 0;
         restartNotBeforeElapsed = 0L;
+        persistentRecoveryPerformed = false;
+        automaticRecoveryPaused = false;
         updateNotification();
         notifyListeners();
         scheduleThumbnailCapture(current, selected.metadata);
@@ -616,13 +644,42 @@ public final class PebbleRuntimeService extends Service {
 
     private void reportFailure(Throwable error) {
         consecutiveFailures = Math.min(consecutiveFailures + 1, 20);
+
+        if (!persistentRecoveryPerformed
+                && consecutiveFailures >= STATE_RESET_FAILURE_THRESHOLD) {
+            try {
+                PebbleRuntimeRecovery.resetPersistentState(this);
+                persistentRecoveryPerformed = true;
+            } catch (IOException recoveryError) {
+                error.addSuppressed(recoveryError);
+            }
+        }
+
+        failure = error.getClass().getSimpleName() + ": " + safeMessage(error);
+        if (consecutiveFailures >= MAX_AUTOMATIC_FAILURES) {
+            automaticRecoveryPaused = true;
+            restartNotBeforeElapsed = Long.MAX_VALUE;
+            status = "PebbleOS recovery paused — reopen NullWrist to retry";
+            updateNotification();
+            notifyListeners();
+            return;
+        }
+
         long delay = RuntimeRestartBackoff.delayMillis(consecutiveFailures);
         restartNotBeforeElapsed = SystemClock.elapsedRealtime() + delay;
-        failure = error.getClass().getSimpleName() + ": " + safeMessage(error);
-        status = "PebbleOS will recover automatically";
+        status = persistentRecoveryPerformed
+                ? "PebbleOS state repaired; retrying automatically"
+                : "PebbleOS will recover automatically";
         updateNotification();
         notifyListeners();
         serviceHandler.postDelayed(() -> scheduleRuntime(false), delay);
+    }
+
+    private void resetRecoveryCircuit() {
+        consecutiveFailures = 0;
+        restartNotBeforeElapsed = 0L;
+        persistentRecoveryPerformed = false;
+        automaticRecoveryPaused = false;
     }
 
     private void setStatus(String value) {

@@ -1,0 +1,17 @@
+{
+  "name": "red-girl",
+  "author": "Manufact / NullWrist",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Red Girl",
+    "uuid": "7846f098-2a61-4b89-a738-62205de68e7a",
+    "sdkVersion": "3",
+    "targetPlatforms": ["emery"],
+    "enableMultiJS": true,
+    "watchapp": {"watchface": true},
+    "resources": {"media": []}
+  }
+}

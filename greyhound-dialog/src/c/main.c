@@ -56,7 +56,7 @@ static int16_t text_width(const char *text, GFont font, int16_t max_w) {
   GSize size = graphics_text_layout_get_content_size(
     text,
     font,
-    GRect(0, 0, max_w, 24),
+    GRect(0, 0, max_w, 28),
     GTextOverflowModeFill,
     GTextAlignmentLeft
   );
@@ -67,11 +67,34 @@ static int16_t draw_part(GContext *ctx, int16_t x, int16_t y, const char *text, 
   int16_t w = text_width(text, font, max_x - x);
   if (w < 1) return x;
 
-  graphics_draw_text(ctx, text, font, GRect(x, y, w + 4, 24), GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+  graphics_draw_text(ctx, text, font, GRect(x, y, w + 4, 26), GTextOverflowModeFill, GTextAlignmentLeft, NULL);
   if (faux_bold) {
-    graphics_draw_text(ctx, text, font, GRect(x + 1, y, w + 4, 24), GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+    graphics_draw_text(ctx, text, font, GRect(x + 1, y, w + 4, 26), GTextOverflowModeFill, GTextAlignmentLeft, NULL);
   }
   return x + w + (faux_bold ? 1 : 0);
+}
+
+static int16_t draw_wrapped(GContext *ctx, int16_t x, int16_t y, int16_t width, const char *text, GFont font) {
+  GRect box = GRect(x, y, width, 40);
+  GSize size = graphics_text_layout_get_content_size(
+    text,
+    font,
+    box,
+    GTextOverflowModeWordWrap,
+    GTextAlignmentLeft
+  );
+  if (size.h < 17) size.h = 17;
+
+  graphics_draw_text(
+    ctx,
+    text,
+    font,
+    GRect(x, y, width, size.h + 2),
+    GTextOverflowModeWordWrap,
+    GTextAlignmentLeft,
+    NULL
+  );
+  return size.h;
 }
 
 static void compose(void) {
@@ -151,11 +174,15 @@ static void draw_status_bar(GContext *ctx, GRect b) {
   if (s_phone_battery >= 0) snprintf(phone_text, sizeof(phone_text), "%d%%", s_phone_battery);
   else snprintf(phone_text, sizeof(phone_text), "--%%");
 
-  draw_watch_icon(ctx, 69, bar_y + 17);
-  graphics_draw_text(ctx, watch_text, s_font_bold, GRect(84, bar_y + 10, 48, 24), GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+  /* Иконки и проценты сидят на одной визуальной базовой линии. */
+  const int16_t icon_y = bar_y + 14;
+  const int16_t text_y = bar_y + 11;
 
-  draw_phone_icon(ctx, 137, bar_y + 17);
-  graphics_draw_text(ctx, phone_text, s_font_bold, GRect(152, bar_y + 10, 46, 24), GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+  draw_watch_icon(ctx, 69, icon_y);
+  graphics_draw_text(ctx, watch_text, s_font_bold, GRect(84, text_y, 48, 27), GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+
+  draw_phone_icon(ctx, 137, icon_y);
+  graphics_draw_text(ctx, phone_text, s_font_bold, GRect(152, text_y, 46, 27), GTextOverflowModeFill, GTextAlignmentLeft, NULL);
 
   graphics_context_set_stroke_color(ctx, s_status_color);
   graphics_draw_line(ctx, GPoint(65, bar_y + 8), GPoint(65, bar_y + 45));
@@ -170,11 +197,11 @@ static void canvas_update(Layer *layer, GContext *ctx) {
 
   GRect bubble = GRect(7, 7, b.size.w - 14, b.size.h - 64);
   graphics_context_set_fill_color(ctx, s_bubble);
-  graphics_fill_rect(ctx, bubble, 2, GCornersAll);
+  graphics_fill_rect(ctx, bubble, 6, GCornersAll);
 
   graphics_context_set_stroke_color(ctx, s_border);
   graphics_context_set_stroke_width(ctx, 2);
-  graphics_draw_rect(ctx, bubble);
+  graphics_draw_round_rect(ctx, bubble, 6);
 
   int16_t tail_y = bubble.origin.y + bubble.size.h - 1;
   graphics_context_set_fill_color(ctx, s_bubble);
@@ -190,28 +217,33 @@ static void canvas_update(Layer *layer, GContext *ctx) {
 
   const int16_t left = 14;
   const int16_t max_x = b.size.w - 12;
+  const int16_t width = max_x - left;
   const int16_t line = 18;
-  int16_t y = 11;
+  int16_t y = 10;
   int16_t x;
 
-  draw_part(ctx, left, y, "Привет! Время сейчас:", s_font_regular, max_x, false);
+  y += draw_wrapped(ctx, left, y, width, "Привет! Время сейчас", s_font_regular);
+  draw_part(ctx, left, y - 1, s_time_text, s_font_bold, max_x, true);
   y += line;
-  draw_part(ctx, left, y, s_time_text, s_font_bold, max_x, true);
+
+  y += draw_wrapped(ctx, left, y, width, s_has_temp ? "Погода волшебная -" : "Погода пока неизвестна", s_font_regular);
+  if (s_has_temp) {
+    x = draw_part(ctx, left, y - 1, s_temp_text, s_font_bold, max_x, true);
+    draw_part(ctx, x + 2, y - 1, "° градусов.", s_font_regular, max_x, false);
+    y += line;
+  }
+
+  y += draw_wrapped(ctx, left, y, width, "Прошел ты уже", s_font_regular);
+  x = draw_part(ctx, left, y - 1, s_steps_text, s_font_bold, max_x, true);
+  draw_part(ctx, x + 2, y - 1, " шагов.", s_font_regular, max_x, false);
   y += line;
-  draw_part(ctx, left, y, s_has_temp ? "Погода как и ожидалось:" : "Погода пока неизвестна:", s_font_regular, max_x, false);
+
+  y += draw_wrapped(ctx, left, y, width, "С пульсом порядок -", s_font_regular);
+  x = draw_part(ctx, left, y - 1, s_hr_text, s_font_bold, max_x, true);
+  draw_part(ctx, x + 2, y - 1, " ударов :)", s_font_regular, max_x, false);
   y += line;
-  x = draw_part(ctx, left, y, s_temp_text, s_font_bold, max_x, true);
-  draw_part(ctx, x + 2, y, "° Цельсия", s_font_regular, max_x, false);
-  y += line;
-  x = draw_part(ctx, left, y, "Прошел ты уже ", s_font_regular, max_x, false);
-  draw_part(ctx, x, y, s_steps_text, s_font_bold, max_x, true);
-  y += line;
-  draw_part(ctx, left, y, "шагов. Пульс сейчас:", s_font_regular, max_x, false);
-  y += line;
-  x = draw_part(ctx, left, y, s_hr_text, s_font_bold, max_x, true);
-  draw_part(ctx, x + 2, y, " ударов", s_font_regular, max_x, false);
-  y += line;
-  draw_part(ctx, left, y, "Хорошего дня!", s_font_regular, max_x, false);
+
+  draw_wrapped(ctx, left, y, width, "Хорошего дня!", s_font_regular);
 
   draw_status_bar(ctx, b);
 }

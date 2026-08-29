@@ -1,5 +1,6 @@
 var Clay = require('@rebble/clay');
 var clay = new Clay(require('./config'));
+var phoneBattery = null;
 
 function sendWeather(lat, lon) {
   var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m&temperature_unit=celsius';
@@ -50,10 +51,52 @@ function updateWeather() {
   }
 }
 
-Pebble.addEventListener('ready', updateWeather);
-Pebble.addEventListener('appmessage', function(e) {
-  if (e.payload.RequestWeather) updateWeather();
+function sendPhoneBatteryValue(level) {
+  var pct = Math.max(0, Math.min(100, Math.round(level * 100)));
+  Pebble.sendAppMessage({PhoneBattery: pct});
+}
+
+function updatePhoneBattery() {
+  try {
+    if (phoneBattery && typeof phoneBattery.level === 'number') {
+      sendPhoneBatteryValue(phoneBattery.level);
+      return;
+    }
+    if (navigator && typeof navigator.getBattery === 'function') {
+      navigator.getBattery().then(function(battery) {
+        phoneBattery = battery;
+        sendPhoneBatteryValue(battery.level);
+        if (battery.addEventListener) {
+          battery.addEventListener('levelchange', function() {
+            sendPhoneBatteryValue(battery.level);
+          });
+        }
+      }).catch(function(err) {
+        console.log('phone battery unavailable: ' + err);
+      });
+    } else {
+      console.log('phone battery API unavailable in PebbleKit JS');
+    }
+  } catch (e) {
+    console.log('phone battery error: ' + e);
+  }
+}
+
+Pebble.addEventListener('ready', function() {
+  updateWeather();
+  updatePhoneBattery();
 });
+
+Pebble.addEventListener('appmessage', function(e) {
+  if (e.payload.RequestWeather) {
+    updateWeather();
+    updatePhoneBattery();
+  }
+});
+
 Pebble.addEventListener('webviewclosed', function() {
-  setTimeout(updateWeather, 800);
+  setTimeout(function() {
+    updateWeather();
+    updatePhoneBattery();
+  }, 800);
 });

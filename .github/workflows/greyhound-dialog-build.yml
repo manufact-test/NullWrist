@@ -24,10 +24,12 @@ jobs:
       - name: Install Pebble SDK
         run: pebble sdk install latest
 
-      - name: Restore Cyrillic font
+      - name: Restore generated assets
         working-directory: greyhound-dialog
         run: |
           cat resources/fonts/dialog-mono-cyr.ttf.b64.part0 resources/fonts/dialog-mono-cyr.ttf.b64.part1 | base64 -d > resources/fonts/dialog-mono-cyr.ttf
+          mkdir -p resources/images
+          base64 -d resources/images/greyhound_status.png.b64 > resources/images/greyhound_status.png
 
       - name: Install JS dependencies
         working-directory: greyhound-dialog

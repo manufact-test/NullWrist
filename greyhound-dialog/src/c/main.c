@@ -59,10 +59,15 @@ static void draw_dog(GContext *ctx, GPoint o) {
 static void compose(void) {
   time_t now = time(NULL);
   struct tm *t = localtime(&now);
-  char tm_buf[12];
+  char tm_buf[16];
 
-  if (s_use_24h) strftime(tm_buf,sizeof(tm_buf),"%H:%M",t);
-  else strftime(tm_buf,sizeof(tm_buf),"%I:%M %p",t);
+  if (s_use_24h) {
+    strftime(tm_buf,sizeof(tm_buf),"%H:%M",t);
+  } else {
+    char base[8];
+    strftime(base,sizeof(base),"%I:%M",t);
+    snprintf(tm_buf,sizeof(tm_buf),"%s %s",base,t->tm_hour < 12 ? "дп" : "пп");
+  }
 
   uint32_t steps = 0;
   uint32_t hr = 0;
@@ -114,16 +119,14 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   graphics_context_set_stroke_width(ctx,2);
   graphics_draw_rect(ctx,bubble);
 
-  GPoint tri[] = {
-    {18,bubble.origin.y+bubble.size.h-1},
-    {29,bubble.origin.y+bubble.size.h-1},
-    {22,bubble.origin.y+bubble.size.h+9}
-  };
+  int tail_y = bubble.origin.y + bubble.size.h - 1;
   graphics_context_set_fill_color(ctx,s_bubble);
-  graphics_fill_polygon(ctx,tri,3);
+  graphics_fill_rect(ctx,GRect(18,tail_y,12,3),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(20,tail_y+3,8,3),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(22,tail_y+6,4,3),0,GCornerNone);
   graphics_context_set_stroke_color(ctx,s_border);
-  graphics_draw_line(ctx,tri[0],tri[2]);
-  graphics_draw_line(ctx,tri[2],tri[1]);
+  graphics_draw_line(ctx,GPoint(18,tail_y),GPoint(22,tail_y+9));
+  graphics_draw_line(ctx,GPoint(30,tail_y),GPoint(26,tail_y+9));
 
   graphics_context_set_text_color(ctx,s_text_color);
   graphics_draw_text(ctx,s_text,s_font,GRect(15,14,b.size.w-30,bubble.size.h-10),GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);

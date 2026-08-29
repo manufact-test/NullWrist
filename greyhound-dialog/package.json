@@ -50,7 +50,7 @@
         {
           "type": "font",
           "name": "FONT_DIALOG_BOLD_17",
-          "file": "fonts/dialog-mono-cyr-bold.ttf",
+          "file": "fonts/dialog-mono-cyr.ttf",
           "compatibility": "2.7",
           "characterRegex": "[А-Яа-яЁёA-Za-z0-9:,.!?° -]"
         }

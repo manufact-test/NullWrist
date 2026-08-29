@@ -1,60 +1,25 @@
 {
   "name": "greyhound-dialog",
   "author": "Ilya",
-  "version": "1.1.0",
-  "keywords": [
-    "pebble-app",
-    "watchface"
-  ],
+  "version": "1.2.0",
+  "keywords": ["pebble-app", "watchface"],
   "private": true,
-  "dependencies": {
-    "@rebble/clay": "^1.0.4"
-  },
+  "dependencies": {"@rebble/clay": "^1.0.4"},
   "pebble": {
     "displayName": "Greyhound Dialog",
     "uuid": "29d6ff43-25ac-4e9f-9e70-d1d7cf4300f2",
     "sdkVersion": "3",
     "enableMultiJS": true,
-    "targetPlatforms": [
-      "emery"
-    ],
-    "watchapp": {
-      "watchface": true
-    },
-    "capabilities": [
-      "configurable",
-      "location",
-      "health"
-    ],
+    "targetPlatforms": ["emery"],
+    "watchapp": {"watchface": true},
+    "capabilities": ["configurable", "location", "health"],
     "messageKeys": [
-      "Temperature",
-      "RequestWeather",
-      "BackgroundColor",
-      "BubbleColor",
-      "BorderColor",
-      "TextColor",
-      "AccentColor",
-      "Use24h",
-      "AutoLocation",
-      "ManualLocation"
+      "Temperature", "RequestWeather", "BackgroundColor", "BubbleColor", "BorderColor", "TextColor", "AccentColor", "StatusColor", "Use24h", "AutoLocation", "ManualLocation", "PhoneBattery"
     ],
-    "resources": {
-      "media": [
-        {
-          "type": "font",
-          "name": "FONT_DIALOG_15",
-          "file": "fonts/dialog-mono-cyr.ttf",
-          "compatibility": "2.7",
-          "characterRegex": "[А-Яа-яЁёA-Za-z0-9:,.!?° -]"
-        },
-        {
-          "type": "font",
-          "name": "FONT_DIALOG_BOLD_17",
-          "file": "fonts/dialog-mono-cyr.ttf",
-          "compatibility": "2.7",
-          "characterRegex": "[А-Яа-яЁёA-Za-z0-9:,.!?° -]"
-        }
-      ]
-    }
+    "resources": {"media": [
+      {"type":"font","name":"FONT_DIALOG_15","file":"fonts/dialog-mono-cyr.ttf","compatibility":"2.7","characterRegex":"[А-Яа-яЁёA-Za-z0-9:,.!?°% -]"},
+      {"type":"font","name":"FONT_DIALOG_BOLD_17","file":"fonts/dialog-mono-cyr.ttf","compatibility":"2.7","characterRegex":"[А-Яа-яЁёA-Za-z0-9:,.!?°% -]"},
+      {"type":"bitmap","name":"IMAGE_GREYHOUND","file":"images/greyhound_status.png"}
+    ]}
   }
 }

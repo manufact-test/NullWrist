@@ -6,7 +6,8 @@ module.exports = [
     {type:'color', messageKey:'BubbleColor', label:'Окно', defaultValue:'0xFFFFFF', allowGray:true},
     {type:'color', messageKey:'BorderColor', label:'Рамка', defaultValue:'0x000000', allowGray:true},
     {type:'color', messageKey:'TextColor', label:'Текст', defaultValue:'0x000000', allowGray:true},
-    {type:'color', messageKey:'AccentColor', label:'Акцент / ошейник', defaultValue:'0xFF5500', allowGray:true}
+    {type:'color', messageKey:'AccentColor', label:'Акцент / ошейник', defaultValue:'0xFF5500', allowGray:true},
+    {type:'color', messageKey:'StatusColor', label:'Батареи в нижней полосе', defaultValue:'0xFFFFFF', allowGray:true}
   ]},
   {type:'section', items:[
     {type:'heading', defaultValue:'Время и погода'},

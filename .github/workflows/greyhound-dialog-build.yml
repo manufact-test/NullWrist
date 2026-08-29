@@ -1,0 +1,49 @@
+name: Build Greyhound Dialog PBW
+
+on:
+  push:
+    branches:
+      - build/greyhound-dialog
+    paths:
+      - 'greyhound-dialog/**'
+      - '.github/workflows/greyhound-dialog-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install Pebble CLI
+        run: uv tool install pebble-tool
+
+      - name: Install Pebble SDK
+        run: pebble sdk install latest
+
+      - name: Restore Cyrillic font
+        working-directory: greyhound-dialog
+        run: |
+          cat resources/fonts/dialog-mono-cyr.ttf.b64.part0 resources/fonts/dialog-mono-cyr.ttf.b64.part1 | base64 -d > resources/fonts/dialog-mono-cyr.ttf
+
+      - name: Install JS dependencies
+        working-directory: greyhound-dialog
+        run: npm install
+
+      - name: Build PBW
+        working-directory: greyhound-dialog
+        run: pebble build
+
+      - name: Show build output
+        working-directory: greyhound-dialog
+        run: find build -maxdepth 2 -type f -print
+
+      - name: Upload PBW
+        uses: actions/upload-artifact@v4
+        with:
+          name: greyhound-dialog-pbw
+          path: greyhound-dialog/build/*.pbw
+          if-no-files-found: error

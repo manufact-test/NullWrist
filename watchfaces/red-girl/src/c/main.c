@@ -30,6 +30,10 @@ static GFont F14;
 static GFont F18;
 static GFont F30;
 
+static int clamp_i(int v, int lo, int hi) {
+  return v < lo ? lo : (v > hi ? hi : v);
+}
+
 static void txt(GContext *ctx, const char *text, GFont font, GColor color,
                 GRect box, GTextAlignment align) {
   graphics_context_set_text_color(ctx, color);
@@ -38,7 +42,7 @@ static void txt(GContext *ctx, const char *text, GFont font, GColor color,
 
 static void rr(GContext *ctx, GRect r, int radius, GColor fill, GColor stroke) {
   graphics_context_set_fill_color(ctx, fill);
-  graphics_fill_round_rect(ctx, r, radius, GCornersAll);
+  graphics_fill_rect(ctx, r, radius, GCornersAll);
   graphics_context_set_stroke_color(ctx, stroke);
   graphics_draw_round_rect(ctx, r, radius);
 }
@@ -162,7 +166,7 @@ static void draw_phone(GContext *ctx, int x, int y) {
 
 static void draw_bar(GContext *ctx, GRect r, int value, GColor color) {
   px_rect(ctx, r.origin.x,r.origin.y,r.size.w,r.size.h,GColorFromHEX(0x40180F));
-  int w = (r.size.w * CLAMP(value,0,100)) / 100;
+  int w = (r.size.w * clamp_i(value,0,100)) / 100;
   px_rect(ctx, r.origin.x,r.origin.y,w,r.size.h,color);
 }
 

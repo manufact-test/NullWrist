@@ -1,7 +1,7 @@
 {
   "name": "red-girl",
   "author": "Manufact / NullWrist",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "keywords": ["pebble-app"],
   "private": true,
   "dependencies": {},
@@ -18,6 +18,16 @@
       "WEATHER_TEMP": 2
     },
     "capabilities": ["health"],
-    "resources": {"media": []}
+    "resources": {
+      "media": [
+        {
+          "type": "bitmap",
+          "name": "IMAGE_RED_GIRL_BASE",
+          "file": "images/red-girl-base.png",
+          "targetPlatforms": ["emery"],
+          "memoryFormat": "Smallest"
+        }
+      ]
+    }
   }
 }

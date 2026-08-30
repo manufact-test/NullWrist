@@ -1,0 +1,19 @@
+top = '.'
+out = 'build'
+
+
+def options(ctx):
+    ctx.load('pebble_sdk')
+
+
+def configure(ctx):
+    ctx.load('pebble_sdk')
+
+
+def build(ctx):
+    ctx.load('pebble_sdk')
+    ctx.pbl_program(source=ctx.path.ant_glob('src/c/**/*.c'))
+    ctx.pbl_bundle(
+        js=ctx.path.ant_glob(['src/pkjs/**/*.js', 'src/pkjs/**/*.json', 'src/common/**/*.js']),
+        js_entry_file='src/pkjs/index.js'
+    )

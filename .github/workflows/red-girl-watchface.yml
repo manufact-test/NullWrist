@@ -1,0 +1,71 @@
+name: Build Red Girl watchface
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["feat/red-girl-watchface"]
+    paths:
+      - "watchfaces/red-girl/**"
+      - ".github/workflows/red-girl-watchface.yml"
+
+concurrency:
+  group: red-girl-watchface-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore Pebble SDK cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pebble-sdk/SDKs
+          key: pebble-sdk-latest-v1-${{ runner.os }}
+
+      - name: Install Pebble SDK prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            nodejs npm libsdl2-2.0-0 libglib2.0-0 libpixman-1-0 \
+            zlib1g libsndio7.0 bzip2
+          python -m pip install --upgrade uv
+          uv tool install --force pebble-tool
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install latest Pebble SDK
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          pebble sdk install latest
+          pebble sdk list
+
+      - name: Build Red Girl PBW
+        working-directory: watchfaces/red-girl
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          pebble build
+          test -f build/red-girl.pbw
+          cp build/red-girl.pbw build/Red-Girl-emery.pbw
+          sha256sum build/Red-Girl-emery.pbw | tee build/Red-Girl-emery.sha256
+
+      - name: Upload installable PBW
+        uses: actions/upload-artifact@v4
+        with:
+          name: red-girl-emery-pbw
+          path: |
+            watchfaces/red-girl/build/Red-Girl-emery.pbw
+            watchfaces/red-girl/build/Red-Girl-emery.sha256
+          if-no-files-found: error
+          retention-days: 30

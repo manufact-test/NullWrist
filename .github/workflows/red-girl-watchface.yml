@@ -45,10 +45,14 @@ jobs:
           uv tool install --force pebble-tool
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install latest Pebble SDK
+      - name: Ensure Pebble SDK
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          pebble sdk install latest
+          if pebble sdk list 2>&1 | grep -q "4.33.1"; then
+            echo "Pebble SDK 4.33.1 already restored from cache"
+          else
+            pebble sdk install latest
+          fi
           pebble sdk list
 
       - name: Build Red Girl PBW

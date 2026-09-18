@@ -22,8 +22,8 @@ jobs:
           pip install pebble-tool
       - name: Install SDK
         run: |
-          pebble sdk install 4.17
-          pebble sdk activate 4.17
+          pebble sdk install latest
+          pebble sdk activate 4.33.1
           pebble --version
       - name: Build
         working-directory: pebble/nosmokeblle

@@ -1,22 +1,27 @@
 # nosmokeblle
 
-Standalone quit-smoking tracker for Pebble.
+Retro-pixel quit-smoking companion for Pebble, designed first for Pebble Time 2 / Emery.
 
-Targets: aplite, basalt, chalk, diorite, emery.
+## Features
+- custom 5x7 bitmap text renderer with English and Russian uppercase glyphs
+- no system-font dependency for app UI text
+- smoke-free streak derived from last_smoked
+- cigarettes avoided and money saved
+- milestone progress and achievement screens
+- relapse confirmation flow
+- onboarding for last cigarette, cigarettes/day, cost/day and currency
+- statistics/settings and a 10-attempt persistence ring buffer
+- USD, EUR, PLN, RUB
+- Russian for ru* locales; English otherwise
 
-Current branch contains the first functional watch-side implementation:
-- EN/RU locale detection
-- persistent quit timestamp
-- cigarettes/day and money/day data model
-- smoke-free timer
-- avoided cigarettes
-- money saved
-- milestones
-- relapse confirmation
-- best streak / attempts / lifetime accumulation foundation
+## Controls
+Home: SELECT relapse confirmation, UP achievements, DOWN statistics, BACK exit.
 
-Build:
-```bash
-pebble sdk install 4.17
-pebble build
-```
+## Platforms
+aplite, basalt, chalk, diorite, emery. Emery is the primary target.
+
+## Build
+`pebble build`
+
+## Structure
+main.c lifecycle; ui.c custom UI/navigation; pixel_font.c bitmap renderer; icons.c pixel icons; storage.c persistence; calc.c math; milestones.c milestones; localization.c RU/EN.

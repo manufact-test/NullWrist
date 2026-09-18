@@ -32,7 +32,9 @@ jobs:
         run: |
           pebble clean || true
           pebble build
-          find build -maxdepth 4 -type f -print
+          test -f build/nosmokeblle.pbw
+          unzip -l build/nosmokeblle.pbw
+          unzip -l build/nosmokeblle.pbw | grep -q "emery/pebble-app.bin"
       - name: Upload PBW
         uses: actions/upload-artifact@v4
         with:

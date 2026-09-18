@@ -9,7 +9,10 @@ def configure(ctx):
 
 def build(ctx):
     ctx.load('pebble_sdk')
+    if hasattr(ctx, 'features') and 'report_memory_usage' in ctx.features:
+        ctx.features.remove('report_memory_usage')
     ctx.pbl_program(
         target='nosmokeblle',
-        source=ctx.path.ant_glob('src/c/*.c')
+        source=ctx.path.ant_glob('src/c/*.c'),
+        features='c cprogram'
     )

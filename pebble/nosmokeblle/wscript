@@ -9,4 +9,7 @@ def configure(ctx):
 
 def build(ctx):
     ctx.load('pebble_sdk')
-    ctx.pbl_program(source=ctx.path.ant_glob('src/c/*.c'))
+    ctx.pbl_program(
+        target='nosmokeblle',
+        source=ctx.path.ant_glob('src/c/*.c')
+    )

@@ -7,8 +7,9 @@ typedef struct {
   int money_cents_per_day;
   int attempts;
   time_t best_streak;
-  int64_t lifetime_avoided_milli;
-  int64_t lifetime_saved_cents_milli;
+  int32_t lifetime_avoided_milli;
+  int32_t lifetime_saved_cents_milli;
+  uint32_t notified_mask;
   bool configured;
 } AppState;
 

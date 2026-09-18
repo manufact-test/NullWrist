@@ -11,6 +11,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [emery, basalt, diorite, chalk, aplite]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,15 +29,15 @@ jobs:
           pebble sdk install latest
           pebble sdk activate 4.33.1
           pebble --version
-      - name: Build
+      - name: Build ${{ matrix.platform }}
         working-directory: pebble/nosmokeblle
         run: |
           pebble clean || true
-          pebble build
-          find build -maxdepth 3 -type f -print
+          pebble build --platform ${{ matrix.platform }}
+          find build -maxdepth 4 -type f -print
       - name: Upload PBW
         uses: actions/upload-artifact@v4
         with:
-          name: nosmokeblle-pbw
+          name: nosmokeblle-${{ matrix.platform }}-pbw
           path: pebble/nosmokeblle/build/*.pbw
           if-no-files-found: error

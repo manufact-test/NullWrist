@@ -1,0 +1,15 @@
+{
+  "name": "nosmokeblle",
+  "author": "MANUFACT",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "nosmokeblle",
+    "uuid": "a6d5908e-4e1d-4c76-a94f-c0e621e89b11",
+    "sdkVersion": "3",
+    "targetPlatforms": ["aplite","basalt","chalk","diorite","emery"],
+    "watchapp": { "watchface": false },
+    "resources": { "media": [] }
+  }
+}

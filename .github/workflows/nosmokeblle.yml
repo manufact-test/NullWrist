@@ -1,0 +1,39 @@
+name: Build nosmokeblle PBW
+on:
+  push:
+    branches: ["feature/nosmokeblle"]
+    paths:
+      - "pebble/nosmokeblle/**"
+      - ".github/workflows/nosmokeblle.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Pebble tool
+        run: |
+          python -m pip install --upgrade pip
+          pip install pebble-tool
+      - name: Install SDK
+        run: |
+          pebble sdk install 4.17
+          pebble sdk activate 4.17
+          pebble --version
+      - name: Build
+        working-directory: pebble/nosmokeblle
+        run: |
+          pebble clean || true
+          pebble build
+          find build -maxdepth 3 -type f -print
+      - name: Upload PBW
+        uses: actions/upload-artifact@v4
+        with:
+          name: nosmokeblle-pbw
+          path: pebble/nosmokeblle/build/*.pbw
+          if-no-files-found: error

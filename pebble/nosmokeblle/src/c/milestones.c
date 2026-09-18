@@ -1,25 +1,4 @@
 #include "milestones.h"
-const Milestone MILESTONES[]={
- {1200,"20 MIN","20 МИН"},
- {3600,"1 HOUR","1 ЧАС"},
- {28800,"8 HOURS","8 ЧАСОВ"},
- {43200,"12 HOURS","12 ЧАСОВ"},
- {86400,"1 DAY","1 ДЕНЬ"},
- {172800,"2 DAYS","2 ДНЯ"},
- {259200,"3 DAYS","3 ДНЯ"},
- {604800,"1 WEEK","1 НЕДЕЛЯ"},
- {1209600,"2 WEEKS","2 НЕДЕЛИ"},
- {2592000,"1 MONTH","1 МЕСЯЦ"},
- {7776000,"3 MONTHS","3 МЕСЯЦА"},
- {15552000,"6 MONTHS","6 МЕСЯЦЕВ"},
- {23328000,"9 MONTHS","9 МЕСЯЦЕВ"},
- {31536000,"1 YEAR","1 ГОД"},
- {63072000,"2 YEARS","2 ГОДА"},
- {94608000,"3 YEARS","3 ГОДА"},
- {157680000,"5 YEARS","5 ЛЕТ"},
- {315360000,"10 YEARS","10 ЛЕТ"},
- {473040000,"15 YEARS","15 ЛЕТ"}
-};
+const Milestone MILESTONES[]={{1200,"20 MIN","20 МИН","HEART RATE BEGINS TO DROP","ПУЛЬС НАЧИНАЕТ СНИЖАТЬСЯ",true},{3600,"1 HOUR","1 ЧАС","STREAK CONTINUES","СЕРИЯ ПРОДОЛЖАЕТСЯ",false},{28800,"8 HOURS","8 ЧАСОВ","CARBON MONOXIDE FALLS","УРОВЕНЬ УГАРНОГО ГАЗА СНИЖАЕТСЯ",true},{43200,"12 HOURS","12 ЧАСОВ","CARBON MONOXIDE NORMALIZES","УГАРНЫЙ ГАЗ ПРИХОДИТ К НОРМЕ",true},{86400,"24 HOURS","24 ЧАСА","STREAK CONTINUES","СЕРИЯ ПРОДОЛЖАЕТСЯ",false},{172800,"48 HOURS","48 ЧАСОВ","TASTE AND SMELL MAY IMPROVE","ВКУС И ОБОНЯНИЕ МОГУТ УЛУЧШИТЬСЯ",true},{259200,"72 HOURS","72 ЧАСА","BREATHING MAY FEEL EASIER","ДЫШАТЬ МОЖЕТ СТАТЬ ЛЕГЧЕ",true},{604800,"1 WEEK","1 НЕДЕЛЯ","STREAK CONTINUES","СЕРИЯ ПРОДОЛЖАЕТСЯ",false},{1209600,"2 WEEKS","2 НЕДЕЛИ","CIRCULATION MAY IMPROVE","КРОВООБРАЩЕНИЕ МОЖЕТ УЛУЧШИТЬСЯ",true},{2592000,"1 MONTH","1 МЕСЯЦ","STREAK CONTINUES","СЕРИЯ ПРОДОЛЖАЕТСЯ",false},{7776000,"3 MONTHS","3 МЕСЯЦА","LUNG FUNCTION MAY IMPROVE","РАБОТА ЛЕГКИХ МОЖЕТ УЛУЧШИТЬСЯ",true},{15552000,"6 MONTHS","6 МЕСЯЦЕВ","COUGHING MAY DECREASE","КАШЕЛЬ МОЖЕТ СТАТЬ РЕЖЕ",true},{23328000,"9 MONTHS","9 МЕСЯЦЕВ","STREAK CONTINUES","СЕРИЯ ПРОДОЛЖАЕТСЯ",false},{31536000,"1 YEAR","1 ГОД","HEART DISEASE RISK DROPS","РИСК БОЛЕЗНЕЙ СЕРДЦА СНИЖАЕТСЯ",true},{63072000,"2 YEARS","2 ГОДА","STREAK CONTINUES","СЕРИЯ ПРОДОЛЖАЕТСЯ",false},{94608000,"3 YEARS","3 ГОДА","STREAK CONTINUES","СЕРИЯ ПРОДОЛЖАЕТСЯ",false},{157680000,"5 YEARS","5 ЛЕТ","STROKE RISK CAN FALL","РИСК ИНСУЛЬТА МОЖЕТ СНИЗИТЬСЯ",true},{315360000,"10 YEARS","10 ЛЕТ","LUNG CANCER RISK IS LOWER","РИСК РАКА ЛЕГКИХ НИЖЕ",true},{473040000,"15 YEARS","15 ЛЕТ","HEART DISEASE RISK NEARS NONSMOKER","РИСК БОЛЕЗНЕЙ СЕРДЦА БЛИЗОК К НЕКУРЯЩЕМУ",true}};
 const int MILESTONE_COUNT=sizeof(MILESTONES)/sizeof(MILESTONES[0]);
-int milestone_next(time_t elapsed){for(int i=0;i<MILESTONE_COUNT;i++)if(elapsed<MILESTONES[i].seconds)return i;return -1;}
-const char *milestone_title(int i,AppLang l){if(i<0||i>=MILESTONE_COUNT)return "MAX";return l==LANG_RU?MILESTONES[i].ru_title:MILESTONES[i].en_title;}
+int milestone_next(time_t e){for(int i=0;i<MILESTONE_COUNT;i++)if(e<MILESTONES[i].seconds)return i;return -1;}int milestone_prev(time_t e){int p=-1;for(int i=0;i<MILESTONE_COUNT;i++){if(e>=MILESTONES[i].seconds)p=i;else break;}return p;}const char*milestone_title(int i,AppLang l){if(i<0||i>=MILESTONE_COUNT)return l==LANG_RU?"МАКС":"MAX";return l==LANG_RU?MILESTONES[i].ru:MILESTONES[i].en;}const char*milestone_desc(int i,AppLang l){if(i<0||i>=MILESTONE_COUNT)return l==LANG_RU?"СЕРИЯ ПРОДОЛЖАЕТСЯ":"STREAK CONTINUES";return l==LANG_RU?MILESTONES[i].ru_desc:MILESTONES[i].en_desc;}

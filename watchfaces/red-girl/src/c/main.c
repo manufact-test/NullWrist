@@ -89,7 +89,7 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   snprintf(daybuf, sizeof(daybuf), "%s", DAY[t->tm_wday]);
 
   /* Keep all five clock characters in the time box at every hour and minute. */
-  draw_text(ctx, timebuf, F_TIME, F_VALUE, F_SMALL, C_ORANGE, GRect(5, 17, 111, 38));
+  draw_text(ctx, timebuf, F_TIME, F_VALUE, F_SMALL, C_ORANGE, GRect(5, 17, 116, 38));
   draw_text(ctx, datebuf, F_DATE, F_TINY, F_TINY, C_ORANGE, GRect(8, 54, 76, 22));
 
   GRect day_rect = GRect(8, 74, 88, 18);
@@ -163,7 +163,7 @@ static void window_load(Window *window) {
   C_BLACK = GColorFromHEX(0x050303);
   C_CARD = GColorFromHEX(0x160604);
 
-  F_TIME = fonts_get_system_font(FONT_KEY_LECO_26_BOLD_NUMBERS_AM_PM);
+  F_TIME = fonts_get_system_font(FONT_KEY_LECO_28_LIGHT_NUMBERS);
   F_DATE = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
   F_DAY = fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
   F_VALUE = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);

@@ -48,11 +48,9 @@ jobs:
       - name: Ensure Pebble SDK
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          if pebble sdk list 2>&1 | grep -q "4.33.1"; then
-            echo "Pebble SDK 4.33.1 already restored from cache"
-          else
-            pebble sdk install latest
-          fi
+          # 'pebble sdk list' also prints available (not installed) versions.
+          # Always ensure the SDK and ARM toolchain are actually installed.
+          pebble sdk install 4.33.1
           pebble sdk list
 
       - name: Build Red Girl PBW

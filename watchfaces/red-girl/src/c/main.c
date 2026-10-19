@@ -13,6 +13,8 @@ static GFont F_DATE;
 static GFont F_DAY;
 static GFont F_VALUE;
 static GFont F_BATTERY;
+static GFont F_SMALL;
+static GFont F_TINY;
 static GColor C_ORANGE;
 static GColor C_MUTED;
 static GColor C_RED;
@@ -20,9 +22,27 @@ static GColor C_BAR_BG;
 static GColor C_BLACK;
 static GColor C_CARD;
 
-static void draw_text(GContext *ctx, const char *text, GFont font, GColor color, GRect r) {
+/* Measure against a full-width single line, not the small card. Otherwise the
+ * Pebble text engine can replace the end of a value (even the minutes) with ... */
+static bool text_fits(const char *text, GFont font, GRect r) {
+  GSize measured = graphics_text_layout_get_content_size(
+      text, font, GRect(0, 0, 200, r.size.h),
+      GTextOverflowModeWordWrap, GTextAlignmentLeft);
+  return measured.w <= r.size.w - 2 && measured.h <= r.size.h;
+}
+
+static void draw_text(GContext *ctx, const char *text, GFont preferred,
+                      GFont smaller, GFont smallest, GColor color, GRect r) {
+  GFont font = preferred;
+  if (!text_fits(text, font, r)) {
+    font = smaller;
+  }
+  if (!text_fits(text, font, r)) {
+    font = smallest;
+  }
   graphics_context_set_text_color(ctx, color);
-  graphics_draw_text(ctx, text, font, r, GTextOverflowModeFill, GTextAlignmentLeft, NULL);
+  graphics_draw_text(ctx, text, font, r,
+                     GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 }
 
 static void cover(GContext *ctx, GRect rect, GColor color) {
@@ -62,15 +82,23 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   char daybuf[24];
   static const char *MON[] = {"ЯНВ", "ФЕВ", "МАР", "АПР", "МАЙ", "ИЮН", "ИЮЛ", "АВГ", "СЕН", "ОКТ", "НОЯ", "ДЕК"};
   static const char *DAY[] = {"ВОСКРЕСЕНЬЕ", "ПОНЕДЕЛЬНИК", "ВТОРНИК", "СРЕДА", "ЧЕТВЕРГ", "ПЯТНИЦА", "СУББОТА"};
+  static const char *DAY_SHORT[] = {"ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"};
 
   strftime(timebuf, sizeof(timebuf), "%H:%M", t);
   snprintf(datebuf, sizeof(datebuf), "%d %s", t->tm_mday, MON[t->tm_mon]);
   snprintf(daybuf, sizeof(daybuf), "%s", DAY[t->tm_wday]);
 
-  /* Время стало крупнее и шире: минуты больше не режутся троеточием. */
-  draw_text(ctx, timebuf, F_TIME, C_ORANGE, GRect(5, 1, 111, 58));
-  draw_text(ctx, datebuf, F_DATE, C_ORANGE, GRect(8, 54, 76, 22));
-  draw_text(ctx, daybuf, F_DAY, C_MUTED, GRect(8, 74, 88, 18));
+  /* Keep all five clock characters in the time box at every hour and minute. */
+  draw_text(ctx, timebuf, F_TIME, F_VALUE, F_SMALL, C_ORANGE, GRect(5, 17, 111, 38));
+  draw_text(ctx, datebuf, F_DATE, F_TINY, F_TINY, C_ORANGE, GRect(8, 54, 76, 22));
+
+  GRect day_rect = GRect(8, 74, 88, 18);
+  const char *day_text = daybuf;
+  if (!text_fits(day_text, F_DAY, day_rect) &&
+      !text_fits(day_text, F_TINY, day_rect)) {
+    day_text = DAY_SHORT[t->tm_wday];
+  }
+  draw_text(ctx, day_text, F_DAY, F_TINY, F_TINY, C_MUTED, day_rect);
 
   char hr[8];
   char temp[8];
@@ -81,12 +109,12 @@ static void canvas_update(Layer *layer, GContext *ctx) {
   snprintf(wb, sizeof(wb), "%d%%", s_watch_battery);
   snprintf(pb, sizeof(pb), "%d%%", s_phone_battery);
 
-  /* Только крупные значения — без лишних подписей. */
-  draw_text(ctx, hr, F_VALUE, C_ORANGE, GRect(34, 104, 43, 34));
-  draw_text(ctx, temp, F_VALUE, C_ORANGE, GRect(34, 144, 45, 34));
+  /* Scale crowded numeric values down rather than losing their last digit. */
+  draw_text(ctx, hr, F_VALUE, F_SMALL, F_TINY, C_ORANGE, GRect(34, 104, 43, 34));
+  draw_text(ctx, temp, F_VALUE, F_SMALL, F_TINY, C_ORANGE, GRect(34, 144, 45, 34));
 
-  draw_text(ctx, wb, F_BATTERY, C_ORANGE, GRect(31, 184, 58, 31));
-  draw_text(ctx, pb, F_BATTERY, C_ORANGE, GRect(120, 184, 61, 31));
+  draw_text(ctx, wb, F_BATTERY, F_SMALL, F_TINY, C_ORANGE, GRect(31, 184, 58, 31));
+  draw_text(ctx, pb, F_BATTERY, F_SMALL, F_TINY, C_ORANGE, GRect(120, 184, 61, 31));
 
   draw_bar(ctx, 33, 215, 55, s_watch_battery, C_RED);
   draw_bar(ctx, 121, 215, 60, s_phone_battery, C_ORANGE);
@@ -135,11 +163,13 @@ static void window_load(Window *window) {
   C_BLACK = GColorFromHEX(0x050303);
   C_CARD = GColorFromHEX(0x160604);
 
-  F_TIME = fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
-  F_DATE = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
-  F_DAY = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
-  F_VALUE = fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK);
-  F_BATTERY = fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK);
+  F_TIME = fonts_get_system_font(FONT_KEY_LECO_26_BOLD_NUMBERS_AM_PM);
+  F_DATE = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+  F_DAY = fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
+  F_VALUE = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+  F_BATTERY = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+  F_SMALL = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+  F_TINY = fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD);
 
   s_bg = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_RED_GIRL_BASE);
   s_layer = layer_create(GRect(0, 0, 200, 228));

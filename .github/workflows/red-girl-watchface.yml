@@ -48,9 +48,15 @@ jobs:
       - name: Ensure Pebble SDK
         run: |
           export PATH="$HOME/.local/bin:$PATH"
-          # 'pebble sdk list' also prints available (not installed) versions.
-          # Always ensure the SDK and ARM toolchain are actually installed.
-          pebble sdk install 4.33.1
+          # 'pebble sdk list' also prints available versions. The installer
+          # returns a failure when a cached SDK is already present, so check
+          # the actual cross-compiler before attempting installation.
+          SDK_COMPILER="$HOME/.local/share/pebble-sdk/SDKs/4.33.1/toolchain/arm-none-eabi/bin/arm-none-eabi-gcc"
+          if [ -x "$SDK_COMPILER" ]; then
+            echo "Pebble SDK 4.33.1 and ARM compiler restored from cache"
+          else
+            pebble sdk install 4.33.1
+          fi
           pebble sdk list
 
       - name: Build Red Girl PBW

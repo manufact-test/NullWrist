@@ -59,6 +59,14 @@ jobs:
           fi
           pebble sdk list
 
+      - name: Generate Red Girl icon and cover
+        working-directory: watchfaces/red-girl
+        run: |
+          python -m pip install Pillow
+          python scripts/make_preview.py
+          test -f resources/images/red-girl-menu-icon.png
+          test -f previews/red-girl-cover.png
+
       - name: Build Red Girl PBW
         working-directory: watchfaces/red-girl
         run: |
@@ -75,5 +83,8 @@ jobs:
           path: |
             watchfaces/red-girl/build/Red-Girl-emery.pbw
             watchfaces/red-girl/build/Red-Girl-emery.sha256
+            watchfaces/red-girl/previews/red-girl-cover.png
+            watchfaces/red-girl/previews/red-girl-cover-2x.png
+            watchfaces/red-girl/resources/images/red-girl-menu-icon.png
           if-no-files-found: error
           retention-days: 30

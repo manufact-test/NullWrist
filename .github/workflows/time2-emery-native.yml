@@ -9,6 +9,10 @@ on:
       - ".github/workflows/time2-emery-native.yml"
   workflow_dispatch:
 
+concurrency:
+  group: time2-emery-native-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -21,6 +25,10 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
+      - name: Validate isolated scripts before installing the toolchain
+        run: |
+          bash -n time2/scripts/build_emery_qemu_android.sh
+          python3 -m py_compile time2/scripts/patch_qemu_emery_framebuffer.py
       - name: Install Android NDK and C build dependencies
         run: |
           sdkmanager "ndk;28.0.13004108"

@@ -21,3 +21,6 @@ Pixel mark (hand-coded 5x7, no external fonts), nearly-black graphite, hot orang
 Desktop upstream Emery M0 smoke entrypoint: `bash time2/scripts/m0_emery_desktop.sh` from the repository root on a Linux host with documented dependencies. Dedicated workflow: `.github/workflows/time2-emery-desktop.yml`. This stage builds and tests genuine QEMU Emery upstream on Linux; it does not create an Android emulator yet. [Brand guide](BRAND.md).
 
 For the future native renderer, `EmeryFrameProtocol` already implements validated 64-byte v2 snapshot reads, and `EmeryQmpClient` establishes a local, request/reply-checked QMP socket. See [frame transport](docs/FRAME-TRANSPORT-V2.md). Neither is presently attached to a running emulator.
+
+### Verified milestone (21 October 2026)
+The **real upstream Emery firmware** built and passed 4 Linux-QEMU integration tests for launcher/back/touch/swipe: [CI M0 run 39600331988](https://github.com/manufact-test/NullWrist/actions/runs/39600331988). PBW installation and native Android execution are not yet verified. The separate ARM64 native builder is currently an engineering experiment and not packaged in the Android app.

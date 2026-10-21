@@ -44,3 +44,9 @@ Store CI links, source hashes, signed APK hashes, physical-device logs and repro
 
 ## Native-build experiment (2026-10-21)
 Isolated script `time2/scripts/build_emery_qemu_android.sh` uses pinned QEMU `8a0a7c6`, Android NDK 28, ARM64 API35, compile-time framebuffer v2 exporting *final rendered ARGB8888* from generic Emery display. Adds Android shm shim without touching Basalt. CI: `.github/workflows/time2-emery-native.yml`. **Not ready for distribution until it passes and the binary boots real firmware on-device.**
+
+## M0 desktop outcome — verified 2026-10-21
+M0 firmware boot and controls sub-gate **PASS**: GitHub Actions run `39600331988` compiled pinned `qemu_emery` firmware and executed **four upstream integration cases**: launcher opens, back returns home, swipe scrolls, touch opens a menu item. Result: **4 passed in 87.36s**. This is native Linux QEMU, NOT Android. Full original M0 still requires installation and launch of a third-party Emery PBW, tracked separately. Do not mark M1 (Android native boot) as complete based on this result.
+
+## M1 Android builder first-attempt notes
+The initial experimental workflow `39601332647` failed before starting compilation because the generated shell script contained malformed duplicated trailing lines. The old Android project and its artifacts were not affected. Fixed in Time2 branch; future runs must pass `bash -n` before toolchain installation. Native proof is still pending.

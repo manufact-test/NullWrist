@@ -224,9 +224,13 @@ build_qemu() {
   file "$OUTPUT_DIR/libnullwrist_emery_qemu.so"
   "$READELF" -h "$OUTPUT_DIR/libnullwrist_emery_qemu.so"
   "$READELF" -d "$OUTPUT_DIR/libnullwrist_emery_qemu.so" || true
-  echo "Registered Pebble machine strings (must include pebble-emery):"
+  echo "Registered Pebble machines (must include pebble-emery):"
   strings "$OUTPUT_DIR/libnullwrist_emery_qemu.so" \
-    | grep -E '^pebble-[a-z0-9-]+
+    | grep -E '^pebble-[a-z0-9-]+$' | sort -u || true
+  if ! strings "$OUTPUT_DIR/libnullwrist_emery_qemu.so" | grep -F 'pebble-emery' >/dev/null; then
+    echo "Emery QEMU machine registration was not found" >&2
+    exit 1
+  fi
   sha256sum "$OUTPUT_DIR/libnullwrist_emery_qemu.so" > "$OUTPUT_DIR/libnullwrist_emery_qemu.so.sha256"
 }
 
@@ -238,19 +242,4 @@ build_glib
 build_pixman
 build_qemu
 
-echo "NullWrist Time 2 Emery ARM64 QEMU experimental build complete: $OUTPUT_DIR/libnullwrist_emery_qemu.so"
- \
-    | sort -u || true
-  strings "$OUTPUT_DIR/libnullwrist_emery_qemu.so" | grep -q pebble-emery || { echo "Emery machine missing" >&2; exit 1; }
-  sha256sum "$OUTPUT_DIR/libnullwrist_emery_qemu.so" > "$OUTPUT_DIR/libnullwrist_emery_qemu.so.sha256"
-}
-
-write_cross_file
-build_zlib
-build_libffi
-build_pcre2
-build_glib
-build_pixman
-build_qemu
-
-echo "NullWrist Time 2 Emery ARM64 QEMU experimental build complete: $OUTPUT_DIR/libnullwrist_emery_qemu.so"
+echo "NullWrist Time 2 Emery ARM64 experiment built: $OUTPUT_DIR/libnullwrist_emery_qemu.so"

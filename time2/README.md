@@ -19,3 +19,5 @@ See [MASTER.md](MASTER.md). Upstream Emery firmware is built as `pbl configure -
 Pixel mark (hand-coded 5x7, no external fonts), nearly-black graphite, hot orange `#FF6D00`; discreet white text. Preserve authentic Pebble LCD pixels rather than interpolating them. Rear preview verifies touch coordinate transforms and virtual button placement; **it is not a running OS**.
 
 Desktop upstream Emery M0 smoke entrypoint: `bash time2/scripts/m0_emery_desktop.sh` from the repository root on a Linux host with documented dependencies. Dedicated workflow: `.github/workflows/time2-emery-desktop.yml`. This stage builds and tests genuine QEMU Emery upstream on Linux; it does not create an Android emulator yet. [Brand guide](BRAND.md).
+
+For the future native renderer, `EmeryFrameProtocol` already implements validated 64-byte v2 snapshot reads, and `EmeryQmpClient` establishes a local, request/reply-checked QMP socket. See [frame transport](docs/FRAME-TRANSPORT-V2.md). Neither is presently attached to a running emulator.

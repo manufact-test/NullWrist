@@ -73,8 +73,8 @@ public final class EmeryRuntime {
                 argv.add("-monitor"); argv.add("none");
                 argv.add("-qmp"); argv.add("unix:"+assets.qmp.getAbsolutePath()+",server=on,wait=off");
                 argv.add("-serial");argv.add("null");
-                argv.add("-serial");argv.add("tcp:127.0.0.1:0,server=on,wait=off");
-                argv.add("-serial");argv.add("tcp:127.0.0.1:0,server=on,wait=off");
+                argv.add("-serial");argv.add("unix:"+new File(assets.root,"pebble.sock").getAbsolutePath()+",server=on,wait=off");
+                argv.add("-serial");argv.add("unix:"+new File(assets.root,"console.sock").getAbsolutePath()+",server=on,wait=off");
                 argv.add("-machine");argv.add("pebble-emery,audiodev=snd0");
                 argv.add("-audiodev");argv.add("none,id=snd0");
                 argv.add("-kernel");argv.add(assets.elf.getAbsolutePath());

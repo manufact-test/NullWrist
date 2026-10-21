@@ -2,6 +2,7 @@ package com.manufacttest.nullwrist.time2;
 
 import android.content.Context;
 import java.io.File;
+import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -24,6 +25,7 @@ public final class EmeryAssets {
     public static final String NATIVE = "libnullwrist_emery_qemu.so";
     private static final String ROOT = "emery/";
     private static final long MAX_ASSET_BYTES = 25L * 1024 * 1024;
+    private static final long MAX_NATIVE_BYTES = 128L * 1024 * 1024;
 
     private EmeryAssets() {}
 
@@ -50,7 +52,7 @@ public final class EmeryAssets {
         Map<String,String> qemuHash=readManifest(context,ROOT+"native.sha256");
 
         File qemu=new File(context.getApplicationInfo().nativeLibraryDir,NATIVE);
-        validateHash(qemu,requiredHash(qemuHash,NATIVE));
+        validateHash(qemu,requiredHash(qemuHash,NATIVE),MAX_NATIVE_BYTES);
 
         File elf=new File(privateRoot,ELF);
         if (!elf.isFile() || !hash(elf).equals(requiredHash(expected,ELF))) {
@@ -68,17 +70,22 @@ public final class EmeryAssets {
     }
 
     private static Map<String,String> readManifest(Context c,String path) throws IOException {
-        byte[] bytes=new byte[4096];
-        int count;
-        try(InputStream stream=c.getAssets().open(path)){
-            count=stream.read(bytes);
-            if(count<=0 || stream.read()!=-1) throw new IOException("Invalid manifest size");
+        ByteArrayOutputStream output=new ByteArrayOutputStream();
+        try (InputStream stream=c.getAssets().open(path)) {
+            byte[] chunk=new byte[1024];
+            int n;
+            while((n=stream.read(chunk))!=-1){
+                if(output.size()+n>4096) throw new IOException("Manifest too large");
+                output.write(chunk,0,n);
+            }
         }
+        if(output.size()==0)throw new IOException("Empty artifact hash manifest");
+        String manifest=new String(output.toByteArray(),StandardCharsets.UTF_8);
         Map<String,String> result=new HashMap<>();
-        for(String raw:new String(bytes,0,count,StandardCharsets.UTF_8).split("\n")){
+        for(String raw:manifest.split("\n")){
             String line=raw.trim();
             if(line.isEmpty()) continue;
-            String[] fields=line.split("\s+",2);
+            String[] fields=line.split("\\s+",2);
             if(fields.length!=2 || !fields[0].matches("(?i)[a-f0-9]{64}"))
                 throw new IOException("Malformed artifact hash manifest");
             String name=fields[1].trim().replaceFirst("^[* ]+","");
@@ -97,15 +104,15 @@ public final class EmeryAssets {
 
     private static String hash(File file) throws IOException {
         try(FileInputStream stream=new FileInputStream(file)){
-            return hex(digest(stream));
+            return hex(digest(stream,file.getName().equals(NATIVE) ? MAX_NATIVE_BYTES : MAX_ASSET_BYTES));
         }
     }
-    private static void validateHash(File file,String sha) throws IOException {
-        if(!file.isFile() || file.length()<1 || file.length()>MAX_ASSET_BYTES
+    private static void validateHash(File file,String sha,long maxSize) throws IOException {
+        if(!file.isFile() || file.length()<1 || file.length()>maxSize
                 || !hash(file).equals(sha))
             throw new IOException("Emery artifact SHA-256 mismatch: "+file.getName());
     }
-    private static byte[] digest(InputStream stream) throws IOException {
+    private static byte[] digest(InputStream stream,long maxSize) throws IOException {
         final MessageDigest md;
         try { md=MessageDigest.getInstance("SHA-256"); }
         catch(NoSuchAlgorithmException e){throw new IOException("SHA-256 unavailable",e);}
@@ -114,7 +121,7 @@ public final class EmeryAssets {
         int n;
         while((n=stream.read(buffer))!=-1){
             total+=n;
-            if(total>MAX_ASSET_BYTES) throw new IOException("Emery asset too large");
+            if(total>maxSize) throw new IOException("Emery asset too large");
             md.update(buffer,0,n);
         }
         return md.digest();
@@ -139,7 +146,7 @@ public final class EmeryAssets {
                 }
                 out.getFD().sync();
             }
-            validateHash(tmp,expected);
+            validateHash(tmp,expected,MAX_ASSET_BYTES);
             if(output.exists() && !output.delete()) throw new IOException("Cannot replace corrupt immutable firmware");
             if(!tmp.renameTo(output)) throw new IOException("Cannot install emulator asset atomically");
         } finally {

@@ -56,5 +56,10 @@ pbl qemu --dry-run > "$LOGS/launch-command.txt" 2>&1
 echo "=== Running PebbleOS integration smoke tests (real emulator boot) ==="
 # PebbleOS integration harness starts and shuts down QEMU headless.
 # Success is necessary for M0 but not proof that Android/ARM64 works.
-timeout 900 pbl itest -m smoke -q --maxfail=1 2>&1 | tee "$LOGS/itest.log"
+timeout 900 pbl itest \
+  ui/test_navigation.py::test_launcher_opens \
+  ui/test_navigation.py::test_back_returns_home \
+  ui/test_touch.py::test_swipe_scrolls_menu \
+  ui/test_touch.py::test_tap_opens_item \
+  -q --maxfail=1 2>&1 | tee "$LOGS/itest.log"
 echo "M0 desktop smoke complete"

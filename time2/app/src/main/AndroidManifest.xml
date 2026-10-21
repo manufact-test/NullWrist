@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- No network, notification, background or sensitive-data permissions until a real backend needs them. -->
+    <application
+        android:allowBackup="false"
+        android:label="NullWrist Time 2"
+        android:theme="@style/Theme.NullWristTime2"
+        android:usesCleartextTraffic="false">
+        <activity android:name=".RearActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

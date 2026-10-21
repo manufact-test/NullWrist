@@ -1,0 +1,141 @@
+package com.manufacttest.nullwrist.time2;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
+import android.view.Display;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
+
+/** Fresh app shell. Never claims an emulator was started before native bootstrap exists. */
+public final class MainActivity extends Activity {
+    private static final int IMPORT_PBW = 26;
+    private static final int BG = Color.rgb(8,9,13);
+    private static final int ORANGE = Color.rgb(255,109,0);
+    private static final int WHITE = Color.rgb(235,236,232);
+    private LinearLayout layout;
+    private LocalPbwLibrary library;
+
+    @Override protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        Display display=getDisplay();
+        int width=getResources().getDisplayMetrics().widthPixels;
+        int height=getResources().getDisplayMetrics().heightPixels;
+        boolean secondary=display!=null && display.getDisplayId()!=Display.DEFAULT_DISPLAY;
+        if (secondary || (width<=700 && height<=820)) {
+            Intent rear=new Intent(this,RearActivity.class);
+            startActivity(rear);
+            finish();
+            return;
+        }
+        library=new LocalPbwLibrary(this);
+        render();
+    }
+
+    private void render() {
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(true); scroll.setBackgroundColor(BG);
+        layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int pad=dp(20);
+        layout.setPadding(pad,dp(24),pad,dp(40));
+        scroll.addView(layout);
+        setContentView(scroll);
+
+        PixelWordmarkView logo=new PixelWordmarkView(this);
+        layout.addView(logo,new LinearLayout.LayoutParams(-1,dp(54)));
+        addText("TIME 2  //  EMERY EDITION",14,ORANGE,Gravity.CENTER,dp(2));
+        addText("VIRTUAL PEBBLEOS ON TITAN 2",11,WHITE,Gravity.CENTER,dp(10));
+
+        section("01 / CORE STATUS");
+        addText("EMERY ENGINE: NOT INSTALLED",15,ORANGE,Gravity.START,dp(8));
+        addText("Fresh standalone app. No firmware, QEMU image or runnable PebbleOS session has been bundled yet. Nothing is emulated in this preview.",12,WHITE,Gravity.START,dp(10));
+        button("OPEN REAR INPUT PREVIEW",()->startActivity(new Intent(this,RearActivity.class)));
+
+        section("02 / WATCH APPS & FACES");
+        button("IMPORT EMERY .PBW",()->{
+            Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            picker.setType("*/*");
+            picker.addCategory(Intent.CATEGORY_OPENABLE);
+            startActivityForResult(picker,IMPORT_PBW);
+        });
+        List<EmeryPackageIndex.PackageInfo> entries=library.list();
+        addText("LOCAL LIBRARY: "+entries.size()+" PACKAGE(S)",12,ORANGE,Gravity.START,dp(6));
+        for (EmeryPackageIndex.PackageInfo entry:entries) {
+            addText((entry.watchface?"[FACE] ":"[APP] ")+entry.name
+                    +"\n"+entry.author+" / "+entry.uuid,11,WHITE,Gravity.START,dp(8));
+        }
+        if(entries.isEmpty())
+            addText("No Emery PBWs imported. Imported files are only inspected and stored; they cannot run until the runtime is integrated.",11,WHITE,Gravity.START,dp(6));
+
+        section("03 / SAFETY");
+        addText("Independent application ID / private storage. Does not alter or migrate the existing NullWrist 0.8.12. No network or notification access requested.",11,WHITE,Gravity.START,dp(8));
+        button("VIEW BUILD STATUS",()->new AlertDialog.Builder(this)
+                .setTitle("NullWrist Time 2 / 0.1.0-dev")
+                .setMessage("Completed: project isolation, raster branding, Emery display mapping, touch diagnostics and PBW library.\n\nNot completed: Emery firmware boot, Android QEMU backend, app execution, phone services, real device tests.")
+                .setPositiveButton("OK",null).show());
+    }
+
+    @Override protected void onActivityResult(int request,int result,Intent data) {
+        super.onActivityResult(request,result,data);
+        if(request!=IMPORT_PBW || result!=RESULT_OK || data==null || data.getData()==null) return;
+        try {
+            EmeryPackageIndex.PackageInfo info=library.importPbw(data.getData());
+            new AlertDialog.Builder(this).setTitle("Imported")
+                    .setMessage(info.name+"\n"+(info.watchface?"Watchface":"Watchapp")
+                            +"\n\nStored safely. Execution requires the future Emery runtime.")
+                    .setPositiveButton("OK",null).show();
+            render();
+        } catch(IOException error) {
+            new AlertDialog.Builder(this).setTitle("Import rejected")
+                    .setMessage(error.getMessage()).setPositiveButton("OK",null).show();
+        }
+    }
+
+    private void section(String title) {
+        TextView label=text(title,13,ORANGE,Gravity.START);
+        label.setPadding(0,dp(20),0,dp(12));
+        layout.addView(label);
+        View line=new View(this);
+        line.setBackgroundColor(ORANGE);
+        layout.addView(line,new LinearLayout.LayoutParams(-1,dp(2)));
+    }
+    private void addText(String value,int size,int color,int gravity,int topMargin) {
+        TextView view=text(value,size,color,gravity);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);
+        params.topMargin=topMargin; layout.addView(view,params);
+    }
+    private TextView text(String text,int size,int color,int gravity) {
+        TextView view=new TextView(this);
+        view.setText(text); view.setTextColor(color); view.setTextSize(size);
+        view.setGravity(gravity); view.setTypeface(Typeface.MONOSPACE);
+        view.setLineSpacing(dp(4),1f);
+        return view;
+    }
+    private void button(String text,Runnable callback) {
+        Button button=new Button(this);
+        button.setAllCaps(false);
+        button.setText(text); button.setTextColor(BG);
+        button.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
+        button.setTextSize(12);
+        GradientDrawable bg=new GradientDrawable();
+        bg.setColor(ORANGE); bg.setCornerRadius(0);
+        button.setBackground(bg);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(55));
+        params.topMargin=dp(12);
+        layout.addView(button,params);
+        button.setOnClickListener(v->callback.run());
+    }
+    private int dp(float x) { return (int)(x*getResources().getDisplayMetrics().density+.5f); }
+}

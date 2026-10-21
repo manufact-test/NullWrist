@@ -1,0 +1,19 @@
+# NullWrist Time 2 — standalone Android project
+
+**Status: 0.1.0-dev, NOT yet a PebbleOS emulator.** Current deliverables are an independently installable Android shell, real 200x228 geometry and letterbox touch calibration, orange bitmap wordmark, button/touch probes and safe Emery PBW metadata import. No firmware or QEMU binary is bundled; no PBW actually executes. Do not market a preview APK as fully functional.
+
+## Isolation invariant
+
+- Old app: `app/`, package `com.manufacttest.pebblereardisplay`, releases up to 0.8.12. **UNCHANGED.**
+- New app: `time2/app/`, package `com.manufacttest.nullwrist.time2`, independent internal storage, launch icon/signature and Gradle build.
+- Build with `cd time2 && gradle :app:testDebugUnitTest :app:assembleDebug` using JDK 17, Android SDK 36, Gradle 9.5.0. Output: `time2/app/build/outputs/apk/debug/app-debug.apk`.
+- Run code and emulator builds only on the isolated feature branch. Old binaries, old flash, previous tags and releases must not be modified.
+- Do not request notifications, network, location or background access until a feature needs and justifies it.
+
+## Technical spec and gates
+
+See [MASTER.md](MASTER.md). Upstream Emery firmware is built as `pbl configure --board qemu_emery && pbl build` and booted using `pbl qemu`. Emulating a Pebble Time 2 on Android requires a separate cross-built QEMU with full Emery peripherals, a framebuffer transport, QMP input, PBW installation and explicit Android service adapters. No shortcuts using fake PNG watchfaces. A native simulator cannot execute PBWs.
+
+## Design
+
+Pixel mark (hand-coded 5x7, no external fonts), nearly-black graphite, hot orange `#FF6D00`; discreet white text. Preserve authentic Pebble LCD pixels rather than interpolating them. Rear preview verifies touch coordinate transforms and virtual button placement; **it is not a running OS**.

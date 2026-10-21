@@ -41,3 +41,6 @@ Core Devices QEMU `hw/arm/pebble_generic.c` defines `-machine pebble-emery` / `c
 
 ## Acceptance evidence 
 Store CI links, source hashes, signed APK hashes, physical-device logs and reproduction steps in this directory as milestones complete. No build success alone proves PebbleOS actually boots on Titan 2.
+
+## Native-build experiment (2026-10-21)
+Isolated script `time2/scripts/build_emery_qemu_android.sh` uses pinned QEMU `8a0a7c6`, Android NDK 28, ARM64 API35, compile-time framebuffer v2 exporting *final rendered ARGB8888* from generic Emery display. Adds Android shm shim without touching Basalt. CI: `.github/workflows/time2-emery-native.yml`. **Not ready for distribution until it passes and the binary boots real firmware on-device.**

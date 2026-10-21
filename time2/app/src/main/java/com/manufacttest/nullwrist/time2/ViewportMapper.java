@@ -46,9 +46,9 @@ public final class ViewportMapper {
         if (!Float.isFinite(x) || !Float.isFinite(y)
                 || x < left || y < top || x >= right || y >= bottom) return null;
         int px = Math.min(sourceWidth - 1,
-                (int) ((x - left) * sourceWidth / (right - left)));
+                (int) Math.floor(((x - left) * sourceWidth / (right - left)) + 0.0001d));
         int py = Math.min(sourceHeight - 1,
-                (int) ((y - top) * sourceHeight / (bottom - top)));
+                (int) Math.floor(((y - top) * sourceHeight / (bottom - top)) + 0.0001d));
         return new Point(px, py);
     }
 

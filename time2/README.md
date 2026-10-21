@@ -1,6 +1,6 @@
 # NullWrist Time 2 — standalone Android project
 
-**Status: 0.1.0-dev, NOT yet a PebbleOS emulator.** Current deliverables are an independently installable Android shell, real 200x228 geometry and letterbox touch calibration, orange bitmap wordmark, button/touch probes and safe Emery PBW metadata import. No firmware or QEMU binary is bundled; no PBW actually executes. Do not market a preview APK as fully functional.
+**Status: 0.1.0-dev, NOT yet a PebbleOS emulator.** Current deliverables are an independently installable Android shell, real 200x228 geometry and letterbox touch calibration, orange bitmap wordmark and raster launcher icon, QMP command encoding, button/touch probes and safe Emery PBW metadata import. No firmware or QEMU binary is bundled; no PBW actually executes. Do not market a preview APK as fully functional.
 
 ## Isolation invariant
 

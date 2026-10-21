@@ -36,5 +36,8 @@ Do not claim a functional Emery runtime until M1-M3 are demonstrated; do not cal
 - Android 16 rear-screen navigation/gesture blocking must be tested on device; no assumption that Android gestures can always be intercepted.
 - GPL-3.0 Android companion source is useful protocol reference but not automatically acceptable for reuse without correct license compliance.
 
+## Established QEMU device names (source-verified 2026-10-21)
+Core Devices QEMU `hw/arm/pebble_generic.c` defines `-machine pebble-emery` / `cortex-m33`, unlike the firmware *build-board name* `qemu_emery`. Touch is QMP `input-send-event` with ABS X/Y and BTN left; pebble_touch.c scales from QEMU absolute input range. `EmeryQmpCommands` builds serialized messages for the future transport; input is still diagnostic-only. Source pinning: `upstream.lock.json`.
+
 ## Acceptance evidence 
 Store CI links, source hashes, signed APK hashes, physical-device logs and reproduction steps in this directory as milestones complete. No build success alone proves PebbleOS actually boots on Titan 2.

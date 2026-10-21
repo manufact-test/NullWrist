@@ -3,6 +3,8 @@
     <!-- No network, notification, background or sensitive-data permissions until a real backend needs them. -->
     <application
         android:allowBackup="false"
+        android:icon="@drawable/ic_nullwrist_time2"
+        android:roundIcon="@drawable/ic_nullwrist_time2"
         android:label="NullWrist Time 2"
         android:theme="@style/Theme.NullWristTime2"
         android:usesCleartextTraffic="false">

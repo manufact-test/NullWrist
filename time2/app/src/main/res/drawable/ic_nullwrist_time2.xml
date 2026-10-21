@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#08090D" android:pathData="M0,0 H108 V108 H0 Z"/>
+    <!-- Pixel-art N mark, warm orange on true graphite. No external font. -->
+    <path android:fillColor="#FF6D00"
+        android:pathData="M22,24 H35 V84 H22 Z M73,24 H86 V84 H73 Z
+        M35,30 H42 V41 H35 Z M42,39 H50 V50 H42 Z
+        M50,47 H58 V58 H50 Z M58,55 H66 V66 H58 Z
+        M66,63 H73 V74 H66 Z"/>
+    <path android:fillColor="#FF9C1F"
+        android:pathData="M15,16 H22 V23 H15 Z M86,85 H93 V92 H86 Z"/>
+</vector>

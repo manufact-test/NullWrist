@@ -59,9 +59,13 @@ public final class MainActivity extends Activity {
         addText("VIRTUAL PEBBLEOS ON TITAN 2",11,WHITE,Gravity.CENTER,dp(10));
 
         section("01 / CORE STATUS");
-        addText("EMERY ENGINE: NOT INSTALLED",15,ORANGE,Gravity.START,dp(8));
-        addText("Fresh standalone app. No firmware, QEMU image or runnable PebbleOS session has been bundled yet. Nothing is emulated in this preview.",12,WHITE,Gravity.START,dp(10));
-        button("OPEN REAR INPUT PREVIEW",()->startActivity(new Intent(this,RearActivity.class)));
+        boolean lab=EmeryAssets.isBundled(this);
+        addText(lab?"EMERY ENGINE: DEVICE LAB ASSETS PRESENT":
+                    "EMERY ENGINE: NOT BUNDLED",15,ORANGE,Gravity.START,dp(8));
+        addText(lab?"Experimental native firmware/QEMU bundle present. Boots in foreground and needs physical Titan 2 validation before claiming runtime support.":
+                    "The ordinary source build contains no native QEMU or Emery firmware. The rear screen is an input-only preview.",12,WHITE,Gravity.START,dp(10));
+        button(lab?"BOOT EMERY (DEVICE LAB)":"OPEN REAR INPUT PREVIEW",
+                    ()->startActivity(new Intent(this,RearActivity.class)));
 
         section("02 / WATCH APPS & FACES");
         button("IMPORT EMERY .PBW",()->{
@@ -83,7 +87,7 @@ public final class MainActivity extends Activity {
         addText("Independent application ID / private storage. Does not alter or migrate the existing NullWrist 0.8.12. No network or notification access requested.",11,WHITE,Gravity.START,dp(8));
         button("VIEW BUILD STATUS",()->new AlertDialog.Builder(this)
                 .setTitle("NullWrist Time 2 / 0.1.0-dev")
-                .setMessage("Completed: project isolation, raster branding, Emery display mapping, touch diagnostics and PBW library.\n\nNot completed: Emery firmware boot, Android QEMU backend, app execution, phone services, real device tests.")
+                .setMessage("Completed: project isolation, raster branding, Emery display mapping, touch diagnostics and PBW library.\n\nNot completed: on-device Emery boot verification, app execution, phone services, hardware stability tests. Device-lab APK bundles an experimental runtime; ordinary APK remains preview-only.")
                 .setPositiveButton("OK",null).show());
     }
 

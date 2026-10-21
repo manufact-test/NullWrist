@@ -8,11 +8,14 @@ android {
         minSdk = 35
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0-dev"
+        versionName = "0.2.0-lab"
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
     }
     buildTypes {
         release { isMinifyEnabled = false }
+    }
+    packaging {
+        jniLibs { useLegacyPackaging = true }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

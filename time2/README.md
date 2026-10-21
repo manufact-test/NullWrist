@@ -24,3 +24,5 @@ For the future native renderer, `EmeryFrameProtocol` already implements validate
 
 ### Verified milestone (21 October 2026)
 The **real upstream Emery firmware** built and passed 4 Linux-QEMU integration tests for launcher/back/touch/swipe: [CI M0 run 39600331988](https://github.com/manufact-test/NullWrist/actions/runs/39600331988). PBW installation and native Android execution are not yet verified. The separate ARM64 native builder is currently an engineering experiment and not packaged in the Android app.
+
+Experimental device-lab pipeline and staged on-phone QEMU entrypoint: [DEVICE-LAB.md](docs/DEVICE-LAB.md). This is not a release or proven Titan2 runtime; device tests are required.

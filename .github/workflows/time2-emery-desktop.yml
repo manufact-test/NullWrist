@@ -8,6 +8,10 @@ on:
       - ".github/workflows/time2-emery-desktop.yml"
   workflow_dispatch:
 
+concurrency:
+  group: time2-emery-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -34,3 +38,10 @@ jobs:
           name: time2-emery-desktop-m0
           path: time2/m0-results/
           if-no-files-found: warn
+      - name: Upload hash-verified Emery development firmware images
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: time2-emery-desktop-firmware
+          path: time2/m0-results/firmware/
+          if-no-files-found: error

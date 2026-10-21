@@ -63,3 +63,15 @@ timeout 900 pbl itest \
   ui/test_touch.py::test_tap_opens_item \
   -q --maxfail=1 2>&1 | tee "$LOGS/itest.log"
 echo "M0 desktop smoke complete"
+echo "=== Exporting independently reproducible Emery development firmware images ==="
+mkdir -p "$LOGS/firmware"
+for item in pebbleos.elf qemu_micro_flash.bin qemu_spi_flash.bin; do
+    input="$LAB/PebbleOS/build/$item"
+    test -s "$input" || { echo "Missing Emery firmware asset: $item" >&2; exit 1; }
+    cp "$input" "$LOGS/firmware/$item"
+done
+(
+  cd "$LOGS/firmware"
+  sha256sum pebbleos.elf qemu_micro_flash.bin qemu_spi_flash.bin > SHA256SUMS
+)
+echo "Prepared development-only Emery images with per-file SHA-256"

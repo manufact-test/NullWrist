@@ -4,8 +4,8 @@ on:
   push:
     branches: ["feature/time2-standalone"]
     paths:
-      - "time2/app/src/main/java/com/manufacttest/nullwrist/time2/EmeryAssets.java"
-      - "time2/app/src/main/java/com/manufacttest/nullwrist/time2/EmeryRuntime.java"
+      - "time2/app/src/main/java/com/manufacttest/nullwrist/time2/**"
+      - "time2/app/build.gradle.kts"
       - ".github/workflows/time2-device-lab.yml"
   workflow_dispatch:
 

@@ -15,12 +15,17 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import java.io.IOException;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.List;
 import java.util.Locale;
 
 /** Fresh app shell. Never claims an emulator was started before native bootstrap exists. */
 public final class MainActivity extends Activity {
     private static final int IMPORT_PBW = 26;
+    private static final int EXPORT_EMERY_LOG = 27;
     private static final int BG = Color.rgb(8,9,13);
     private static final int ORANGE = Color.rgb(255,109,0);
     private static final int WHITE = Color.rgb(235,236,232);
@@ -85,6 +90,18 @@ public final class MainActivity extends Activity {
 
         section("03 / SAFETY");
         addText("Independent application ID / private storage. Does not alter or migrate the existing NullWrist 0.8.12. No network or notification access requested.",11,WHITE,Gravity.START,dp(8));
+        button("EXPORT EMERY DIAGNOSTICS",()->{
+            File log = new File(new File(getFilesDir(),"time2-emery"),"emery-qemu.log");
+            if(!log.isFile()){
+                showMessage("No log yet","Open the rear display once in the device-lab APK to generate a QEMU log.");
+                return;
+            }
+            Intent export = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            export.addCategory(Intent.CATEGORY_OPENABLE);
+            export.setType("text/plain");
+            export.putExtra(Intent.EXTRA_TITLE,"nullwrist-time2-emery-qemu.log");
+            startActivityForResult(export,EXPORT_EMERY_LOG);
+        });
         button("VIEW BUILD STATUS",()->new AlertDialog.Builder(this)
                 .setTitle("NullWrist Time 2 / 0.1.0-dev")
                 .setMessage("Completed: project isolation, raster branding, Emery display mapping, touch diagnostics and PBW library.\n\nNot completed: on-device Emery boot verification, app execution, phone services, hardware stability tests. Device-lab APK bundles an experimental runtime; ordinary APK remains preview-only.")
@@ -93,7 +110,30 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
-        if(request!=IMPORT_PBW || result!=RESULT_OK || data==null || data.getData()==null) return;
+        if(result!=RESULT_OK || data==null || data.getData()==null) return;
+        if(request==EXPORT_EMERY_LOG){
+            File log=new File(new File(getFilesDir(),"time2-emery"),"emery-qemu.log");
+            if(!log.isFile()){showMessage("No log","QEMU log not available.");return;}
+            try(InputStream input=new FileInputStream(log);
+                OutputStream output=getContentResolver().openOutputStream(data.getData())){
+                if(output==null)throw new IOException("Cannot write destination");
+                // Export only the most recent 512 KiB to avoid huge diagnostic files.
+                long skip=Math.max(0,log.length()-512L*1024L);
+                while(skip>0){
+                    long jumped=input.skip(skip);
+                    if(jumped<=0)throw new IOException("Cannot seek to log tail");
+                    skip-=jumped;
+                }
+                byte[] buffer=new byte[8192];
+                int n;
+                while((n=input.read(buffer))!=-1)output.write(buffer,0,n);
+                showMessage("Diagnostic exported","Saved the latest QEMU log to your selected location.");
+            }catch(IOException error){
+                showMessage("Export failed",error.getMessage());
+            }
+            return;
+        }
+        if(request!=IMPORT_PBW) return;
         try {
             EmeryPackageIndex.PackageInfo info=library.importPbw(data.getData());
             new AlertDialog.Builder(this).setTitle("Imported")
@@ -105,6 +145,11 @@ public final class MainActivity extends Activity {
             new AlertDialog.Builder(this).setTitle("Import rejected")
                     .setMessage(error.getMessage()).setPositiveButton("OK",null).show();
         }
+    }
+
+    private void showMessage(String title,String content){
+        new AlertDialog.Builder(this).setTitle(title).setMessage(content)
+                .setPositiveButton("OK",null).show();
     }
 
     private void section(String title) {

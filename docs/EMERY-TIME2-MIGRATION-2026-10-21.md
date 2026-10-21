@@ -89,7 +89,7 @@ Acceptance: tester can use watchface -> launcher -> app -> notification -> media
 
 ## Risks / validation
 1. New firmware/boot image may require a different QEMU build/ABI/peripheral set than the legacy Android QEMU: **largest blocker**.
-2. Display patch currently hooks Basalt-specific graphics: must measure Emirates frame format and event plumbing before reuse.
+2. Display patch currently hooks Basalt-specific graphics: must measure Emery frame format and event plumbing before reuse.
 3. Touch is software/API and firmware dependent. Newly added system gestures vs app-specific touch are distinct.
 4. Android secondary display may not deliver all input on OEM launchers; verify on user's actual Titan 2 Android 16.
 5. Current watchface persistence is coupled to selected face; launching the OS app launcher must not trigger a watchface re-selection loop.

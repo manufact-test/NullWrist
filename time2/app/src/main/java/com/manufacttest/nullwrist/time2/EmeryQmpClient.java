@@ -56,6 +56,29 @@ public final class EmeryQmpClient implements Closeable {
         request(EmeryQmpCommands.touch(phase,x,y));
     }
 
+    /**
+     * Explicit screendump makes QEMU refresh its graphic console while
+     * -display none is in use: with no display refresh listener, the normal
+     * GUI timer never drives gfx_update and native framebuffer export stalls.
+     * The PPM file is diagnostic; the real LCD pixels are read from the
+     * independent 200x228 ARGB8888 shared-file exporter.
+     */
+    public synchronized void refreshHeadlessDisplay(String privatePpmPath)
+            throws IOException {
+        if(privatePpmPath==null || privatePpmPath.isEmpty())
+            throw new IllegalArgumentException("Missing diagnostic screenshot path");
+        try {
+            JSONObject cmd=new JSONObject();
+            cmd.put("execute","screendump");
+            JSONObject args=new JSONObject();
+            args.put("filename",privatePpmPath);
+            cmd.put("arguments",args);
+            request(cmd.toString());
+        } catch(JSONException bad) {
+            throw new IOException("Cannot build QEMU screenshot command",bad);
+        }
+    }
+
     private JSONObject readJsonLine() throws IOException {
         // Bound a single line to protect against corrupted/malicious output.
         StringBuilder line = new StringBuilder();

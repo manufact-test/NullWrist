@@ -92,8 +92,9 @@ public final class MainActivity extends Activity {
         addText("Independent application ID / private storage. Does not alter or migrate the existing NullWrist 0.8.12. No network or notification access requested.",11,WHITE,Gravity.START,dp(8));
         button("EXPORT EMERY DIAGNOSTICS",()->{
             File log = new File(new File(getFilesDir(),"time2-emery"),"emery-qemu.log");
-            if(!log.isFile()){
-                showMessage("No log yet","Open the rear display once in the device-lab APK to generate a QEMU log.");
+            File host=new File(new File(getFilesDir(),"time2-emery"),"emery-host.log");
+            if(!log.isFile() && !host.isFile()){
+                showMessage("No log yet","Open the rear display once in the device-lab APK to generate diagnostics.");
                 return;
             }
             Intent export = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -113,21 +114,16 @@ public final class MainActivity extends Activity {
         if(result!=RESULT_OK || data==null || data.getData()==null) return;
         if(request==EXPORT_EMERY_LOG){
             File log=new File(new File(getFilesDir(),"time2-emery"),"emery-qemu.log");
-            if(!log.isFile()){showMessage("No log","QEMU log not available.");return;}
-            try(InputStream input=new FileInputStream(log);
-                OutputStream output=getContentResolver().openOutputStream(data.getData())){
+            File host=new File(new File(getFilesDir(),"time2-emery"),"emery-host.log");
+            if(!log.isFile() && !host.isFile()){
+                showMessage("No logs","Run the rear display first.");return;
+            }
+            try(OutputStream output=getContentResolver().openOutputStream(data.getData())){
                 if(output==null)throw new IOException("Cannot write destination");
-                // Export only the most recent 512 KiB to avoid huge diagnostic files.
-                long skip=Math.max(0,log.length()-512L*1024L);
-                while(skip>0){
-                    long jumped=input.skip(skip);
-                    if(jumped<=0)throw new IOException("Cannot seek to log tail");
-                    skip-=jumped;
-                }
-                byte[] buffer=new byte[8192];
-                int n;
-                while((n=input.read(buffer))!=-1)output.write(buffer,0,n);
-                showMessage("Diagnostic exported","Saved the latest QEMU log to your selected location.");
+                appendLog(output,"ANDROID EMERY HOST",host);
+                appendLog(output,"NATIVE QEMU",log);
+                showMessage("Diagnostic exported",
+                        "Saved both Android host status and QEMU process output.");
             }catch(IOException error){
                 showMessage("Export failed",error.getMessage());
             }
@@ -144,6 +140,25 @@ public final class MainActivity extends Activity {
         } catch(IOException error) {
             new AlertDialog.Builder(this).setTitle("Import rejected")
                     .setMessage(error.getMessage()).setPositiveButton("OK",null).show();
+        }
+    }
+
+    private void appendLog(OutputStream out,String label,File file) throws IOException {
+        out.write(("\n=== "+label+" ===\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if(!file.isFile()){
+            out.write("(not created)\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return;
+        }
+        try(InputStream input=new FileInputStream(file)){
+            long skip=Math.max(0,file.length()-256L*1024L);
+            while(skip>0){
+                long n=input.skip(skip);
+                if(n<=0)throw new IOException("Cannot seek to log tail");
+                skip-=n;
+            }
+            byte[] buffer=new byte[8192];
+            int n;
+            while((n=input.read(buffer))!=-1)out.write(buffer,0,n);
         }
     }
 

@@ -59,3 +59,6 @@ The initial experimental workflow `39601332647` failed before starting compilati
 - Available on-phone diagnostic export is `EXPORT EMERY DIAGNOSTICS` in the app's front-screen interface.
 - All old releases untouched. `main` remains `71fd6e5eba5b36b50168277be82e0eadbbc2a58c`. New project remains draft PR #21, do not merge.
 - Third-party attribution and release gate tracked in [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
+
+### First physical Titan2 test / screen not painted
+2026-10-21 user-supplied screenshot: orange NullWrist shell, QMP handshake established, no actual Emery pixels. Native QEMU log only SIGTERM from Android host. This is a **failed M1 frame/render verification**; do not call Emery firmware boot established. New code uses QMP headless screendump to force renderer while QEMU uses `-display none`; export now includes Android host diagnostic events and native QEMU log. Recheck on hardware: screen actual, QMP screenshot successful, framebuffer v2 sequence, virtual inputs. No older releases touched.

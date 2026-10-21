@@ -4,7 +4,10 @@ import android.content.Context;
 import android.graphics.Bitmap;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -30,6 +33,7 @@ public final class EmeryRuntime {
     private final ExecutorService frames=Executors.newSingleThreadExecutor(r->{
         Thread thread=new Thread(r,"EmeryFrameReader");thread.setDaemon(true);return thread;
     });
+    private final AtomicBoolean displayRefreshQueued=new AtomicBoolean(false);
     private volatile boolean closing;
     private volatile boolean connected;
     private volatile Process process;
@@ -66,6 +70,12 @@ public final class EmeryRuntime {
                 // A previous output is never proof of the current session.
                 if(assets.frame.exists() && !assets.frame.delete())
                     throw new IOException("Cannot clear stale frame");
+                File ppm=new File(assets.root,"headless-frame.ppm");
+                if(ppm.exists() && !ppm.delete())
+                    throw new IOException("Cannot clear stale screenshot");
+                File hostLog=new File(assets.root,"emery-host.log");
+                if(hostLog.exists() && !hostLog.delete())
+                    throw new IOException("Cannot reset emulator diagnostics");
                 List<String> argv=new ArrayList<>();
                 argv.add(assets.qemu.getAbsolutePath());
                 argv.add("-rtc"); argv.add("base=localtime");
@@ -105,7 +115,7 @@ public final class EmeryRuntime {
                     }
                 }
                 if(!connected)throw new IOException("Emery QMP did not come online");
-                emit("Emery QMP online; waiting for real LCD pixels...");
+                emit("Emery QMP connected; requesting explicit headless LCD refresh");
                 frames.execute(this::pumpFrames);
             } catch(InterruptedException e){
                 Thread.currentThread().interrupt();
@@ -121,6 +131,9 @@ public final class EmeryRuntime {
     private void pumpFrames(){
         int lastSeq=0;
         boolean rendered=false;
+        boolean refreshWorked=false;
+        long lastRefresh=0;
+        int refreshes=0;
         long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(40);
         while(!closing){
             Process p=process;
@@ -129,6 +142,37 @@ public final class EmeryRuntime {
                 return;
             }
             try {
+                // QEMU -display none does not install a periodic GUI refresh
+                // listener. Trigger graphic_hw_update through the official
+                // QMP screendump command, not through a fake app overlay.
+                long now=System.nanoTime();
+                if(now-lastRefresh>=TimeUnit.MILLISECONDS.toNanos(350) &&
+                        displayRefreshQueued.compareAndSet(false,true)){
+                    lastRefresh=now;
+                    try {
+                        commands.execute(()->{
+                            try {
+                                if(!closing && qmp!=null && connected){
+                                    File ppm=new File(assets.root,"headless-frame.ppm");
+                                    qmp.refreshHeadlessDisplay(ppm.getAbsolutePath());
+                                }
+                            } catch(IOException error) {
+                                emit("QMP screendump failed: "+error.getMessage());
+                            } finally {
+                                displayRefreshQueued.set(false);
+                            }
+                        });
+                        refreshes++;
+                    } catch(java.util.concurrent.RejectedExecutionException stop) {
+                        displayRefreshQueued.set(false);
+                        return;
+                    }
+                }
+                File ppm=new File(assets.root,"headless-frame.ppm");
+                if(!refreshWorked && ppm.isFile() && ppm.length()>100){
+                    refreshWorked=true;
+                    emit("QEMU headless screenshot generated; checking ARGB bridge");
+                }
                 EmeryFrameProtocol.Frame image=EmeryFrameProtocol.read(assets.frame);
                 if(image!=null && image.sequence!=lastSeq){
                     lastSeq=image.sequence;
@@ -143,7 +187,8 @@ public final class EmeryRuntime {
                     }
                 }
                 if(!rendered && System.nanoTime()>deadline){
-                    emit("No Emery LCD frames after 40 seconds. Review QEMU logs.");
+                    emit("No Emery LCD after 40s; QMP screenshot "+(refreshWorked?"OK":"MISSING")+
+                            "; refresh requests="+refreshes+"; review host diagnostics");
                     return;
                 }
                 Thread.sleep(120);
@@ -211,5 +256,20 @@ public final class EmeryRuntime {
         }
     }
 
-    private void emit(String text){if(!closing)listener.status(text);}
+    private void emit(String text){
+        if(closing)return;
+        if(assets!=null){
+            File file=new File(assets.root,"emery-host.log");
+            byte[] record=(System.currentTimeMillis()+" "+text+"\n")
+                    .getBytes(StandardCharsets.UTF_8);
+            synchronized(this){
+                try(FileOutputStream out=new FileOutputStream(file,true)){
+                    out.write(record);
+                }catch(IOException ignored){
+                    // A failed debug write cannot stop the emulator.
+                }
+            }
+        }
+        listener.status(text);
+    }
 }

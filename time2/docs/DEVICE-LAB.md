@@ -21,3 +21,6 @@ No external PBW installation or real Android notification integration is wired a
 
 ## Capturing failures without root / adb
 In the Time 2 front-screen application, choose `EXPORT EMERY DIAGNOSTICS` after attempting an Emery boot on the rear display. Android's document picker writes the latest 512 KiB of `emery-qemu.log` to a text file in the location you choose. This avoids broad storage permissions. Send this text log alongside a screenshot/photo of the rear display and whether QMP responded.
+
+### LCD black grid after QMP online — on-device observation
+First Titan2 screenshot displays `Emery QMP online; waiting for real LCD pixels`, proving QMP handshake only, not guest firmware boot. User-exported QEMU log contains only SIGTERM from app shutdown; no internal crash trace. Source review found QEMU's GUI refresh timer is registered only when a display listener has `dpy_refresh`, while our emulator uses `-display none`. New lab strategy issues bounded periodic `screendump` QMP commands to force `graphic_hw_update`, reads the **actual** framebuffer v2 exporter afterward, and logs Android-side boot/refresh outcomes separately from native QEMU. Once validated, move to a native no-disk refresh driver.

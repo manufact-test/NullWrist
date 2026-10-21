@@ -18,3 +18,6 @@ Artifacts are verified against SHA256 manifests from each CI run before being st
 7. Report device model/build, Android API, logs, observations, CPU and battery impact.
 
 No external PBW installation or real Android notification integration is wired at this stage. Those remain M3/M4.
+
+## Capturing failures without root / adb
+In the Time 2 front-screen application, choose `EXPORT EMERY DIAGNOSTICS` after attempting an Emery boot on the rear display. Android's document picker writes the latest 512 KiB of `emery-qemu.log` to a text file in the location you choose. This avoids broad storage permissions. Send this text log alongside a screenshot/photo of the rear display and whether QMP responded.

@@ -50,3 +50,12 @@ M0 firmware boot and controls sub-gate **PASS**: GitHub Actions run `39600331988
 
 ## M1 Android builder first-attempt notes
 The initial experimental workflow `39601332647` failed before starting compilation because the generated shell script contained malformed duplicated trailing lines. The old Android project and its artifacts were not affected. Fixed in Time2 branch; future runs must pass `bash -n` before toolchain installation. Native proof is still pending.
+
+## New M1 laboratory build checkpoint — 2026-10-21
+- **PASS** native Android ARM64 cross-build of Core Devices QEMU `pebble-emery`: [GitHub Actions 39601756889](https://github.com/manufact-test/NullWrist/actions/runs/39601756889), SHA-256 artifact retained.
+- **PASS** official Emery firmware image generation and four Linux QEMU navigation/touch tests: [GitHub Actions 39602123890](https://github.com/manufact-test/NullWrist/actions/runs/39602123890). Development ELF/SPI images and hashes archived separately.
+- **PASS** experimental `0.2.0-lab` Android assembly from both SHA256-checked artifact groups: [GitHub Actions 39603808282](https://github.com/manufact-test/NullWrist/actions/runs/39603808282). New activity-scoped emulator launch/QMP/frame reader is included; lab image not demonstrated on real hardware.
+- **NOT YET VERIFIED** startup on real Titan2 Android 15+, first framebuffer, touch/virtual-button QMP in the same APK, persistent SPI, process cleanup and thermal stability. They are mandatory before M1 is declared complete.
+- Available on-phone diagnostic export is `EXPORT EMERY DIAGNOSTICS` in the app's front-screen interface.
+- All old releases untouched. `main` remains `71fd6e5eba5b36b50168277be82e0eadbbc2a58c`. New project remains draft PR #21, do not merge.
+- Third-party attribution and release gate tracked in [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).

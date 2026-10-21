@@ -56,7 +56,7 @@ jobs:
           mkdir -p "$dest_native" "$dest_assets"
           cp "$native" "$dest_native/libnullwrist_emery_qemu.so"
           ( cd "$dest_native"; sha256sum libnullwrist_emery_qemu.so > ../../assets/emery/native.sha256 )
-          for item in pebbleos.elf qemu_spi_flash.bin SHA256SUMS; do
+          for item in pebbleos.elf qemu_spi_flash.bin qemu_micro_flash.bin SHA256SUMS; do
             origin="$(find time2/lab-input/firmware -type f -name "$item" -print -quit)"
             test -n "$origin"
             cp "$origin" "$dest_assets/$item"

@@ -24,7 +24,8 @@ public final class EmeryAssets {
     public static final String SPI = "qemu_spi_flash.bin";
     public static final String NATIVE = "libnullwrist_emery_qemu.so";
     private static final String ROOT = "emery/";
-    private static final long MAX_ASSET_BYTES = 25L * 1024 * 1024;
+    // Emery QEMU SPI flash is 32 MiB; allow bounded headroom for upstream images.
+    private static final long MAX_ASSET_BYTES = 64L * 1024 * 1024;
     private static final long MAX_NATIVE_BYTES = 128L * 1024 * 1024;
 
     private EmeryAssets() {}

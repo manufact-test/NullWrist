@@ -4,8 +4,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WORK_DIR="${QEMU_ANDROID_WORK_DIR:-$ROOT_DIR/.native-qemu-build}"
-OUTPUT_DIR="${QEMU_ANDROID_OUTPUT_DIR:-$ROOT_DIR/native-qemu-output}"
+WORK_DIR="${QEMU_ANDROID_WORK_DIR:-$ROOT_DIR/time2/.native-qemu-build}"
+OUTPUT_DIR="${QEMU_ANDROID_OUTPUT_DIR:-$ROOT_DIR/time2/native-qemu-output}"
 ANDROID_API="${ANDROID_API:-35}"
 QEMU_COMMIT="${QEMU_COMMIT:-8a0a7c646fd80bb13d92bb5e2320427e224a2f6b}"
 NDK_ROOT="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-}}"

@@ -87,9 +87,20 @@ public final class MainActivity extends Activity {
             addText((entry.watchface?"[FACE] ":"[APP] ")+entry.name
                     +"\n"+entry.author+" / "+entry.platform.toUpperCase(java.util.Locale.ROOT)
                     +" / "+entry.uuid,11,WHITE,Gravity.START,dp(8));
+            button("INSTALL / LAUNCH "+(entry.watchface?"FACE":"APP")+" — "+entry.name,
+                    ()->{
+                        if(EmeryRuntime.isDeviceLabActive()){
+                            showMessage("Close current watch screen",
+                                    "Return from the current PebbleOS session before installation.");
+                            return;
+                        }
+                        getSharedPreferences("time2-pbw-install",MODE_PRIVATE)
+                                .edit().putString("pending_uuid",entry.uuid).apply();
+                        startActivity(new Intent(this,RearActivity.class));
+                    });
         }
         if(entries.isEmpty())
-            addText("No Emery PBWs imported. Imported files are only inspected and stored; they cannot run until the runtime is integrated.",11,WHITE,Gravity.START,dp(6));
+            addText("No Emery PBW imported. Choose an Emery/Basalt-compatible file, then select INSTALL / LAUNCH.",11,WHITE,Gravity.START,dp(6));
 
         addText("Independent application ID / private storage. Does not alter or migrate the existing NullWrist 0.8.12. No network or notification access requested.",11,WHITE,Gravity.START,dp(8));
         section("03 / WATCH MEMORY");
@@ -134,8 +145,8 @@ public final class MainActivity extends Activity {
             startActivityForResult(export,EXPORT_EMERY_LOG);
         });
         button("VIEW BUILD STATUS",()->new AlertDialog.Builder(this)
-                .setTitle("NullWrist Time 2 / 0.3.0-lab")
-                .setMessage("Completed: project isolation, raster branding, Emery display mapping, touch diagnostics and PBW library.\n\nNot completed: on-device Emery boot verification, app execution, phone services, hardware stability tests. Device-lab APK bundles an experimental runtime; ordinary APK remains preview-only.")
+                .setTitle("NullWrist Time 2 / 0.4.0-lab")
+                .setMessage("Completed: project isolation, raster branding, Emery display mapping, touch diagnostics and PBW library.\n\nConfirmed: genuine Emery boot/display on Titan 2. Experimental: direct PBW install via QEMU serial / BlobDB / AppFetch / PutBytes; needs real-device testing. Phone services, background work and stability tests remain.")
                 .setPositiveButton("OK",null).show());
     }
 
@@ -181,7 +192,7 @@ public final class MainActivity extends Activity {
             EmeryPackageIndex.PackageInfo info=library.importPbw(data.getData());
             new AlertDialog.Builder(this).setTitle("Imported")
                     .setMessage(info.name+"\n"+(info.watchface?"Watchface":"Watchapp")
-                            +"\n\nStored safely. Execution requires the future Emery runtime.")
+                            +"\n\nStored in private library. Choose INSTALL / LAUNCH next to the imported app to try installation in real PebbleOS.")
                     .setPositiveButton("OK",null).show();
             render();
         } catch(IOException error) {

@@ -39,6 +39,10 @@ public final class EmeryRuntime {
     private volatile boolean closing;
     private volatile boolean connected;
     private volatile Process process;
+    private final ExecutorService appInstallWorker=Executors.newSingleThreadExecutor(r->{
+        Thread t=new Thread(r,"EmeryPebbleInstaller");t.setDaemon(true);return t;
+    });
+    private volatile EmeryPebbleLink appLink;
     private EmeryQmpClient qmp;
     private EmeryAssets.Staged assets;
 
@@ -125,6 +129,7 @@ public final class EmeryRuntime {
                 if(!connected)throw new IOException("Emery QMP did not come online");
                 emit("Emery QMP connected; requesting explicit headless LCD refresh");
                 frames.execute(this::pumpFrames);
+                queueRequestedPbwInstall();
             } catch(InterruptedException e){
                 Thread.currentThread().interrupt();
                 if(!closing)emit("Emery startup interrupted");
@@ -210,6 +215,44 @@ public final class EmeryRuntime {
         }
     }
 
+    private void queueRequestedPbwInstall(){
+        android.content.SharedPreferences pref=context.getSharedPreferences(
+                "time2-pbw-install",Context.MODE_PRIVATE);
+        String chosen=pref.getString("pending_uuid",null);
+        if(chosen==null)return;
+        // A failed installation must not silently retry on every boot.
+        pref.edit().remove("pending_uuid").apply();
+        appInstallWorker.execute(()->{
+            try{
+                java.util.UUID id=java.util.UUID.fromString(chosen);
+                File file=new File(new File(context.getFilesDir(),"time2/pbws"),id+".pbw");
+                if(!file.isFile())throw new IOException("Selected PBW is missing");
+                emit("PebbleOS: waiting for private serial UART...");
+                File socket=new File(assets.root,"pebble.sock");
+                IOException last=null;
+                long until=System.nanoTime()+TimeUnit.SECONDS.toNanos(20);
+                while(!closing && System.nanoTime()<until && appLink==null){
+                    try{
+                        appLink=new EmeryPebbleLink(socket.getAbsolutePath());
+                    }catch(IOException pending){
+                        last=pending;Thread.sleep(200);
+                    }
+                }
+                if(closing)return;
+                if(appLink==null)throw new IOException("Pebble UART unavailable: "+last);
+                new EmeryPbwInstaller(appLink,this::emit).install(file);
+            }catch(InterruptedException interrupted){
+                Thread.currentThread().interrupt();
+            }catch(Exception error){
+                emit("PBW INSTALL FAILED: "+error.getMessage());
+            }finally{
+                EmeryPebbleLink link=appLink;
+                appLink=null;
+                if(link!=null)try{link.close();}catch(IOException ignored){}
+            }
+        });
+    }
+
     public void touch(EmeryQmpCommands.TouchPhase phase,int x,int y){
         if(closing||!connected)return;
         commands.execute(()->{
@@ -232,6 +275,9 @@ public final class EmeryRuntime {
         closing=true;
         connected=false;
         frames.shutdownNow();
+        appInstallWorker.shutdownNow();
+        EmeryPebbleLink serial=appLink;
+        if(serial!=null)try{serial.close();}catch(IOException ignored){}
         // If the worker is blocked in a QMP transaction, allow that bounded
         // operation to finish and then tear down QEMU in its own worker.
         commands.execute(this::shutdownProcess);

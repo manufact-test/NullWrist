@@ -154,7 +154,7 @@ public final class EmeryRuntime {
                 // listener. Trigger graphic_hw_update through the official
                 // QMP screendump command, not through a fake app overlay.
                 long now=System.nanoTime();
-                if(now-lastRefresh>=TimeUnit.MILLISECONDS.toNanos(350) &&
+                if(now-lastRefresh>=TimeUnit.MILLISECONDS.toNanos(rendered?4500:350) &&
                         displayRefreshQueued.compareAndSet(false,true)){
                     lastRefresh=now;
                     try {
@@ -199,7 +199,7 @@ public final class EmeryRuntime {
                             "; refresh requests="+refreshes+"; review host diagnostics");
                     return;
                 }
-                Thread.sleep(120);
+                Thread.sleep(75);
             } catch(InterruptedException stop){
                 Thread.currentThread().interrupt();
                 return;

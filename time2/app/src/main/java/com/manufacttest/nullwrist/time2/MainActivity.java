@@ -85,7 +85,8 @@ public final class MainActivity extends Activity {
         addText("LOCAL LIBRARY: "+entries.size()+" PACKAGE(S)",12,ORANGE,Gravity.START,dp(6));
         for (EmeryPackageIndex.PackageInfo entry:entries) {
             addText((entry.watchface?"[FACE] ":"[APP] ")+entry.name
-                    +"\n"+entry.author+" / "+entry.uuid,11,WHITE,Gravity.START,dp(8));
+                    +"\n"+entry.author+" / "+entry.platform.toUpperCase(java.util.Locale.ROOT)
+                    +" / "+entry.uuid,11,WHITE,Gravity.START,dp(8));
         }
         if(entries.isEmpty())
             addText("No Emery PBWs imported. Imported files are only inspected and stored; they cannot run until the runtime is integrated.",11,WHITE,Gravity.START,dp(6));
@@ -133,7 +134,7 @@ public final class MainActivity extends Activity {
             startActivityForResult(export,EXPORT_EMERY_LOG);
         });
         button("VIEW BUILD STATUS",()->new AlertDialog.Builder(this)
-                .setTitle("NullWrist Time 2 / 0.1.0-dev")
+                .setTitle("NullWrist Time 2 / 0.3.0-lab")
                 .setMessage("Completed: project isolation, raster branding, Emery display mapping, touch diagnostics and PBW library.\n\nNot completed: on-device Emery boot verification, app execution, phone services, hardware stability tests. Device-lab APK bundles an experimental runtime; ordinary APK remains preview-only.")
                 .setPositiveButton("OK",null).show());
     }

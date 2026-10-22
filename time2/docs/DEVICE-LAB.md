@@ -36,3 +36,10 @@ Titan2 user reports **"Ура! Работает!"**. Exported Android-side log p
 5. If screen is black / touch fails / backup fails, use **EXPORT EMERY DIAGNOSTICS**; it includes native and Android-side logs. No root, adb or external network required.
 
 PBW import now recognizes authentic Emery plus SDK-compatible Basalt/root PBW manifests, but **does not install them into PebbleOS yet**; no app execution claim.
+
+## 0.4.0-lab — first watchface installation attempt
+1. On main screen choose **IMPORT EMERY .PBW**, select a PBW watchface; a successful import only puts it into the private Android library.
+2. Tap **INSTALL / LAUNCH FACE — [name]** next to that entry. This starts the guest PebbleOS and sends the PBW over QEMU's private UART1 using BlobDB/AppFetch/PutBytes, with visible status.
+3. Verify actual face visible. **No assumption:** the first serial bridge attempt may fail; in that case note the last visible status and export **EMERY DIAGNOSTICS** from main screen. These logs include installer errors.
+4. For an import error, record the dialog text and (optionally) provide the PBW file; a separate QEMU boot log cannot diagnose a rejected ZIP/UUID/manifest.
+5. Old 0.8.12 NullWrist remains a different package. Do not uninstall it.

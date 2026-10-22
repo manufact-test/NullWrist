@@ -31,3 +31,6 @@ Latest lab checkpoint: [Android emulator build (39601756889)](https://github.com
 
 ### On-device confirmed (2026-10-22)
 First Titan 2 Emery 0.2.0 lab run successfully displayed real firmware; user-exported host log shows QMP, screenshot and ARGB frame. Time2 0.3.0 experiments target native headless framebuffer 80ms timer, faster Android frame read, official Basalt compatibility and user-owned flash backup/restore. See [M1/M2 checkpoint](MASTER.md) and [new device-lab instructions](docs/DEVICE-LAB.md). Buttons, PBW execution and long-term stability still require verification.
+
+### PBW installation experiment: 0.4.0-lab
+The app previously only inspected and stored PBWs. The first actual guest installation implementation is now wired through QEMU UART1 / Pebble Protocol BlobDB / AppFetch / PutBytes. It remains **unverified on the user's real device** and shows explicit errors instead of pretending that importing a watchface automatically activates it. See [DEVICE-LAB](docs/DEVICE-LAB.md) for test steps.

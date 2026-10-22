@@ -78,3 +78,17 @@ Native process terminates with SIGTERM when Activity closes: expected shutdown. 
 - Separate PR #21 remains draft, root legacy `main` untouched.
 
 **Next M3 major block:** implement one authenticated local Pebble QEMU serial protocol transport over `pebble.sock`, then official PutBytes + BlobDB AppFetch app install/start and watchface change. No physical third-party PBW execution has been claimed.
+
+## 0.4.0-lab — M3 first on-device PBW installer candidate
+
+**Trigger:** Titan 2 user confirmed 0.3.0 runs Emery but importing a watchface does not make it appear. The uploaded file contained prior normal QEMU boot/shutdown messages; it does not contain a PBW-specific error. Prior "import" only stored bytes, not an OS install.
+
+**Implemented in independent Time2 branch** (not yet verified on-device):
+- Pure `EmeryPebbleWire` QEMU-serial framing (0xFEED/0xBEEF, protocol 1 SPP) plus nested Pebble protocol (big-endian length/endpoint), fragmentation handling and CRC32 STM32. JUnit tests.
+- App-private Unix socket transport to actual `pebble.sock` (generic emulated UART1 intercepted by `pebble_control`), companion AppVersion response, WatchVersion query.
+- `EmeryPbwInstaller`: official PebbleOS modern AppDB BlobDB 0xB1DB insert; AppRunStateStart 0x34; watch AppFetchRequest 0x1771; PutBytes 0xBEEF INIT / PUT / COMMIT / INSTALL with 2k chunks for executable plus optional resources and worker.
+- Imported PBWs now show per-app **INSTALL / LAUNCH** button. Selecting queues one UUID, boots real Emery and attempts transfer on a dedicated background serial worker, reporting stages/errors in on-screen status + exported Android host diagnostics. No user-facing fake success.
+- No external TCP or Root permissions; only app-private Unix socket.
+- `0.4.0-lab` is a hardware diagnostic, **not proven M3**. Do not mark app/watchface execution complete until device log confirms successful BlobDB+AppFetch+PutBytes and user sees/operates app on actual PebbleOS.
+
+**Next user evidence:** screenshot after selecting INSTALL and exported emery host diagnostics. If import itself is rejected, the exact PBW file (if user is willing to share) or full "Import rejected" message is needed to reproduce UUID/manifest compatibility; do not diagnose an unknown PBW from QEMU boot logs alone.

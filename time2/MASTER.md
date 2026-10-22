@@ -62,3 +62,19 @@ The initial experimental workflow `39601332647` failed before starting compilati
 
 ### First physical Titan2 test / screen not painted
 2026-10-21 user-supplied screenshot: orange NullWrist shell, QMP handshake established, no actual Emery pixels. Native QEMU log only SIGTERM from Android host. This is a **failed M1 frame/render verification**; do not call Emery firmware boot established. New code uses QMP headless screendump to force renderer while QEMU uses `-display none`; export now includes Android host diagnostic events and native QEMU log. Recheck on hardware: screen actual, QMP screenshot successful, framebuffer v2 sequence, virtual inputs. No older releases touched.
+
+## 2026-10-22 — first physical boot verified and M2 follow-up
+
+**User-confirmed on Titan2 Android:** QEMU starts, QMP handshake succeeds, headless screenshot is produced and the `200 x 228` ARGB framebuffer is delivered. Exported Android host log:
+`Booting genuine PebbleOS / Emery` → `Emery QMP connected` → `QEMU headless screenshot generated` → `Real Emery framebuffer detected — interactive test mode`.
+Native process terminates with SIGTERM when Activity closes: expected shutdown. This supports **M1 physical boot/render path PASS**. There is no separate evidence yet for gestures, four-button behavior, multiple launch persistence or app installation. Treat these as pending M2/M3.
+
+**M2 implementation batch, branch only:**
+- Native Core Devices QEMU adds private headless display refresh timer, 80 ms on QEMU virtual clock when `PEBBLE_EMERY_FB_PATH` set. Cross-build **SUCCESS**: [39699350838](https://github.com/manufact-test/NullWrist/actions/runs/39699350838).
+- Android foreground loop now polls latest framebuffer each 75 ms; screendump remains fallback (every 4.5 s after a real frame) for protection against missing refresh. This optimization is not yet physically validated; regression check required.
+- PBW import uses official Emery→Basalt→root compatibility hierarchy. For Basalt SDK minor below `0x54`, root below `0x16`; verifies executable header UUID and bounds ZIP entries. **This is library support only, NOT installation on PebbleOS.**
+- User-owned Emery SPI flash backup/restore is available through SAF; restores size-checked image using atomic replace and blocks while an active emulator session exists. Intended to preserve device data between reinstallations of debug APKs (whose signatures may vary). Never touches legacy NullWrist private data.
+- Version `0.3.0-lab`. Next physical check: true frame animations without disk refresh stall, buttons, touch, backup roundtrip, and app/face candidate import.
+- Separate PR #21 remains draft, root legacy `main` untouched.
+
+**Next M3 major block:** implement one authenticated local Pebble QEMU serial protocol transport over `pebble.sock`, then official PutBytes + BlobDB AppFetch app install/start and watchface change. No physical third-party PBW execution has been claimed.

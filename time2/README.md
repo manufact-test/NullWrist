@@ -28,3 +28,6 @@ The **real upstream Emery firmware** built and passed 4 Linux-QEMU integration t
 Experimental device-lab pipeline and staged on-phone QEMU entrypoint: [DEVICE-LAB.md](docs/DEVICE-LAB.md). This is not a release or proven Titan2 runtime; device tests are required.
 
 Latest lab checkpoint: [Android emulator build (39601756889)](https://github.com/manufact-test/NullWrist/actions/runs/39601756889) and [signed-for-debug hardware lab APK (39603808282)](https://github.com/manufact-test/NullWrist/actions/runs/39603808282). The APK is **unverified on Titan2 hardware** and not a public release. [Third-party provenance](THIRD-PARTY-LICENSES.md).
+
+### On-device confirmed (2026-10-22)
+First Titan 2 Emery 0.2.0 lab run successfully displayed real firmware; user-exported host log shows QMP, screenshot and ARGB frame. Time2 0.3.0 experiments target native headless framebuffer 80ms timer, faster Android frame read, official Basalt compatibility and user-owned flash backup/restore. See [M1/M2 checkpoint](MASTER.md) and [new device-lab instructions](docs/DEVICE-LAB.md). Buttons, PBW execution and long-term stability still require verification.

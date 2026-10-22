@@ -24,3 +24,15 @@ In the Time 2 front-screen application, choose `EXPORT EMERY DIAGNOSTICS` after 
 
 ### LCD black grid after QMP online — on-device observation
 First Titan2 screenshot displays `Emery QMP online; waiting for real LCD pixels`, proving QMP handshake only, not guest firmware boot. User-exported QEMU log contains only SIGTERM from app shutdown; no internal crash trace. Source review found QEMU's GUI refresh timer is registered only when a display listener has `dpy_refresh`, while our emulator uses `-display none`. New lab strategy issues bounded periodic `screendump` QMP commands to force `graphic_hw_update`, reads the **actual** framebuffer v2 exporter afterward, and logs Android-side boot/refresh outcomes separately from native QEMU. Once validated, move to a native no-disk refresh driver.
+
+## First successful physical device evidence (2026-10-22)
+Titan2 user reports **"Ура! Работает!"**. Exported Android-side log proves successful QMP session, QEMU screenshot, real ARGB v2 pixels. No QEMU crash seen; SIGTERM is normal Android shutdown. See M1 statement in MASTER. Does not by itself establish button/touch results or a long-running stable session.
+
+## 0.3.0-lab new physical test
+1. From front screen, boot on Titan2 rear display; check actual watchface and smooth navigation. Test OK→launcher, BACK→face and swipe/tap.
+2. Keep watchface running about 2 minutes, verify animation/time updates, screen switching and no repeated pause/crash. New native headless refresh timer drives display every ~80 ms; QMP screendump is now a slower fallback.
+3. Close virtual watch, use **BACK UP EMERY WATCH MEMORY**. Do not uninstall Time2 before saving the backup if its virtual data matters.
+4. Install next debug build, use **RESTORE EMERY WATCH MEMORY** and verify settings remain. Uninstalling a debug APK may erase its private flash when signing key changes.
+5. If screen is black / touch fails / backup fails, use **EXPORT EMERY DIAGNOSTICS**; it includes native and Android-side logs. No root, adb or external network required.
+
+PBW import now recognizes authentic Emery plus SDK-compatible Basalt/root PBW manifests, but **does not install them into PebbleOS yet**; no app execution claim.

@@ -152,6 +152,44 @@ static int shm_unlink(const char *name)
 #endif
 '''
 
+
+# -display none creates no GUI refresh timer; the generic display redraw
+# method is ordinarily only called by QEMU's graphical frontend or screendump.
+# Supply a private 12.5 Hz timer when Time2 exports the framebuffer, avoiding
+# dozens of disk-bound QMP screendump requests per minute.
+TIMER_FIELD_MARKER = "    QEMUTimer *vibe_timer;\n};\n"
+TIMER_FUNC_MARKER = "static void pbl_display_realize(DeviceState *dev, Error **errp)\n"
+TIMER_REALIZE_MARKER = "    qemu_console_resize(s->con, s->width, s->height);\n"
+TIMER_FIELD_PATCH = r'''
+#if defined(__ANDROID__) || defined(NULLWRIST_EMERY_FB_EXPORT)
+    QEMUTimer *nw_headless_timer;
+#endif
+'''
+TIMER_FUNCTION_PATCH = r'''
+#if defined(__ANDROID__) || defined(NULLWRIST_EMERY_FB_EXPORT)
+#define NULLWRIST_EMERY_REFRESH_MS 80
+static void nw_emery_headless_refresh(void *opaque)
+{
+    PblDisplay *s = opaque;
+    if (s->con && (s->ctrl & CTRL_ENABLE)) {
+        graphic_hw_update(s->con);
+    }
+    timer_mod(s->nw_headless_timer,
+              qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL) + NULLWRIST_EMERY_REFRESH_MS);
+}
+#endif
+'''
+TIMER_INIT_PATCH = r'''
+#if defined(__ANDROID__) || defined(NULLWRIST_EMERY_FB_EXPORT)
+    if (getenv("PEBBLE_EMERY_FB_PATH")) {
+        s->nw_headless_timer = timer_new_ms(QEMU_CLOCK_VIRTUAL,
+                                            nw_emery_headless_refresh, s);
+        timer_mod(s->nw_headless_timer,
+                  qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL) + NULLWRIST_EMERY_REFRESH_MS);
+    }
+#endif
+'''
+
 def patch(root: pathlib.Path) -> None:
     file = root / SOURCE
     text = file.read_text(encoding="utf-8")
@@ -176,6 +214,16 @@ def patch(root: pathlib.Path) -> None:
                             "#if defined(__ANDROID__) || defined(NULLWRIST_EMERY_FB_EXPORT)\n"
                             "    if (nw_publishing) nw_emery_end();\n"
                             "#endif\n", 1)
+        # Headless refresh support is part of the same pinned-source patch.
+        timer_anchors = [TIMER_FIELD_MARKER, TIMER_FUNC_MARKER, TIMER_REALIZE_MARKER]
+        if any(text.count(anchor) != 1 for anchor in timer_anchors):
+            raise RuntimeError("QEMU display timer anchors changed; patch refused")
+        text = text.replace(TIMER_FIELD_MARKER,
+                            TIMER_FIELD_MARKER.replace("};\n", TIMER_FIELD_PATCH + "};\n"), 1)
+        text = text.replace(TIMER_FUNC_MARKER,
+                            TIMER_FUNCTION_PATCH + TIMER_FUNC_MARKER, 1)
+        text = text.replace(TIMER_REALIZE_MARKER,
+                            TIMER_REALIZE_MARKER + TIMER_INIT_PATCH, 1)
         file.write_text(text, encoding="utf-8")
     osfile = root / OSLIB
     oslib = osfile.read_text(encoding="utf-8")

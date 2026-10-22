@@ -36,12 +36,27 @@ public final class EmeryPbwInstaller {
         this.link=link;this.progress=progress;
     }
 
-    public void install(File pbw)throws IOException{
+    public void install(File pbw,String previouslyInstalledUuid)throws IOException{
         EmeryPackageIndex.PackageInfo info=EmeryPackageIndex.inspect(pbw);
         progress.update("PebbleOS: awaiting companion handshake...");
         EmeryPebbleWire.Packet v=link.transact(0x10,new byte[]{0},0x10,35);
         if(v.payload.length<2||v.payload[0]!=1)
             throw new IOException("Guest returned invalid WatchVersion response");
+        // Re-installing a face while another runs can produce the native OS
+        // "is not responding" crash dialog (see PebbleOS issue #2172).
+        // Request graceful DEINIT instead of force-killing the running face.
+        java.util.UUID stopping;
+        try {stopping=java.util.UUID.fromString(
+                previouslyInstalledUuid==null?info.uuid:previouslyInstalledUuid);}
+        catch(IllegalArgumentException invalid) {stopping=java.util.UUID.fromString(info.uuid);}
+        progress.update("PebbleOS: requesting graceful watchface stop...");
+        ByteArrayOutputStream stop=new ByteArrayOutputStream(17);
+        stop.write(2); EmeryPebbleWire.uuid(stop,stopping);
+        link.send(0x34,stop.toByteArray());
+        try{Thread.sleep(280);}catch(InterruptedException interrupted){
+            Thread.currentThread().interrupt();
+            throw new IOException("Graceful stop interrupted",interrupted);
+        }
 
         try(ZipFile archive=new ZipFile(pbw)){
             String prefix=info.platform.equals("legacy")?"":info.platform+"/";
@@ -115,8 +130,8 @@ public final class EmeryPbwInstaller {
                 progress.update("PebbleOS: installing background worker...");
                 putBytes(7,read(archive,prefix,worker.optString("name","")),appId);
             }
-            progress.update("PebbleOS installed: "+info.name+
-                    " — check the watch screen");
+            progress.update("PBW transfer complete: "+info.name+
+                    " — checking if PebbleOS actually starts it");
         }catch(JSONException malformed){
             throw new IOException("Invalid platform manifest in PBW",malformed);
         }

@@ -88,6 +88,9 @@ public final class EmeryRuntime {
                 File hostLog=new File(assets.root,"emery-host.log");
                 if(hostLog.exists() && !hostLog.delete())
                     throw new IOException("Cannot reset emulator diagnostics");
+                File guestLog=new File(assets.root,"emery-debug-uart2.bin");
+                if(guestLog.exists() && !guestLog.delete())
+                    throw new IOException("Cannot reset guest UART2 diagnostics");
                 List<String> argv=new ArrayList<>();
                 argv.add(assets.qemu.getAbsolutePath());
                 argv.add("-rtc"); argv.add("base=localtime");
@@ -96,7 +99,9 @@ public final class EmeryRuntime {
                 argv.add("-qmp"); argv.add("unix:"+assets.qmp.getAbsolutePath()+",server=on,wait=off");
                 argv.add("-serial");argv.add("null");
                 argv.add("-serial");argv.add("unix:"+new File(assets.root,"pebble.sock").getAbsolutePath()+",server=on,wait=off");
-                argv.add("-serial");argv.add("unix:"+new File(assets.root,"console.sock").getAbsolutePath()+",server=on,wait=off");
+                // Firmware debug serial is UART2, NOT QMP/UART1. Preserve raw Pulse
+                // frames for diagnosing real PebbleOS watchface crashes.
+                argv.add("-serial");argv.add("file:"+new File(assets.root,"emery-debug-uart2.bin").getAbsolutePath());
                 argv.add("-machine");argv.add("pebble-emery,audiodev=snd0");
                 argv.add("-audiodev");argv.add("none,id=snd0");
                 argv.add("-kernel");argv.add(assets.elf.getAbsolutePath());
@@ -240,11 +245,22 @@ public final class EmeryRuntime {
                 }
                 if(closing)return;
                 if(appLink==null)throw new IOException("Pebble UART unavailable: "+last);
-                new EmeryPbwInstaller(appLink,this::emit).install(file);
+                String prior=context.getSharedPreferences("time2-pbw-install",Context.MODE_PRIVATE)
+                        .getString("last_installed_uuid",null);
+                new EmeryPbwInstaller(appLink,this::emit).install(file,prior);
+                context.getSharedPreferences("time2-pbw-install",Context.MODE_PRIVATE)
+                        .edit().putString("last_installed_uuid",chosen).apply();
+                emit("Pebble serial companion connected; watching guest after PBW transfer");
+                // Retain QEMU UART1 connection while the watchface is live.
+                // The previous prototype immediately disconnected the virtual
+                // companion after PutBytes and could starve the new app.
+                while(!closing && process!=null && process.isAlive()){
+                    appLink.serviceOnce(1);
+                }
             }catch(InterruptedException interrupted){
                 Thread.currentThread().interrupt();
             }catch(Exception error){
-                emit("PBW INSTALL FAILED: "+error.getMessage());
+                if(!closing)emit("PBW INSTALL FAILED: "+error.getMessage());
             }finally{
                 EmeryPebbleLink link=appLink;
                 appLink=null;

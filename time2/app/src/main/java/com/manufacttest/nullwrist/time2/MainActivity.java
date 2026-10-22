@@ -145,8 +145,8 @@ public final class MainActivity extends Activity {
             startActivityForResult(export,EXPORT_EMERY_LOG);
         });
         button("VIEW BUILD STATUS",()->new AlertDialog.Builder(this)
-                .setTitle("NullWrist Time 2 / 0.4.0-lab")
-                .setMessage("Completed: project isolation, raster branding, Emery display mapping, touch diagnostics and PBW library.\n\nConfirmed: genuine Emery boot/display on Titan 2. Experimental: direct PBW install via QEMU serial / BlobDB / AppFetch / PutBytes; needs real-device testing. Phone services, background work and stability tests remain.")
+                .setTitle("NullWrist Time 2 / 0.4.1-lab")
+                .setMessage("Completed: project isolation, raster branding, Emery display mapping, touch diagnostics and PBW library.\n\nConfirmed: genuine Emery boot/display on Titan 2. Partial: PBW binary/resources transfer confirmed on Titan2; guest may show not-responding. 0.4.1 adds graceful-stop + persistent companion and raw UART2 diagnostics. Phone services, background work and stability tests remain.")
                 .setPositiveButton("OK",null).show());
     }
 
@@ -180,8 +180,10 @@ public final class MainActivity extends Activity {
                 if(output==null)throw new IOException("Cannot write destination");
                 appendLog(output,"ANDROID EMERY HOST",host);
                 appendLog(output,"NATIVE QEMU",log);
+                appendGuestRaw(output,new File(new File(getFilesDir(),"time2-emery"),
+                        "emery-debug-uart2.bin"));
                 showMessage("Diagnostic exported",
-                        "Saved both Android host status and QEMU process output.");
+                        "Saved Android status, QEMU output and encoded guest UART2 logs.");
             }catch(IOException error){
                 showMessage("Export failed",error.getMessage());
             }
@@ -218,6 +220,33 @@ public final class MainActivity extends Activity {
             int n;
             while((n=input.read(buffer))!=-1)out.write(buffer,0,n);
         }
+    }
+
+    private void appendGuestRaw(OutputStream out,File guest)throws IOException{
+        out.write("\n=== PEBBLEOS DEBUG UART2 (base64, last 48 KiB) ===\n"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if(!guest.isFile()){
+            out.write("(not created)\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return;
+        }
+        byte[] tail;
+        try(InputStream in=new FileInputStream(guest);
+            java.io.ByteArrayOutputStream b=new java.io.ByteArrayOutputStream()){
+            long skipped=Math.max(0,guest.length()-48L*1024L);
+            while(skipped>0){
+                long n=in.skip(skipped);
+                if(n<=0)throw new IOException("Cannot seek to guest log tail");
+                skipped-=n;
+            }
+            byte[] chunk=new byte[8192];int n;
+            while((n=in.read(chunk))!=-1){
+                if(b.size()+n>48*1024)throw new IOException("Debug UART expanded unexpectedly");
+                b.write(chunk,0,n);
+            }
+            tail=b.toByteArray();
+        }
+        out.write((android.util.Base64.encodeToString(tail,android.util.Base64.NO_WRAP)
+                +"\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));
     }
 
     private void showMessage(String title,String content){

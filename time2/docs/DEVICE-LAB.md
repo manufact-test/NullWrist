@@ -43,3 +43,17 @@ PBW import now recognizes authentic Emery plus SDK-compatible Basalt/root PBW ma
 3. Verify actual face visible. **No assumption:** the first serial bridge attempt may fail; in that case note the last visible status and export **EMERY DIAGNOSTICS** from main screen. These logs include installer errors.
 4. For an import error, record the dialog text and (optionally) provide the PBW file; a separate QEMU boot log cannot diagnose a rejected ZIP/UUID/manifest.
 5. Old 0.8.12 NullWrist remains a different package. Do not uninstall it.
+
+## Royale is not responding — 0.4.1 follow-up
+- If the guest shows "is not responding" after a successful PBW transfer,
+  **do not infer a wire transport failure or a QEMU process crash**. Capture the
+  watch screen and **EXPORT EMERY DIAGNOSTICS**. In 0.4.1 this includes the
+  capped raw guest debug UART2 payload in base64 for crash-level investigation.
+- Repeated installation can be affected by the graceful-app-switch issue
+  described in upstream PebbleOS #2172. We now send AppRunStateStop before
+  install and keep the virtual UART1 phone connected after transfer.
+- Try one other small, known-good Emery watchface to distinguish the general
+  install path from Royale's runtime needs.
+- The exact Royale PBW file helps reproduce build, ABI and runtime problems.
+  A screenshot of this crash and a host log ending in "transfer complete"
+  do not tell us which guest assertion or fault occurred.

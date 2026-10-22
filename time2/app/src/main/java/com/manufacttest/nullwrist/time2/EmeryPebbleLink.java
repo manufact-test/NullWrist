@@ -63,6 +63,21 @@ public final class EmeryPebbleLink implements Closeable {
                 " timed out after "+seconds+" seconds");
     }
 
+    /**
+     * Drain asynchronous guest traffic after install without disconnecting the
+     * watch's virtual phone. This also serves late PhoneAppVersion requests.
+     * Idle timeouts return silently rather than dropping the link.
+     */
+    public void serviceOnce(int seconds)throws IOException {
+        if(closed)return;
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(seconds);
+        EmeryPebbleWire.Packet packet=next(deadline);
+        if(packet!=null && packet.endpoint==0x11 && packet.payload.length>0
+                && packet.payload[0]==0){
+            send(0x11,EmeryPebbleWire.appVersionReply());
+        }
+    }
+
     public EmeryPebbleWire.Packet transact(int endpoint,byte[] payload,
                                            int responseEndpoint,int seconds)throws IOException{
         send(endpoint,payload);
@@ -82,7 +97,7 @@ public final class EmeryPebbleLink implements Closeable {
             if(length>EmeryPebbleWire.MAX_CONTROL_PAYLOAD)
                 throw new IOException("Oversized QEMU serial frame");
             byte[] body=readExactly(length+2,deadline);
-            if(body==null)return null;
+            if(body==null)throw new IOException("QEMU serial body was not received");
             if(EmeryPebbleWire.u16(body,length)!=0xBEEF)
                 throw new IOException("Pebble/QEMU control footer mismatch");
             if(proto!=EmeryPebbleWire.SPP)continue;
@@ -98,8 +113,10 @@ public final class EmeryPebbleLink implements Closeable {
         int done=0;
         while(done<length){
             if(closed)throw new IOException("Emery link closed");
-            if(System.nanoTime()>=deadline)
+            if(System.nanoTime()>=deadline){
+                if(done==0)return null; // no traffic during idle guest session
                 throw new IOException("Partial QEMU serial frame timed out ("+done+"/"+length+")");
+            }
             try{
                 int n=input.read(buffer,done,length-done);
                 if(n<0)throw new IOException("QEMU serial channel closed");

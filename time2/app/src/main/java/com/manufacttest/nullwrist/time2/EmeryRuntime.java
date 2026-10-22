@@ -33,6 +33,8 @@ public final class EmeryRuntime {
     private final ExecutorService frames=Executors.newSingleThreadExecutor(r->{
         Thread thread=new Thread(r,"EmeryFrameReader");thread.setDaemon(true);return thread;
     });
+    private static final AtomicBoolean SESSION_ACTIVE=new AtomicBoolean(false);
+    private volatile boolean ownsSession;
     private final AtomicBoolean displayRefreshQueued=new AtomicBoolean(false);
     private volatile boolean closing;
     private volatile boolean connected;
@@ -45,8 +47,14 @@ public final class EmeryRuntime {
         this.listener=listener;
     }
     public boolean isConnected(){return connected&&!closing;}
+    public static boolean isDeviceLabActive(){return SESSION_ACTIVE.get();}
 
     public void start(){
+        if(!SESSION_ACTIVE.compareAndSet(false,true)){
+            emit("Another Emery session is still running; close it first");
+            return;
+        }
+        ownsSession=true;
         commands.execute(()->{
             try {
                 emit("Validating Emery firmware and QEMU...");
@@ -253,6 +261,10 @@ public final class EmeryRuntime {
         // Only unlink after the process is gone, never while still live.
         if(assets!=null && (p==null||!p.isAlive())){
             if(assets.qmp.exists())assets.qmp.delete();
+        }
+        if(ownsSession){
+            ownsSession=false;
+            SESSION_ACTIVE.set(false);
         }
     }
 

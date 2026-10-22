@@ -26,6 +26,8 @@ import java.util.Locale;
 public final class MainActivity extends Activity {
     private static final int IMPORT_PBW = 26;
     private static final int EXPORT_EMERY_LOG = 27;
+    private static final int EXPORT_SPI = 28;
+    private static final int IMPORT_SPI = 29;
     private static final int BG = Color.rgb(8,9,13);
     private static final int ORANGE = Color.rgb(255,109,0);
     private static final int WHITE = Color.rgb(235,236,232);
@@ -88,8 +90,35 @@ public final class MainActivity extends Activity {
         if(entries.isEmpty())
             addText("No Emery PBWs imported. Imported files are only inspected and stored; they cannot run until the runtime is integrated.",11,WHITE,Gravity.START,dp(6));
 
-        section("03 / SAFETY");
         addText("Independent application ID / private storage. Does not alter or migrate the existing NullWrist 0.8.12. No network or notification access requested.",11,WHITE,Gravity.START,dp(8));
+        section("03 / WATCH MEMORY");
+        addText("Back up your virtual PebbleOS apps and settings before uninstalling a debug APK. Keep this binary file private.",11,WHITE,Gravity.START,dp(8));
+        button("BACK UP EMERY WATCH MEMORY",()->{
+            if(EmeryRuntime.isDeviceLabActive()){
+                showMessage("Emery is running","Close the rear screen first.");return;
+            }
+            Intent choose=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            choose.addCategory(Intent.CATEGORY_OPENABLE);
+            choose.setType("application/octet-stream");
+            choose.putExtra(Intent.EXTRA_TITLE,"nullwrist-time2-emery-flash.bin");
+            startActivityForResult(choose,EXPORT_SPI);
+        });
+        button("RESTORE EMERY WATCH MEMORY",()->{
+            if(EmeryRuntime.isDeviceLabActive()){
+                showMessage("Emery is running","Close the rear screen first.");return;
+            }
+            new AlertDialog.Builder(this).setTitle("Restore virtual watch memory?")
+                .setMessage("This replaces ALL settings, installed faces and apps of this new Time 2 emulator. It never touches the older NullWrist app.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("CHOOSE BACKUP",(dialog,which)->{
+                    Intent choose=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    choose.setType("*/*");
+                    choose.addCategory(Intent.CATEGORY_OPENABLE);
+                    startActivityForResult(choose,IMPORT_SPI);
+                }).show();
+        });
+
+        section("04 / SAFETY");
         button("EXPORT EMERY DIAGNOSTICS",()->{
             File log = new File(new File(getFilesDir(),"time2-emery"),"emery-qemu.log");
             File host=new File(new File(getFilesDir(),"time2-emery"),"emery-host.log");
@@ -112,6 +141,23 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int request,int result,Intent data) {
         super.onActivityResult(request,result,data);
         if(result!=RESULT_OK || data==null || data.getData()==null) return;
+        if(request==EXPORT_SPI||request==IMPORT_SPI){
+            final boolean backup=request==EXPORT_SPI;
+            android.net.Uri selected=data.getData();
+            new Thread(()->{
+                try{
+                    if(backup)EmeryFlashBackup.exportImage(this,selected);
+                    else EmeryFlashBackup.restoreImage(this,selected);
+                    runOnUiThread(()->showMessage("Emery memory",
+                            backup?"Backup saved successfully. Store it safely.":
+                                    "Memory restored. Launch the rear display to check the watch."));
+                }catch(IOException problem){
+                    runOnUiThread(()->showMessage(backup?"Backup failed":"Restore failed",
+                            problem.getMessage()));
+                }
+            },"EmeryFlashTransfer").start();
+            return;
+        }
         if(request==EXPORT_EMERY_LOG){
             File log=new File(new File(getFilesDir(),"time2-emery"),"emery-qemu.log");
             File host=new File(new File(getFilesDir(),"time2-emery"),"emery-host.log");

@@ -170,7 +170,7 @@ public final class MainActivity extends Activity {
         }
         text(info,name,18,WHITE,Gravity.START,8).setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         text(info,"Last framebuffer snapshot",11,MUTED,Gravity.START,8);
-        text(info,"Installation is not proof of a running watchface",
+        text(info,"Only a guest RUNNING response confirms launch",
                 10,MUTED,Gravity.START,8);
 
         TextView launch=action("OPEN PEBBLEOS",true,()->openWatch(false));
@@ -225,11 +225,18 @@ public final class MainActivity extends Activity {
             text(copy,item.name,14,WHITE,Gravity.START,0);
             String lastId=getSharedPreferences("time2-pbw-install",MODE_PRIVATE)
                     .getString("last_installed_uuid","");
-            text(copy,item.uuid.equals(lastId)?"Transferred · not verified running":
-                    "Imported · not installed",10,MUTED,Gravity.START,4);
+            text(copy,item.uuid.equals(lastId)?"Last confirmed running":
+                    "Imported · choose INSTALL",10,MUTED,Gravity.START,4);
             TextView install=action("INSTALL",false,()->install(item));
             install.setTextSize(11);
-            line.addView(install,new LinearLayout.LayoutParams(dp(96),dp(48)));
+            line.addView(install,new LinearLayout.LayoutParams(dp(88),dp(48)));
+            TextView remove=action("×",false,()->confirmRemove(item));
+            remove.setContentDescription("Remove "+item.name+" from library and watch");
+            remove.setTextSize(24);
+            LinearLayout.LayoutParams removeParams=
+                    new LinearLayout.LayoutParams(dp(48),dp(48));
+            removeParams.leftMargin=dp(4);
+            line.addView(remove,removeParams);
         }
     }
 
@@ -254,6 +261,33 @@ public final class MainActivity extends Activity {
         getSharedPreferences("time2-pbw-install",MODE_PRIVATE).edit()
                 .putString("pending_uuid",item.uuid).apply();
         openWatch(false);
+    }
+
+    private void confirmRemove(EmeryPackageIndex.PackageInfo item){
+        if(EmeryRuntime.isDeviceLabActive()){
+            showMessage("Close the watch first",
+                    "Return to the phone screen and close the active watch session before deleting an installed face.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Remove "+item.name+"?")
+            .setMessage("Deletes the PBW from your private library and asks PebbleOS "
+                    +"to remove this watchface from its AppDB. Included starter "
+                    +"faces will stay deleted until you import them again.")
+            .setNegativeButton("CANCEL",null)
+            .setPositiveButton("REMOVE",(dialog,which)->{
+                try {
+                    library.removePbw(item.uuid);
+                    android.content.SharedPreferences pref=
+                        getSharedPreferences("time2-pbw-install",MODE_PRIVATE);
+                    pref.edit().remove("pending_uuid")
+                        .putString("pending_delete_uuid",item.uuid).apply();
+                    render();
+                    if(EmeryAssets.isBundled(this))openWatch(false);
+                    else showMessage("Removed locally",
+                        "This APK does not bundle the emulator; guest deletion is queued for the next emulator start.");
+                }catch(IOException error){showMessage("Remove failed",error.getMessage());}
+            }).show();
     }
 
     private void openWatch(boolean diagnostics){

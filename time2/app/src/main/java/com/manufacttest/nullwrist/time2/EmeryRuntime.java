@@ -227,6 +227,12 @@ public final class EmeryRuntime {
         String deleting=pref.getString("pending_delete_uuid",null);
         // Do not repeat an already-failed operation on every watch boot.
         pref.edit().remove("pending_uuid").remove("pending_delete_uuid").apply();
+        if(chosen!=null || deleting!=null) {
+            pref.edit().remove("last_operation_error")
+                    .putString("last_operation_status",chosen!=null
+                            ? "Installing watchface in PebbleOS..."
+                            : "Removing watchface from PebbleOS...").apply();
+        }
         appInstallWorker.execute(()->{
             try {
                 File socket=new File(assets.root,"pebble.sock");
@@ -340,6 +346,22 @@ public final class EmeryRuntime {
 
     private void emit(String text){
         if(closing)return;
+        // Report the true result back to the main-screen companion. This does
+        // not cover the genuine guest LCD with an Android spinner or dialog.
+        if(text.startsWith("PebbleOS:") || text.startsWith("PBW ") ||
+                text.startsWith("PEBBLE APP TASK")) {
+            android.content.SharedPreferences prefs=context.getSharedPreferences(
+                    "time2-pbw-install",Context.MODE_PRIVATE);
+            android.content.SharedPreferences.Editor update=prefs.edit()
+                    .putString("last_operation_status",text);
+            if(text.startsWith("PEBBLE APP TASK FAILED") ||
+                    text.contains("NOT confirmed"))
+                update.putString("last_operation_error",text);
+            else if(text.startsWith("PebbleOS confirmed watchface running") ||
+                    text.startsWith("PebbleOS deleted watchface"))
+                update.remove("last_operation_error");
+            update.apply();
+        }
         if(assets!=null){
             File file=new File(assets.root,"emery-host.log");
             byte[] record=(System.currentTimeMillis()+" "+text+"\n")

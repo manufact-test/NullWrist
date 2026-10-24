@@ -124,8 +124,9 @@ fun removeWallpaper(context: Context) {
 
 // Android intents rather than vendor-specific package names; compatible with alternate defaults.
 fun openDefaultClock(context: Context, language: String) {
-    val actions = listOf(
-        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CLOCK),
+    val actions = listOfNotNull(
+        context.packageManager.getLaunchIntentForPackage("com.android.deskclock"),
+        context.packageManager.getLaunchIntentForPackage("com.google.android.deskclock"),
         Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
     )
     launchFirstActivity(context, actions, language, "Clock app not found", "Приложение часов не найдено")

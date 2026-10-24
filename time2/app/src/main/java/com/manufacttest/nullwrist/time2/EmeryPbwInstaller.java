@@ -130,11 +130,39 @@ public final class EmeryPbwInstaller {
                 progress.update("PebbleOS: installing background worker...");
                 putBytes(7,read(archive,prefix,worker.optString("name","")),appId);
             }
-            progress.update("PBW transfer complete: "+info.name+
-                    " — checking if PebbleOS actually starts it");
+            progress.update("PBW bytes committed: "+info.name+
+                    " — querying PebbleOS running state");
+            // Do not equate transfer ACK with successful execution. The
+            // first matching RUNNING status proves a launch; otherwise
+            // retain the PBW in the library for a manual retry.
+            boolean active=awaitRunning(uuid,12);
+            if(active)progress.update("PebbleOS confirmed watchface running: "+info.name);
+            else progress.update("PBW installed but launch NOT confirmed: "+info.name+
+                    " — inspect guest diagnostics");
         }catch(JSONException malformed){
             throw new IOException("Invalid platform manifest in PBW",malformed);
         }
+    }
+
+    private boolean awaitRunning(UUID uuid,int seconds)throws IOException {
+        byte[] expected=uuidBytes(uuid);
+        long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(seconds);
+        byte[] query=new byte[17];query[0]=3;
+        int attempts=0;
+        while(System.nanoTime()<deadline && attempts++<7){
+            link.send(0x34,query);
+            try {
+                EmeryPebbleWire.Packet state=link.waitFor(0x34,2);
+                if(state.payload.length>=17 && state.payload[0]==1){
+                    boolean matches=true;
+                    for(int i=0;i<16;i++)if(state.payload[i+1]!=expected[i])matches=false;
+                    if(matches)return true;
+                }
+            }catch(IOException e){
+                if(!e.getMessage().contains("timed out"))throw e;
+            }
+        }
+        return false;
     }
 
     private void putBytes(int type,byte[] payload,int appId)throws IOException {
@@ -143,38 +171,61 @@ public final class EmeryPbwInstaller {
         writeBe32(init,payload.length);
         init.write(type|0x80); // app-install-id present
         writeBe32(init,appId);
-        EmeryPebbleWire.Packet response=link.transact(0xBEEF,init.toByteArray(),
-                0xBEEF,20);
+        EmeryPebbleWire.Packet response=transactPutBytes(init.toByteArray(),20);
         int cookie=checkPutBytes(response);
         int sent=0,reported=0;
         while(sent<payload.length){
-            int size=Math.min(2000,payload.length-sent);
+            int size=Math.min(1000,payload.length-sent);
             ByteArrayOutputStream chunk=new ByteArrayOutputStream(size+9);
             chunk.write(2);writeBe32(chunk,cookie);writeBe32(chunk,size);
             chunk.write(payload,sent,size);
-            int ackCookie=checkPutBytes(link.transact(0xBEEF,chunk.toByteArray(),
-                    0xBEEF,30));
+            int ackCookie=checkPutBytes(transactPutBytes(chunk.toByteArray(),30));
             if(ackCookie!=cookie)throw new IOException("PBW transfer cookie mismatch");
             sent+=size;
             if(sent-reported>=16384||sent==payload.length){
                 progress.update("PebbleOS: uploaded "+sent+"/"+payload.length+" bytes");
                 reported=sent;
             }
-            try{Thread.sleep(4);}catch(InterruptedException stop){
+            try{Thread.sleep(12);}catch(InterruptedException stop){
                 Thread.currentThread().interrupt();throw new IOException("PBW installation interrupted",stop);
             }
         }
         ByteArrayOutputStream commit=new ByteArrayOutputStream();
         commit.write(3);writeBe32(commit,cookie);
         writeBe32(commit,EmeryPebbleWire.stm32Crc(payload));
-        int commitCookie=checkPutBytes(link.transact(0xBEEF,commit.toByteArray(),
-                0xBEEF,30));
+        int commitCookie=checkPutBytes(transactPutBytes(commit.toByteArray(),30));
         if(commitCookie!=cookie)throw new IOException("PBW commit cookie mismatch");
         ByteArrayOutputStream install=new ByteArrayOutputStream();
         install.write(5);writeBe32(install,cookie);
-        int installCookie=checkPutBytes(link.transact(0xBEEF,install.toByteArray(),
-                0xBEEF,30));
-        if(installCookie!=cookie)throw new IOException("PBW install cookie mismatch");
+        // The real guest clears its transfer token after COMMIT. INSTALL
+        // acknowledges with token ZERO, not the previous transfer cookie.
+        int installCookie=checkPutBytes(transactPutBytes(install.toByteArray(),30));
+        if(installCookie!=0)throw new IOException("PBW INSTALL acknowledged an unexpected cookie "
+                +Integer.toUnsignedString(installCookie));
+        try{Thread.sleep(40);}catch(InterruptedException stop){
+            Thread.currentThread().interrupt();throw new IOException("PBW install interrupted",stop);
+        }
+    }
+
+    // PebbleOS may NACK a transfer with token zero while storage is busy.
+    // Only that NACK is retried; other errors never become fake success.
+    private EmeryPebbleWire.Packet transactPutBytes(byte[] payload,int timeoutSeconds)
+            throws IOException {
+        for(int i=0;i<10;i++){
+            EmeryPebbleWire.Packet ack=link.transact(0xBEEF,payload,0xBEEF,timeoutSeconds);
+            if(ack.payload.length>=5 && (ack.payload[0]&255)==2 &&
+                    ack.payload[1]==0 && ack.payload[2]==0 &&
+                    ack.payload[3]==0 && ack.payload[4]==0) {
+                try{Thread.sleep(Math.min(250,20*(i+1)));}
+                catch(InterruptedException e){
+                    Thread.currentThread().interrupt();
+                    throw new IOException("PutBytes interrupted",e);
+                }
+                continue;
+            }
+            return ack;
+        }
+        throw new IOException("PebbleOS remained busy during PutBytes");
     }
 
     private static int checkPutBytes(EmeryPebbleWire.Packet ack)throws IOException{

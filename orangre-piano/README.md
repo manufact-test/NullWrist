@@ -4,7 +4,7 @@ Minimalist, text-only, orange-black Android HOME launcher designed for the squar
 
 An entirely separate Android application from NullWrist. Does not change the rear screen, Pebble runtime, or main NullWrist application.
 
-## v0.1 scope
+## v0.2 scope
 
 - Android HOME role (no root), safe to swap back to the stock launcher.
 - 5 or 6 selectable and reorderable favorite apps, no app icons.
@@ -27,16 +27,24 @@ The repository workflow `orangre-piano.yml` builds this project independently an
 
 ## Install and first launch
 
-1. Install APK on the Titan 2.
+1. Install APK on the Titan 2 (same package as v0.1).
 2. Launch **orangre piano** from app list.
-3. Tap **SET AS HOME** and confirm with Android's standard launcher chooser.
-4. Tap **EDIT FAVORITES** to assign favorite apps.
-5. Tap **WALLPAPER** in settings to select a local photo.
+3. Tap **SET AS DEFAULT HOME** and confirm with Android's standard launcher chooser.
+4. In **PREFERENCES**, tap a slot to assign an app.
+5. Tap **CHOOSE WALLPAPER** in preferences to select a local photo.
 
 To restore the previous launcher, open **Settings → Apps → Default apps → Home app**.
 
 ## Notes
 
-This personal v0.1 build has not yet been device-tested on the Titan 2. Android firmware-specific physical keyboard gestures, system HOME transitions, glass render performance, and soft-keyboard behavior need real device validation. Source package: `com.orangrepiano.launcher`.
+This personal v0.2 build has not yet been device-tested on the Titan 2. Android firmware-specific physical keyboard gestures, system HOME transitions, glass render performance, and soft-keyboard behavior need real device validation. Source package: `com.orangrepiano.launcher`.
 
 Project name is intentionally spelled **orangre piano**.
+
+## v0.2 refinements
+
+- Non-scrolling home screen; removed brand and nonessential labels from HOME.
+- Tap time to open the clock; tap date to open the calendar (uses standard Android intents).
+- Built-in English and Russian UI setting, including date locale.
+- Optional hide top status bar on this launcher; Android does not allow a normal app to disable the notification shade system-wide. System pull-down remains available.
+- Existing favorites, wallpaper and preferences persist when updating v0.1.

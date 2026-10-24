@@ -114,9 +114,10 @@ private val Glass = Color(0x99302620)
 private val NoGlass = Color(0xE8151311)
 
 private enum class Page { HOME, DRAWER, SETTINGS }
+private fun tr(lang: String, en: String, ru: String): String = if (lang == "ru") ru else en
 
 @Composable
-fun PianoApp(onRequestHome: () -> Unit) {
+fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     val context = LocalContext.current
     val prefs = remember { LauncherPrefs(context) }
     val scope = rememberCoroutineScope()
@@ -126,6 +127,8 @@ fun PianoApp(onRequestHome: () -> Unit) {
     var glass by remember { mutableStateOf(prefs.glass) }
     var quiet by remember { mutableStateOf(prefs.quiet) }
     var hideFavorites by remember { mutableStateOf(prefs.hideFavoritesInDrawer) }
+    var language by remember { mutableStateOf(prefs.language) }
+    var hideStatusBar by remember { mutableStateOf(prefs.hideStatusBar) }
     var wallpaper by remember { mutableStateOf(getWallpaper(context)) }
     var page by remember { mutableStateOf(Page.HOME) }
     var filter by remember { mutableStateOf("") }
@@ -149,7 +152,7 @@ fun PianoApp(onRequestHome: () -> Unit) {
         if (uri != null) scope.launch {
             val result = withContext(Dispatchers.IO) { importWallpaper(context, uri) }
             if (result != null) wallpaper = result
-            else Toast.makeText(context, "Could not read wallpaper", Toast.LENGTH_SHORT).show()
+            else Toast.makeText(context, tr(language, "Could not read wallpaper", "Не удалось открыть обои"), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -242,6 +245,9 @@ fun PianoApp(onRequestHome: () -> Unit) {
                 when (current) {
                     Page.HOME -> HomePage(
                         apps = installed, favorites = favorites, slots = slots, glass = glass,
+                        language = language,
+                        onClock = { openDefaultClock(context, language) },
+                        onCalendar = { openDefaultCalendar(context, language) },
                         onOpen = { openApp(context, it) },
                         onChoose = ::chooseFavorite,
                         onDrawer = ::goDrawer,
@@ -250,6 +256,7 @@ fun PianoApp(onRequestHome: () -> Unit) {
                     Page.DRAWER -> DrawerPage(
                         apps = installed.filterNot { hideFavorites && it.key in favorites },
                         filter = filter, onFilter = { filter = it },
+                        language = language,
                         glass = glass, onHome = ::goHome,
                         onOpen = { openApp(context, it) }
                     )
@@ -257,6 +264,9 @@ fun PianoApp(onRequestHome: () -> Unit) {
                         apps = installed, favorites = favorites, slots = slots,
                         glass = glass, quiet = quiet, hideFavorites = hideFavorites,
                         hasWallpaper = wallpaper != null,
+                        language = language, hideStatusBar = hideStatusBar,
+                        onLanguage = { prefs.setLanguage(it); language = prefs.language },
+                        onHideStatusBar = { prefs.setHideStatusBar(it); hideStatusBar = it; onStatusBarChanged(it) },
                         onBack = ::goHome,
                         onChoose = ::chooseFavorite,
                         onMove = { index, delta ->
@@ -287,13 +297,13 @@ fun PianoApp(onRequestHome: () -> Unit) {
             }
             AlertDialog(
                 onDismissRequest = { selectingSlot = -1 },
-                title = { Text("SELECT AN APP", color = Peach, fontFamily = FontFamily.Monospace, fontSize = 17.sp) },
+                title = { Text(tr(language, "SELECT AN APP", "ВЫБРАТЬ ПРИЛОЖЕНИЕ"), color = Peach, fontFamily = FontFamily.Monospace, fontSize = 17.sp) },
                 text = {
                     Column {
                         OutlinedTextField(
                             value = pickerSearch,
                             onValueChange = { pickerSearch = it },
-                            label = { Text("Filter apps") },
+                            label = { Text(tr(language, "Filter apps", "Поиск приложений")) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -317,10 +327,10 @@ fun PianoApp(onRequestHome: () -> Unit) {
                     TextButton(onClick = {
                         updateFavorite(selectingSlot, "")
                         selectingSlot = -1
-                    }) { Text("CLEAR SLOT") }
+                    }) { Text(tr(language, "CLEAR SLOT", "ОЧИСТИТЬ")) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { selectingSlot = -1 }) { Text("CANCEL") }
+                    TextButton(onClick = { selectingSlot = -1 }) { Text(tr(language, "CANCEL", "ОТМЕНА")) }
                 },
                 containerColor = Color(0xFF29201C)
             )
@@ -377,6 +387,9 @@ private fun HomePage(
     favorites: List<String>,
     slots: Int,
     glass: Boolean,
+    language: String,
+    onClock: () -> Unit,
+    onCalendar: () -> Unit,
     onOpen: (AppEntry) -> Unit,
     onChoose: (Int) -> Unit,
     onDrawer: () -> Unit,
@@ -392,21 +405,19 @@ private fun HomePage(
             )
         }
     ) {
-        val compact = maxHeight < 430.dp
-        val lineHeight = if (compact) 31.dp else 40.dp
+        // Titan 2's 1:1 display has limited usable dp height after Android insets.
+        // Fit the entire home without vertical scrolling, including all six rows.
+        val compact = maxHeight < 445.dp
+        val lineHeight = when {
+            maxHeight < 375.dp -> 29.dp
+            compact -> 33.dp
+            else -> 38.dp
+        }
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = if (compact) 5.dp else 14.dp),
+            Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 7.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            BrandHeader("◦ ◦ ◦", onSettings)
-            Spacer(Modifier.height(if (compact) 7.dp else 22.dp))
-            ClockBlock(compact)
-            Spacer(Modifier.height(if (compact) 10.dp else 22.dp))
-            Text("YOUR SIX KEYS".replace("SIX", if (slots == 5) "FIVE" else "SIX"),
-                color = Subtle, fontFamily = FontFamily.Monospace,
-                fontSize = 10.sp, letterSpacing = 1.sp)
-            Spacer(Modifier.height(7.dp))
+            ClockBlock(compact = compact, language = language, onClock = onClock, onCalendar = onCalendar)
             GlassPanel(enabled = glass, modifier = Modifier.fillMaxWidth()) {
                 Column {
                     repeat(slots) { index ->
@@ -430,59 +441,59 @@ private fun HomePage(
                             Text((index + 1).toString().padStart(2, '0'),
                                 fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = Orange.copy(alpha = .7f),
                                 modifier = Modifier.width(36.dp))
-                            Text(entry?.label ?: "+  assign application",
+                            Text(entry?.label ?: tr(language, "+  assign application", "+  выбрать приложение"),
                                 color = if (entry == null) Subtle.copy(alpha = .7f) else Cream,
                                 fontSize = if (compact) 16.sp else 18.sp,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f))
-                            if (entry != null) {
-                                Box(Modifier.size(4.dp).background(Orange.copy(alpha = .72f)))
-                            }
+                            if (entry != null) Box(Modifier.size(4.dp).background(Orange.copy(alpha = .72f)))
                         }
                         if (index != slots - 1) HorizontalDivider(color = Line.copy(alpha = .27f))
                     }
                 }
             }
-            Spacer(Modifier.height(if (compact) 13.dp else 27.dp))
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("↑  ALL APPS", fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Peach,
-                    modifier = Modifier.clickable(onClick = onDrawer).padding(vertical = 8.dp))
-                Text("SETTINGS  ⋮", fontFamily = FontFamily.Monospace,
+                Text(tr(language, "↑  ALL APPS", "↑  ВСЕ ПРИЛОЖЕНИЯ"), fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Peach,
+                    modifier = Modifier.clickable(onClick = onDrawer).padding(vertical = 6.dp))
+                Text(tr(language, "SETTINGS  ⋮", "НАСТРОЙКИ  ⋮"), fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp, color = Subtle,
-                    modifier = Modifier.clickable(onClick = onSettings).padding(vertical = 8.dp))
-            }
-            if (!compact) {
-                Text("type on keyboard to find an app", color = Subtle.copy(alpha = .7f),
-                    fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
+                    modifier = Modifier.clickable(onClick = onSettings).padding(vertical = 6.dp))
             }
         }
     }
 }
 
 @Composable
-private fun ClockBlock(compact: Boolean) {
+private fun ClockBlock(
+    compact: Boolean,
+    language: String,
+    onClock: () -> Unit,
+    onCalendar: () -> Unit
+) {
     val now by produceState(initialValue = LocalDateTime.now()) {
         while (true) { value = LocalDateTime.now(); delay(10_000) }
     }
+    val locale = if (language == "ru") Locale.forLanguageTag("ru") else Locale.ENGLISH
     Column {
         Text(now.format(DateTimeFormatter.ofPattern("HH:mm")),
-            fontSize = if (compact) 53.sp else 66.sp,
+            fontSize = if (compact) 51.sp else 60.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.Monospace,
             letterSpacing = (-4).sp,
-            lineHeight = if (compact) 56.sp else 68.sp,
-            color = Peach)
+            lineHeight = if (compact) 55.sp else 64.sp,
+            color = Peach,
+            modifier = Modifier.clickable(onClick = onClock))
         Text(
-            now.format(DateTimeFormatter.ofPattern("EEEE  ·  d MMMM", Locale.getDefault()))
-                .uppercase(Locale.getDefault()),
+            now.format(DateTimeFormatter.ofPattern("EEEE  ·  d MMMM", locale)).uppercase(locale),
             color = Subtle, fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, letterSpacing = .5.sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.clickable(onClick = onCalendar).padding(vertical = 4.dp)
         )
     }
 }
@@ -492,6 +503,7 @@ private fun DrawerPage(
     apps: List<AppEntry>,
     filter: String,
     onFilter: (String) -> Unit,
+    language: String,
     glass: Boolean,
     onHome: () -> Unit,
     onOpen: (AppEntry) -> Unit
@@ -517,15 +529,15 @@ private fun DrawerPage(
     }
 
     Column(Modifier.fillMaxSize().padding(start = 18.dp, end = 11.dp, top = 5.dp)) {
-        BrandHeader("← HOME", onHome)
+        BrandHeader(tr(language, "← HOME", "← ДОМОЙ"), onHome)
         Spacer(Modifier.height(10.dp))
-        Text("ALL APPLICATIONS", color = Peach, fontSize = 21.sp,
+        Text(tr(language, "ALL APPLICATIONS", "ВСЕ ПРИЛОЖЕНИЯ"), color = Peach, fontSize = 21.sp,
             fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-        Text("${results.size} AVAILABLE", color = Subtle, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+        Text(tr(language, "${results.size} AVAILABLE", "НАЙДЕНО: ${results.size}"), color = Subtle, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
         Spacer(Modifier.height(10.dp))
         OutlinedTextField(
             value = filter, onValueChange = onFilter, singleLine = true,
-            label = { Text("Search / type to filter", fontSize = 12.sp) },
+            label = { Text(tr(language, "Search / type to filter", "Поиск по названию"), fontSize = 12.sp) },
             modifier = Modifier.fillMaxWidth().padding(end = 21.dp)
         )
         Spacer(Modifier.height(8.dp))
@@ -545,7 +557,7 @@ private fun DrawerPage(
                     }
                 }
                 if (results.isEmpty()) item {
-                    Text("NO MATCHES", color = Subtle, modifier = Modifier.padding(top = 30.dp))
+                    Text(tr(language, "NO MATCHES", "НИЧЕГО НЕ НАЙДЕНО"), color = Subtle, modifier = Modifier.padding(top = 30.dp))
                 }
             }
             Column(
@@ -572,6 +584,10 @@ private fun SettingsPage(
     quiet: Boolean,
     hideFavorites: Boolean,
     hasWallpaper: Boolean,
+    language: String,
+    hideStatusBar: Boolean,
+    onLanguage: (String) -> Unit,
+    onHideStatusBar: (Boolean) -> Unit,
     onBack: () -> Unit,
     onChoose: (Int) -> Unit,
     onMove: (Int, Int) -> Unit,
@@ -585,14 +601,14 @@ private fun SettingsPage(
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         .padding(horizontal = 19.dp, vertical = 6.dp)) {
-        BrandHeader("← HOME", onBack)
+        BrandHeader(tr(language, "← HOME", "← ДОМОЙ"), onBack)
         Spacer(Modifier.height(12.dp))
-        Text("PREFERENCES", color = Peach, fontFamily = FontFamily.Monospace,
+        Text(tr(language, "PREFERENCES", "НАСТРОЙКИ"), color = Peach, fontFamily = FontFamily.Monospace,
             fontSize = 23.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(17.dp))
-        SectionTitle("01 / FAVORITE KEYS")
+        SectionTitle(tr(language, "01 / FAVORITE KEYS", "01 / ИЗБРАННОЕ"))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("SHOW", color = Subtle, fontSize = 12.sp)
+            Text(tr(language, "SHOW", "ПОКАЗАТЬ"), color = Subtle, fontSize = 12.sp)
             listOf(5, 6).forEach { n ->
                 TextButton(onClick = { onSlots(n) }) {
                     Text(n.toString(), color = if (n == slots) Orange else Subtle, fontSize = 16.sp)
@@ -600,7 +616,7 @@ private fun SettingsPage(
             }
         }
         repeat(slots) { index ->
-            val label = apps.firstOrNull { it.key == favorites.getOrNull(index) }?.label ?: "+ choose app"
+            val label = apps.firstOrNull { it.key == favorites.getOrNull(index) }?.label ?: tr(language, "+ choose app", "+ выбрать приложение")
             Row(
                 Modifier.fillMaxWidth().height(39.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -618,23 +634,40 @@ private fun SettingsPage(
             HorizontalDivider(color = Line.copy(alpha = .22f))
         }
         Spacer(Modifier.height(19.dp))
-        SectionTitle("02 / APPEARANCE")
-        SettingRow("GLASS PANELS", glass, onGlass)
-        SettingRow("QUIET ANIMATIONS", quiet, onQuiet)
+        SectionTitle(tr(language, "02 / APPEARANCE", "02 / ОФОРМЛЕНИЕ"))
+        SettingRow(tr(language, "GLASS PANELS", "СТЕКЛЯННЫЕ ПАНЕЛИ"), glass, onGlass)
+        SettingRow(tr(language, "QUIET ANIMATIONS", "МИНИМУМ АНИМАЦИЙ"), quiet, onQuiet)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onWallpaper) { Text("CHOOSE WALLPAPER", color = Orange) }
-            if (hasWallpaper) TextButton(onClick = onClearWallpaper) { Text("REMOVE", color = Subtle) }
+            TextButton(onClick = onWallpaper) { Text(tr(language, "CHOOSE WALLPAPER", "ВЫБРАТЬ ОБОИ"), color = Orange) }
+            if (hasWallpaper) TextButton(onClick = onClearWallpaper) { Text(tr(language, "REMOVE", "УДАЛИТЬ"), color = Subtle) }
         }
         Spacer(Modifier.height(12.dp))
-        SectionTitle("03 / DIGITAL DETOX")
-        SettingRow("HIDE FAVORITES IN A-Z", hideFavorites, onHideFavorites)
+        SectionTitle(tr(language, "03 / DIGITAL DETOX", "03 / DIGITAL DETOX"))
+        SettingRow(tr(language, "HIDE FAVORITES IN A-Z", "СКРЫТЬ ИЗБРАННОЕ В СПИСКЕ"), hideFavorites, onHideFavorites)
         Spacer(Modifier.height(13.dp))
-        SectionTitle("04 / SYSTEM")
-        TextButton(onClick = onSetHome) { Text("SET AS DEFAULT HOME", color = Orange) }
-        Text("To switch back, open Android Settings → Default apps → Home app.",
+        SectionTitle(tr(language, "04 / SYSTEM", "04 / СИСТЕМА"))
+        Text(tr(language, "LANGUAGE / ЯЗЫК", "ЯЗЫК / LANGUAGE"),
+            color = Cream, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            TextButton(onClick = { onLanguage("ru") }) {
+                Text("Русский", color = if (language == "ru") Peach else Subtle)
+            }
+            TextButton(onClick = { onLanguage("en") }) {
+                Text("English", color = if (language == "en") Peach else Subtle)
+            }
+        }
+        SettingRow(tr(language, "HIDE TOP STATUS BAR", "СКРЫТЬ ВЕРХНЮЮ СТРОКУ"), hideStatusBar, onHideStatusBar)
+        Text(
+            tr(language,
+                "Only the top status bar is hidden on the launcher. Android still allows opening the notification shade with a swipe.",
+                "Скрывается только верхняя строка на экране лаунчера. Шторка уведомлений Android по-прежнему открывается свайпом."),
+            color = Subtle, fontSize = 11.sp, lineHeight = 15.sp
+        )
+        TextButton(onClick = onSetHome) { Text(tr(language, "SET AS DEFAULT HOME", "СДЕЛАТЬ ГЛАВНЫМ ЭКРАНОМ"), color = Orange) }
+        Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · personal build 0.1.0", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · personal build 0.2.0", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

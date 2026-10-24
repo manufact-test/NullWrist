@@ -63,6 +63,8 @@ class LauncherPrefs(context: Context) {
     val glass: Boolean get() = prefs.getBoolean("glass", true)
     val quiet: Boolean get() = prefs.getBoolean("quiet", false)
     val hideFavoritesInDrawer: Boolean get() = prefs.getBoolean("hide_favorites_drawer", false)
+    val language: String get() = prefs.getString("language", "en").let { if (it == "ru") "ru" else "en" }
+    val hideStatusBar: Boolean get() = prefs.getBoolean("hide_status_bar", false)
 
     fun setFavorite(index: Int, key: String) {
         val current = favorites.toMutableList()
@@ -88,6 +90,8 @@ class LauncherPrefs(context: Context) {
     fun setGlass(v: Boolean) { prefs.edit().putBoolean("glass", v).apply() }
     fun setQuiet(v: Boolean) { prefs.edit().putBoolean("quiet", v).apply() }
     fun setHideFavorites(v: Boolean) { prefs.edit().putBoolean("hide_favorites_drawer", v).apply() }
+    fun setLanguage(v: String) { prefs.edit().putString("language", if (v == "ru") "ru" else "en").apply() }
+    fun setHideStatusBar(v: Boolean) { prefs.edit().putBoolean("hide_status_bar", v).apply() }
 }
 
 private fun decodeScaled(input: java.io.InputStream, sample: Int): Bitmap? =
@@ -115,4 +119,44 @@ fun getWallpaper(context: Context): Bitmap? {
 
 fun removeWallpaper(context: Context) {
     File(context.filesDir, "piano-wallpaper.jpg").delete()
+}
+
+
+// Android intents rather than vendor-specific package names; compatible with alternate defaults.
+fun openDefaultClock(context: Context, language: String) {
+    val actions = listOf(
+        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CLOCK),
+        Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
+    )
+    launchFirstActivity(context, actions, language, "Clock app not found", "Приложение часов не найдено")
+}
+
+fun openDefaultCalendar(context: Context, language: String) {
+    val actions = listOf(
+        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CALENDAR),
+        Intent(Intent.ACTION_VIEW, android.provider.CalendarContract.CONTENT_URI)
+    )
+    launchFirstActivity(context, actions, language, "Calendar app not found", "Приложение календаря не найдено")
+}
+
+private fun launchFirstActivity(
+    context: Context,
+    actions: List<Intent>,
+    language: String,
+    enError: String,
+    ruError: String
+) {
+    for (intent in actions) {
+        try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        } catch (_: Exception) {
+            // Missing or restricted activity: try the next standard Android intent.
+        }
+    }
+    android.widget.Toast.makeText(
+        context,
+        if (language == "ru") ruError else enError,
+        android.widget.Toast.LENGTH_SHORT
+    ).show()
 }

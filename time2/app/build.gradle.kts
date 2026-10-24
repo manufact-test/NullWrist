@@ -7,8 +7,8 @@ android {
         applicationId = "com.manufacttest.nullwrist.time2"
         minSdk = 35
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0-lab"
+        versionCode = 6
+        versionName = "0.6.0-lab"
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
     }
     buildTypes {

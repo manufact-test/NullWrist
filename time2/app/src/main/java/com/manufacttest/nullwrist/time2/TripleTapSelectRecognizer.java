@@ -82,8 +82,10 @@ public final class TripleTapSelectRecognizer {
                     lastUpTime=timeMs;
                     if(pending.size()==3) {
                         // Exactly one center-button click; no guest touchscreen taps.
-                        pending.clear();
-                        sink.select();
+                        if(timeMs-firstDownTime <= SEQUENCE_MAX_MS) {
+                            pending.clear();
+                            sink.select();
+                        } else flushPending();
                     }
                 } else {
                     flushPending();

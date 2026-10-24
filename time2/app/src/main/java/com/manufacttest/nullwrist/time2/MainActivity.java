@@ -280,7 +280,7 @@ public final class MainActivity extends Activity {
                         case 1:backupMemory();break;
                         case 2:restoreMemory();break;
                         case 3:exportDiagnostics();break;
-                        case 4:showMessage("NullWrist Time 2 / 0.4.1-lab",
+                        case 4:showMessage("NullWrist Time 2 / 0.5.0-lab",
                                 "Real Emery firmware display was verified on Titan 2. "
                                 +"Third-party watchface execution is still experimental. "
                                 +"Triple-tap sends Pebble SELECT. "

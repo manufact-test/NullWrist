@@ -36,7 +36,7 @@ public final class EmeryPbwInstaller {
         this.link=link;this.progress=progress;
     }
 
-    public void install(File pbw,String previouslyInstalledUuid)throws IOException{
+    public boolean install(File pbw,String previouslyInstalledUuid)throws IOException{
         EmeryPackageIndex.PackageInfo info=EmeryPackageIndex.inspect(pbw);
         progress.update("PebbleOS: awaiting companion handshake...");
         EmeryPebbleWire.Packet v=link.transact(0x10,new byte[]{0},0x10,35);
@@ -139,9 +139,38 @@ public final class EmeryPbwInstaller {
             if(active)progress.update("PebbleOS confirmed watchface running: "+info.name);
             else progress.update("PBW installed but launch NOT confirmed: "+info.name+
                     " — inspect guest diagnostics");
+            return active;
         }catch(JSONException malformed){
             throw new IOException("Invalid platform manifest in PBW",malformed);
         }
+    }
+
+    /**
+     * Delete an app from the GUEST AppDB, not just the Android PBW library.
+     * BlobDB DELETE 0x04, database 0x02, UUID key. No CLEAR command.
+     */
+    public void uninstall(UUID uuid)throws IOException {
+        progress.update("PebbleOS: removing "+uuid+" from watch...");
+        // A running app should be asked to stop before deleting its metadata.
+        ByteArrayOutputStream stop=new ByteArrayOutputStream();
+        stop.write(2);EmeryPebbleWire.uuid(stop,uuid);
+        link.send(0x34,stop.toByteArray());
+        ByteArrayOutputStream request=new ByteArrayOutputStream();
+        int currentToken=token++;
+        request.write(4);
+        EmeryPebbleWire.le16(request,currentToken);
+        request.write(2);request.write(16);
+        EmeryPebbleWire.uuid(request,uuid);
+        EmeryPebbleWire.Packet ack=link.transact(0xB1DB,
+                request.toByteArray(),0xB1DB,20);
+        if(ack.payload.length<3 ||
+                (ack.payload[0]&255)!=(currentToken&255) ||
+                (ack.payload[1]&255)!=((currentToken>>8)&255))
+            throw new IOException("PebbleOS did not acknowledge watchface deletion");
+        int status=ack.payload[2]&255;
+        if(status!=1 && status!=6)
+            throw new IOException("PebbleOS rejected deletion (BlobDB "+status+")");
+        progress.update("PebbleOS deleted watchface "+uuid);
     }
 
     private boolean awaitRunning(UUID uuid,int seconds)throws IOException {

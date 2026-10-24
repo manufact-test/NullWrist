@@ -226,14 +226,25 @@ public final class EmeryPbwInstaller {
         if(commitCookie!=cookie)throw new IOException("PBW commit cookie mismatch");
         ByteArrayOutputStream install=new ByteArrayOutputStream();
         install.write(5);writeBe32(install,cookie);
-        // The real guest clears its transfer token after COMMIT. INSTALL
-        // acknowledges with token ZERO, not the previous transfer cookie.
+        // Firmware variants acknowledge INSTALL with either the active transfer
+        // cookie (verified on the user's Emery QEMU) or token zero (seen on
+        // other PebbleOS builds). 0.6 rejected the real nonzero ACK and
+        // prevented installation of the resource part. Do not accept an
+        // arbitrary third cookie or a NACK.
         int installCookie=checkPutBytes(transactPutBytes(install.toByteArray(),30));
-        if(installCookie!=0)throw new IOException("PBW INSTALL acknowledged an unexpected cookie "
-                +Integer.toUnsignedString(installCookie));
+        if(!isExpectedInstallCookie(cookie,installCookie))
+            throw new IOException("PBW INSTALL cookie mismatch: transfer="
+                    +Integer.toUnsignedString(cookie)+", ack="
+                    +Integer.toUnsignedString(installCookie));
+        progress.update("PebbleOS: INSTALL accepted (cookie "
+                +Integer.toUnsignedString(installCookie)+")");
         try{Thread.sleep(40);}catch(InterruptedException stop){
             Thread.currentThread().interrupt();throw new IOException("PBW install interrupted",stop);
         }
+    }
+
+    static boolean isExpectedInstallCookie(int transferCookie,int acknowledgedCookie) {
+        return acknowledgedCookie == 0 || acknowledgedCookie == transferCookie;
     }
 
     // PebbleOS may NACK a transfer with token zero while storage is busy.

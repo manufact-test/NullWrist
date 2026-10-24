@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-10-21",
+  "status": "investigation; pin each revision before distributable native builds",
+  "pebbleos": {
+    "repository": "https://github.com/coredevices/PebbleOS",
+    "sha": "0f806feed7b4bf7a2358119c667a09a7c9b961ff",
+    "board": "qemu_emery"
+  },
+  "qemu": {
+    "repository": "https://github.com/coredevices/qemu",
+    "sha": "8a0a7c646fd80bb13d92bb5e2320427e224a2f6b",
+    "branch": "pebble-10.1",
+    "machine": "pebble-emery",
+    "cpu": "cortex-m33"
+  },
+  "pebbleos_sdk": {
+    "repository": "https://github.com/coredevices/PebbleOS-SDK",
+    "sha": "6ecf7d119303a54283b80b7e11aba1ae160b47e2",
+    "notes": "SDK release package version and binary hashes must additionally be pinned"
+  }
+}

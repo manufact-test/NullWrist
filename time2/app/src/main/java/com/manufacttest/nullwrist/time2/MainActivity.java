@@ -1,0 +1,292 @@
+package com.manufacttest.nullwrist.time2;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
+import android.view.Display;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import java.io.IOException;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.List;
+import java.util.Locale;
+
+/** Fresh app shell. Never claims an emulator was started before native bootstrap exists. */
+public final class MainActivity extends Activity {
+    private static final int IMPORT_PBW = 26;
+    private static final int EXPORT_EMERY_LOG = 27;
+    private static final int EXPORT_SPI = 28;
+    private static final int IMPORT_SPI = 29;
+    private static final int BG = Color.rgb(8,9,13);
+    private static final int ORANGE = Color.rgb(255,109,0);
+    private static final int WHITE = Color.rgb(235,236,232);
+    private LinearLayout layout;
+    private LocalPbwLibrary library;
+
+    @Override protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        Display display=getDisplay();
+        int width=getResources().getDisplayMetrics().widthPixels;
+        int height=getResources().getDisplayMetrics().heightPixels;
+        boolean secondary=display!=null && display.getDisplayId()!=Display.DEFAULT_DISPLAY;
+        if (secondary || (width<=700 && height<=820)) {
+            Intent rear=new Intent(this,RearActivity.class);
+            startActivity(rear);
+            finish();
+            return;
+        }
+        library=new LocalPbwLibrary(this);
+        render();
+    }
+
+    private void render() {
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(true); scroll.setBackgroundColor(BG);
+        layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int pad=dp(20);
+        layout.setPadding(pad,dp(24),pad,dp(40));
+        scroll.addView(layout);
+        setContentView(scroll);
+
+        PixelWordmarkView logo=new PixelWordmarkView(this);
+        layout.addView(logo,new LinearLayout.LayoutParams(-1,dp(54)));
+        addText("TIME 2  //  EMERY EDITION",14,ORANGE,Gravity.CENTER,dp(2));
+        addText("VIRTUAL PEBBLEOS ON TITAN 2",11,WHITE,Gravity.CENTER,dp(10));
+
+        section("01 / CORE STATUS");
+        boolean lab=EmeryAssets.isBundled(this);
+        addText(lab?"EMERY ENGINE: DEVICE LAB ASSETS PRESENT":
+                    "EMERY ENGINE: NOT BUNDLED",15,ORANGE,Gravity.START,dp(8));
+        addText(lab?"Experimental native firmware/QEMU bundle present. Boots in foreground and needs physical Titan 2 validation before claiming runtime support.":
+                    "The ordinary source build contains no native QEMU or Emery firmware. The rear screen is an input-only preview.",12,WHITE,Gravity.START,dp(10));
+        button(lab?"BOOT EMERY (DEVICE LAB)":"OPEN REAR INPUT PREVIEW",
+                    ()->startActivity(new Intent(this,RearActivity.class)));
+
+        section("02 / WATCH APPS & FACES");
+        button("IMPORT EMERY .PBW",()->{
+            Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            picker.setType("*/*");
+            picker.addCategory(Intent.CATEGORY_OPENABLE);
+            startActivityForResult(picker,IMPORT_PBW);
+        });
+        List<EmeryPackageIndex.PackageInfo> entries=library.list();
+        addText("LOCAL LIBRARY: "+entries.size()+" PACKAGE(S)",12,ORANGE,Gravity.START,dp(6));
+        for (EmeryPackageIndex.PackageInfo entry:entries) {
+            addText((entry.watchface?"[FACE] ":"[APP] ")+entry.name
+                    +"\n"+entry.author+" / "+entry.platform.toUpperCase(java.util.Locale.ROOT)
+                    +" / "+entry.uuid,11,WHITE,Gravity.START,dp(8));
+            button("INSTALL / LAUNCH "+(entry.watchface?"FACE":"APP")+" — "+entry.name,
+                    ()->{
+                        if(EmeryRuntime.isDeviceLabActive()){
+                            showMessage("Close current watch screen",
+                                    "Return from the current PebbleOS session before installation.");
+                            return;
+                        }
+                        getSharedPreferences("time2-pbw-install",MODE_PRIVATE)
+                                .edit().putString("pending_uuid",entry.uuid).apply();
+                        startActivity(new Intent(this,RearActivity.class));
+                    });
+        }
+        if(entries.isEmpty())
+            addText("No Emery PBW imported. Choose an Emery/Basalt-compatible file, then select INSTALL / LAUNCH.",11,WHITE,Gravity.START,dp(6));
+
+        addText("Independent application ID / private storage. Does not alter or migrate the existing NullWrist 0.8.12. No network or notification access requested.",11,WHITE,Gravity.START,dp(8));
+        section("03 / WATCH MEMORY");
+        addText("Back up your virtual PebbleOS apps and settings before uninstalling a debug APK. Keep this binary file private.",11,WHITE,Gravity.START,dp(8));
+        button("BACK UP EMERY WATCH MEMORY",()->{
+            if(EmeryRuntime.isDeviceLabActive()){
+                showMessage("Emery is running","Close the rear screen first.");return;
+            }
+            Intent choose=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            choose.addCategory(Intent.CATEGORY_OPENABLE);
+            choose.setType("application/octet-stream");
+            choose.putExtra(Intent.EXTRA_TITLE,"nullwrist-time2-emery-flash.bin");
+            startActivityForResult(choose,EXPORT_SPI);
+        });
+        button("RESTORE EMERY WATCH MEMORY",()->{
+            if(EmeryRuntime.isDeviceLabActive()){
+                showMessage("Emery is running","Close the rear screen first.");return;
+            }
+            new AlertDialog.Builder(this).setTitle("Restore virtual watch memory?")
+                .setMessage("This replaces ALL settings, installed faces and apps of this new Time 2 emulator. It never touches the older NullWrist app.")
+                .setNegativeButton("CANCEL",null)
+                .setPositiveButton("CHOOSE BACKUP",(dialog,which)->{
+                    Intent choose=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    choose.setType("*/*");
+                    choose.addCategory(Intent.CATEGORY_OPENABLE);
+                    startActivityForResult(choose,IMPORT_SPI);
+                }).show();
+        });
+
+        section("04 / SAFETY");
+        button("EXPORT EMERY DIAGNOSTICS",()->{
+            File log = new File(new File(getFilesDir(),"time2-emery"),"emery-qemu.log");
+            File host=new File(new File(getFilesDir(),"time2-emery"),"emery-host.log");
+            if(!log.isFile() && !host.isFile()){
+                showMessage("No log yet","Open the rear display once in the device-lab APK to generate diagnostics.");
+                return;
+            }
+            Intent export = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            export.addCategory(Intent.CATEGORY_OPENABLE);
+            export.setType("text/plain");
+            export.putExtra(Intent.EXTRA_TITLE,"nullwrist-time2-emery-qemu.log");
+            startActivityForResult(export,EXPORT_EMERY_LOG);
+        });
+        button("VIEW BUILD STATUS",()->new AlertDialog.Builder(this)
+                .setTitle("NullWrist Time 2 / 0.4.1-lab")
+                .setMessage("Completed: project isolation, raster branding, Emery display mapping, touch diagnostics and PBW library.\n\nConfirmed: genuine Emery boot/display on Titan 2. Partial: PBW binary/resources transfer confirmed on Titan2; guest may show not-responding. 0.4.1 adds graceful-stop + persistent companion and raw UART2 diagnostics. Phone services, background work and stability tests remain.")
+                .setPositiveButton("OK",null).show());
+    }
+
+    @Override protected void onActivityResult(int request,int result,Intent data) {
+        super.onActivityResult(request,result,data);
+        if(result!=RESULT_OK || data==null || data.getData()==null) return;
+        if(request==EXPORT_SPI||request==IMPORT_SPI){
+            final boolean backup=request==EXPORT_SPI;
+            android.net.Uri selected=data.getData();
+            new Thread(()->{
+                try{
+                    if(backup)EmeryFlashBackup.exportImage(this,selected);
+                    else EmeryFlashBackup.restoreImage(this,selected);
+                    runOnUiThread(()->showMessage("Emery memory",
+                            backup?"Backup saved successfully. Store it safely.":
+                                    "Memory restored. Launch the rear display to check the watch."));
+                }catch(IOException problem){
+                    runOnUiThread(()->showMessage(backup?"Backup failed":"Restore failed",
+                            problem.getMessage()));
+                }
+            },"EmeryFlashTransfer").start();
+            return;
+        }
+        if(request==EXPORT_EMERY_LOG){
+            File log=new File(new File(getFilesDir(),"time2-emery"),"emery-qemu.log");
+            File host=new File(new File(getFilesDir(),"time2-emery"),"emery-host.log");
+            if(!log.isFile() && !host.isFile()){
+                showMessage("No logs","Run the rear display first.");return;
+            }
+            try(OutputStream output=getContentResolver().openOutputStream(data.getData())){
+                if(output==null)throw new IOException("Cannot write destination");
+                appendLog(output,"ANDROID EMERY HOST",host);
+                appendLog(output,"NATIVE QEMU",log);
+                appendGuestRaw(output,new File(new File(getFilesDir(),"time2-emery"),
+                        "emery-debug-uart2.bin"));
+                showMessage("Diagnostic exported",
+                        "Saved Android status, QEMU output and encoded guest UART2 logs.");
+            }catch(IOException error){
+                showMessage("Export failed",error.getMessage());
+            }
+            return;
+        }
+        if(request!=IMPORT_PBW) return;
+        try {
+            EmeryPackageIndex.PackageInfo info=library.importPbw(data.getData());
+            new AlertDialog.Builder(this).setTitle("Imported")
+                    .setMessage(info.name+"\n"+(info.watchface?"Watchface":"Watchapp")
+                            +"\n\nStored in private library. Choose INSTALL / LAUNCH next to the imported app to try installation in real PebbleOS.")
+                    .setPositiveButton("OK",null).show();
+            render();
+        } catch(IOException error) {
+            new AlertDialog.Builder(this).setTitle("Import rejected")
+                    .setMessage(error.getMessage()).setPositiveButton("OK",null).show();
+        }
+    }
+
+    private void appendLog(OutputStream out,String label,File file) throws IOException {
+        out.write(("\n=== "+label+" ===\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if(!file.isFile()){
+            out.write("(not created)\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return;
+        }
+        try(InputStream input=new FileInputStream(file)){
+            long skip=Math.max(0,file.length()-256L*1024L);
+            while(skip>0){
+                long n=input.skip(skip);
+                if(n<=0)throw new IOException("Cannot seek to log tail");
+                skip-=n;
+            }
+            byte[] buffer=new byte[8192];
+            int n;
+            while((n=input.read(buffer))!=-1)out.write(buffer,0,n);
+        }
+    }
+
+    private void appendGuestRaw(OutputStream out,File guest)throws IOException{
+        out.write("\n=== PEBBLEOS DEBUG UART2 (base64, last 48 KiB) ===\n"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if(!guest.isFile()){
+            out.write("(not created)\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return;
+        }
+        byte[] tail;
+        try(InputStream in=new FileInputStream(guest);
+            java.io.ByteArrayOutputStream b=new java.io.ByteArrayOutputStream()){
+            long skipped=Math.max(0,guest.length()-48L*1024L);
+            while(skipped>0){
+                long n=in.skip(skipped);
+                if(n<=0)throw new IOException("Cannot seek to guest log tail");
+                skipped-=n;
+            }
+            byte[] chunk=new byte[8192];int n;
+            while((n=in.read(chunk))!=-1){
+                if(b.size()+n>48*1024)throw new IOException("Debug UART expanded unexpectedly");
+                b.write(chunk,0,n);
+            }
+            tail=b.toByteArray();
+        }
+        out.write((android.util.Base64.encodeToString(tail,android.util.Base64.NO_WRAP)
+                +"\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+    }
+
+    private void showMessage(String title,String content){
+        new AlertDialog.Builder(this).setTitle(title).setMessage(content)
+                .setPositiveButton("OK",null).show();
+    }
+
+    private void section(String title) {
+        TextView label=text(title,13,ORANGE,Gravity.START);
+        label.setPadding(0,dp(20),0,dp(12));
+        layout.addView(label);
+        View line=new View(this);
+        line.setBackgroundColor(ORANGE);
+        layout.addView(line,new LinearLayout.LayoutParams(-1,dp(2)));
+    }
+    private void addText(String value,int size,int color,int gravity,int topMargin) {
+        TextView view=text(value,size,color,gravity);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);
+        params.topMargin=topMargin; layout.addView(view,params);
+    }
+    private TextView text(String text,int size,int color,int gravity) {
+        TextView view=new TextView(this);
+        view.setText(text); view.setTextColor(color); view.setTextSize(size);
+        view.setGravity(gravity); view.setTypeface(Typeface.MONOSPACE);
+        view.setLineSpacing(dp(4),1f);
+        return view;
+    }
+    private void button(String text,Runnable callback) {
+        Button button=new Button(this);
+        button.setAllCaps(false);
+        button.setText(text); button.setTextColor(BG);
+        button.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
+        button.setTextSize(12);
+        GradientDrawable bg=new GradientDrawable();
+        bg.setColor(ORANGE); bg.setCornerRadius(0);
+        button.setBackground(bg);
+        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(55));
+        params.topMargin=dp(12);
+        layout.addView(button,params);
+        button.setOnClickListener(v->callback.run());
+    }
+    private int dp(float x) { return (int)(x*getResources().getDisplayMetrics().density+.5f); }
+}

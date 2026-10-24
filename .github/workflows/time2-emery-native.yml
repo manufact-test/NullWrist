@@ -1,0 +1,56 @@
+name: NullWrist Time 2 — Emery QEMU ARM64 build
+
+on:
+  push:
+    branches: ["feature/time2-standalone"]
+    paths:
+      - "time2/scripts/build_emery_qemu_android.sh"
+      - "time2/scripts/patch_qemu_emery_framebuffer.py"
+      - ".github/workflows/time2-emery-native.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: time2-emery-native-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  native-arm64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Validate isolated scripts before installing the toolchain
+        run: |
+          bash -n time2/scripts/build_emery_qemu_android.sh
+          python3 -m py_compile time2/scripts/patch_qemu_emery_framebuffer.py
+      - name: Install Android NDK and C build dependencies
+        run: |
+          sdkmanager "ndk;28.0.13004108"
+          sudo apt-get update
+          sudo apt-get install -y python3 git curl cmake meson ninja-build \
+            pkg-config make gcc g++ libtool autoconf automake bison flex
+      - name: Cross compile private Emery Cortex-M33 QEMU and framebuffer ABI
+        env:
+          ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/28.0.13004108
+          JOBS: "4"
+        run: bash time2/scripts/build_emery_qemu_android.sh > time2-emery-native.log 2>&1 || { tail -120 time2-emery-native.log; exit 1; }
+      - name: Verify Android ELF and QEMU machine
+        run: |
+          test -s time2/native-qemu-output/libnullwrist_emery_qemu.so
+          file time2/native-qemu-output/libnullwrist_emery_qemu.so
+          sha256sum time2/native-qemu-output/libnullwrist_emery_qemu.so
+      - name: Upload native experiment and full logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: time2-emery-native-experiment
+          path: |
+            time2/native-qemu-output/
+            time2-emery-native.log
+          if-no-files-found: warn

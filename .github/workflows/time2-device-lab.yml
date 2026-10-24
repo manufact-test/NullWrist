@@ -1,0 +1,79 @@
+name: NullWrist Time 2 — Android physical device lab APK
+
+on:
+  push:
+    branches: ["feature/time2-standalone"]
+    paths:
+      - "time2/app/src/main/java/com/manufacttest/nullwrist/time2/**"
+      - "time2/app/build.gradle.kts"
+      - ".github/workflows/time2-device-lab.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: time2-device-lab-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  device-lab-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+      - name: Download independently verified Emery and QEMU assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p time2/lab-input/native time2/lab-input/firmware
+          gh run download 39699350838 -R "$GITHUB_REPOSITORY" -n time2-emery-native-experiment -D time2/lab-input/native
+          gh run download 39602123890 -R "$GITHUB_REPOSITORY" -n time2-emery-desktop-firmware -D time2/lab-input/firmware
+      - name: Verify SHA256 and stage independent debug build
+        run: |
+          set -euo pipefail
+          native="$(find time2/lab-input/native -type f -name libnullwrist_emery_qemu.so -print -quit)"
+          manifest="$(find time2/lab-input/native -type f -name libnullwrist_emery_qemu.so.sha256 -print -quit)"
+          test -n "$native" && test -n "$manifest"
+          expected="$(awk '{ print $1 }' "$manifest")"
+          echo "$expected  $native" | sha256sum -c -
+          dest_native=time2/app/src/main/jniLibs/arm64-v8a
+          dest_assets=time2/app/src/main/assets/emery
+          mkdir -p "$dest_native" "$dest_assets"
+          cp "$native" "$dest_native/libnullwrist_emery_qemu.so"
+          ( cd "$dest_native"; sha256sum libnullwrist_emery_qemu.so > ../../assets/emery/native.sha256 )
+          for item in pebbleos.elf qemu_spi_flash.bin qemu_micro_flash.bin SHA256SUMS; do
+            origin="$(find time2/lab-input/firmware -type f -name "$item" -print -quit)"
+            test -n "$origin"
+            cp "$origin" "$dest_assets/$item"
+          done
+          ( cd "$dest_assets"; sha256sum --check SHA256SUMS )
+          file "$dest_native/libnullwrist_emery_qemu.so"
+          ls -lh "$dest_assets" "$dest_native"
+      - name: Unit tests and assemble device lab APK
+        working-directory: time2
+        run: |
+          gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon
+          sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/SHA256SUMS
+      - name: Publish test-only APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nullwrist-time2-0.4.1-emery-device-lab-debug
+          path: |
+            time2/app/build/outputs/apk/debug/app-debug.apk
+            time2/app/build/outputs/apk/debug/SHA256SUMS
+          if-no-files-found: error

@@ -23,6 +23,8 @@ public final class EmulatorSurfaceView extends View {
     private InputListener listener;
     private ViewportMapper.Point lastTouch;
     private boolean pointerDown;
+    private boolean diagnosticOverlay;
+    private String emptyLabel="PEBBLEOS STARTING";
 
     public EmulatorSurfaceView(Context context) {
         super(context);
@@ -42,6 +44,16 @@ public final class EmulatorSurfaceView extends View {
 
     public void setInputListener(InputListener listener) { this.listener = listener; }
 
+    public void setDiagnosticOverlay(boolean enabled) {
+        this.diagnosticOverlay=enabled;
+        invalidate();
+    }
+
+    public void setEmptyLabel(String label) {
+        this.emptyLabel=label==null?"":label;
+        invalidate();
+    }
+
     @Override protected void onSizeChanged(int w,int h,int oldw,int oldh) {
         super.onSizeChanged(w,h,oldw,oldh);
         mapper = w > 0 && h > 0
@@ -51,47 +63,36 @@ public final class EmulatorSurfaceView extends View {
 
     @Override protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (mapper == null) return;
-        RectF lcd = new RectF(mapper.left, mapper.top, mapper.right, mapper.bottom);
-        paint.setColor(Color.rgb(20, 20, 24));
-        canvas.drawRect(lcd, paint);
-        if (frame != null) {
-            paint.setFilterBitmap(false);
-            canvas.drawBitmap(frame, null, lcd, paint);
+        if(mapper==null)return;
+        RectF lcd=new RectF(mapper.left,mapper.top,mapper.right,mapper.bottom);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setAntiAlias(false);
+        paint.setFilterBitmap(false);
+        if(frame!=null) {
+            // This is the genuine PebbleOS 200x228 ARGB framebuffer.
+            // No Android overlays, borders, gradients or bilinear smoothing.
+            canvas.drawBitmap(frame,null,lcd,paint);
         } else {
-            paint.setColor(Color.rgb(35, 36, 40));
-            for (int x = 0; x < ViewportMapper.EMERY_WIDTH; x += 20) {
-                float px = mapper.left + x * (mapper.right - mapper.left)
-                        / ViewportMapper.EMERY_WIDTH;
-                canvas.drawLine(px,mapper.top,px,mapper.bottom,paint);
-            }
-            for (int y = 0; y < ViewportMapper.EMERY_HEIGHT; y += 20) {
-                float py = mapper.top + y * (mapper.bottom - mapper.top)
-                        / ViewportMapper.EMERY_HEIGHT;
-                canvas.drawLine(mapper.left,py,mapper.right,py,paint);
-            }
-            paint.setColor(ORANGE);
+            paint.setColor(Color.rgb(235,236,232));
             paint.setTextAlign(Paint.Align.CENTER);
             paint.setTypeface(android.graphics.Typeface.MONOSPACE);
-            paint.setTextSize(Math.max(11, (mapper.right - mapper.left) / 13f));
-            canvas.drawText("EMERY",lcd.centerX(),lcd.centerY()-18,paint);
-            paint.setColor(Color.LTGRAY);
-            paint.setTextSize(Math.max(8, (mapper.right - mapper.left) / 23f));
-            canvas.drawText("RUNTIME NOT INSTALLED",lcd.centerX(),lcd.centerY()+14,paint);
-            canvas.drawText("200 x 228",lcd.centerX(),lcd.centerY()+35,paint);
+            paint.setTextSize(Math.min(17f,Math.max(11f,getWidth()/23f)));
+            canvas.drawText(emptyLabel,lcd.centerX(),
+                    lcd.centerY(),paint);
         }
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(3f);
-        paint.setColor(ORANGE);
-        canvas.drawRect(lcd,paint);
-        paint.setStyle(Paint.Style.FILL);
-        if (lastTouch != null && pointerDown) {
-            float x = mapper.left + (lastTouch.x + .5f) *
-                    (mapper.right-mapper.left) / mapper.sourceWidth;
-            float y = mapper.top + (lastTouch.y + .5f) *
-                    (mapper.bottom-mapper.top) / mapper.sourceHeight;
+        if(diagnosticOverlay) {
             paint.setColor(ORANGE);
-            canvas.drawCircle(x,y,6,paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2f);
+            canvas.drawRect(lcd,paint);
+            paint.setStyle(Paint.Style.FILL);
+            if(lastTouch!=null && pointerDown) {
+                float x=mapper.left+(lastTouch.x+.5f)*
+                        (mapper.right-mapper.left)/mapper.sourceWidth;
+                float y=mapper.top+(lastTouch.y+.5f)*
+                        (mapper.bottom-mapper.top)/mapper.sourceHeight;
+                canvas.drawCircle(x,y,5f,paint);
+            }
         }
     }
 

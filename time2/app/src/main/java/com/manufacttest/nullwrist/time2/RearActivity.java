@@ -86,6 +86,7 @@ public final class RearActivity extends Activity {
                             message.startsWith("No Emery LCD") ||
                             message.startsWith("Another Emery") ||
                             message.startsWith("Emery QEMU stopped")) {
+                        surface.setFrame(null);
                         surface.setEmptyLabel("PEBBLEOS ERROR — SEE DIAGNOSTICS");
                         gestures.reset();
                         handler.removeCallbacks(gestureTimeout);

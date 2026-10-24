@@ -72,7 +72,7 @@ jobs:
       - name: Publish test-only APK
         uses: actions/upload-artifact@v4
         with:
-          name: nullwrist-time2-0.6.0-emery-device-lab-debug
+          name: nullwrist-time2-0.6.1-emery-device-lab-debug
           path: |
             time2/app/build/outputs/apk/debug/app-debug.apk
             time2/app/build/outputs/apk/debug/SHA256SUMS

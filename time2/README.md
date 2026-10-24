@@ -34,3 +34,36 @@ First Titan 2 Emery 0.2.0 lab run successfully displayed real firmware; user-exp
 
 ### PBW installation experiment: 0.4.0-lab
 The app previously only inspected and stored PBWs. The first actual guest installation implementation is now wired through QEMU UART1 / Pebble Protocol BlobDB / AppFetch / PutBytes. It remains **unverified on the user's real device** and shows explicit errors instead of pretending that importing a watchface automatically activates it. See [DEVICE-LAB](docs/DEVICE-LAB.md) for test steps.
+
+### 0.6.0-lab PBW compatibility / 2026-10-25
+
+The real PebbleOS Emery boot and UI are verified on Titan 2, but third-party
+watchface execution still needs physical testing. The 0.5 installer incorrectly
+required the prior PutBytes cookie for the INSTALL acknowledgment; genuine
+PebbleOS returns ACK cookie **zero** after COMMIT. The 0.6 installer accepts
+that proven protocol response, retries token-zero busy NACKs, uses conservative
+1000-byte chunks/12ms pacing from legacy NullWrist, and asks the guest for
+the actual running UUID instead of trusting transfer completion.
+
+User-provided watchface inspection found: Iridescency II, Halcyon and Comic
+Watchface have native Emery binaries; BeerClock, Crush 'Em and Essential
+provide older Basalt binaries that should be eligible for documented Emery
+fallback. These facts prove package compatibility metadata, not runtime health.
+The user's uploaded UART2 log contains only PebbleOS boot output and **no
+watchface execution fault** for Halcyon or Iridescency II.
+
+**Optional personal starter pack:** `assets/starter-pbws/index.txt` contains six
+SHA-256 pins; the 6 original PBW files are not published in this public
+repository or CI artifact. A privately assembled APK may carry the matching
+`assets/starter-pbws/<uuid>.pbw` entries. At startup, `LocalPbwLibrary`
+imports these into app-private storage after hash and UUID checks, without
+overwriting existing files. `×` in the library deletes a face, records a
+tombstone so the starter won't silently return, and queues an individual
+BlobDB AppDB DELETE on next guest session. No whole-AppDB CLEAR is issued.
+
+The in-app PBW catalogue marks guest launch confirmed only after a matching
+AppRunState response. A late crash, dependencies on phone-side PebbleKit JS,
+or an unsupported external service may still cause guest "not responding".
+Keep the debug UART2 log and report after trying each face.
+
+The independent legacy app, all its signed releases and `main` are unchanged.

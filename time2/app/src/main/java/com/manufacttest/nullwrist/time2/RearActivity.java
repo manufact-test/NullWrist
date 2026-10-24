@@ -1,112 +1,178 @@
 package com.manufacttest.nullwrist.time2;
 
 import android.app.Activity;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.graphics.drawable.GradientDrawable;
 
-/** Touch/coordinate-probe UI, isolated from the foreground host Android app. */
+/**
+ * Real PebbleOS on the Titan 2 rear display.
+ * Default UI is ONLY the Emery LCD. Four virtual hardware controls are
+ * intentionally available solely in an explicit front-launched lab mode.
+ */
 public final class RearActivity extends Activity {
+    public static final String EXTRA_DIAGNOSTICS =
+            "com.manufacttest.nullwrist.time2.DIAGNOSTICS";
+
     private static final int ORANGE=Color.rgb(255,109,0);
     private static final int BG=Color.rgb(8,9,13);
-    private TextView output;
-    private TextView footer;
+    private final Handler handler=new Handler(Looper.getMainLooper());
+    private final Runnable gestureTimeout=()->{
+        if(gestures==null)return;
+        gestures.onTimeout(SystemClock.uptimeMillis());
+        scheduleGestureTimeout();
+    };
+
+    private EmulatorSurfaceView surface;
+    private TripleTapSelectRecognizer gestures;
     private EmeryRuntime runtime;
+    private TextView diagnosticStatus;
+    private boolean diagnostics;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        diagnostics=getIntent().getBooleanExtra(EXTRA_DIAGNOSTICS,false);
+        enterImmersive();
+
+        surface=new EmulatorSurfaceView(this);
+        surface.setEmptyLabel("STARTING PEBBLEOS");
+        surface.setDiagnosticOverlay(diagnostics);
+        gestures=new TripleTapSelectRecognizer(new TripleTapSelectRecognizer.Sink(){
+            @Override public void touch(TripleTapSelectRecognizer.Type type,int x,int y){
+                if(runtime==null||!runtime.isConnected())return;
+                runtime.touch(EmeryQmpCommands.TouchPhase.valueOf(type.name()),x,y);
+            }
+            @Override public void select(){
+                if(runtime!=null&&runtime.isConnected())
+                    runtime.press(EmeryQmpCommands.Button.SELECT);
+            }
+        });
+        surface.setInputListener((type,x,y)->{
+            if(runtime==null||!runtime.isConnected()){
+                gestures.reset();
+                handler.removeCallbacks(gestureTimeout);
+                return;
+            }
+            gestures.onEvent(TripleTapSelectRecognizer.Type.valueOf(type.name()),
+                    x,y,SystemClock.uptimeMillis());
+            scheduleGestureTimeout();
+        });
+
+        if(diagnostics)showDiagnosticShell();
+        else setContentView(surface);
+
+        if(!EmeryAssets.isBundled(this)){
+            surface.setEmptyLabel("PEBBLEOS UNAVAILABLE");
+            if(diagnosticStatus!=null)
+                diagnosticStatus.setText("Emery firmware/QEMU not bundled in this APK");
+            return;
+        }
+        runtime=new EmeryRuntime(this,new EmeryRuntime.Listener(){
+            @Override public void status(String message){
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    if(diagnosticStatus!=null)diagnosticStatus.setText(message);
+                    if(message.startsWith("Emery start failed") ||
+                            message.startsWith("No Emery LCD") ||
+                            message.startsWith("Another Emery") ||
+                            message.startsWith("Emery QEMU stopped")) {
+                        surface.setEmptyLabel("PEBBLEOS ERROR — SEE DIAGNOSTICS");
+                        gestures.reset();
+                        handler.removeCallbacks(gestureTimeout);
+                    }
+                });
+            }
+            @Override public void frame(Bitmap image){
+                runOnUiThread(()->{
+                    if(!isFinishing()&&!isDestroyed())surface.setFrame(image);
+                });
+            }
+        });
+        runtime.start();
+    }
+
+    /** Only the advanced diagnostic mode shows any Android buttons. */
+    private void showDiagnosticShell() {
         LinearLayout root=new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
-        root.setPadding(dp(8),dp(10),dp(8),dp(10));
-
-        PixelWordmarkView wordmark=new PixelWordmarkView(this);
-        root.addView(wordmark,new LinearLayout.LayoutParams(-1,dp(26)));
-        TextView top=label("TIME 2  /  EMERY LAB",11);
-        top.setGravity(Gravity.CENTER);
-        root.addView(top,new LinearLayout.LayoutParams(-1,dp(22)));
-
-        EmulatorSurfaceView surface=new EmulatorSurfaceView(this);
-        LinearLayout.LayoutParams surfaceParams=new LinearLayout.LayoutParams(-1,0,1);
-        root.addView(surface,surfaceParams);
-
-        output=label("TAP THE DISPLAY TO CHECK 200x228 INPUT",10);
-        output.setGravity(Gravity.CENTER);
-        root.addView(output,new LinearLayout.LayoutParams(-1,dp(30)));
-        surface.setInputListener((type,x,y)->{
-            if(runtime!=null && runtime.isConnected()){
-                EmeryQmpCommands.TouchPhase phase =
-                    EmeryQmpCommands.TouchPhase.valueOf(type.name());
-                runtime.touch(phase,x,y);
-            }else{
-                output.setText(type.name()+" "+x+":"+y+" [INPUT PROBE]");
-            }
-        });
+        root.setPadding(dp(8),dp(8),dp(8),dp(8));
+        TextView title=label("TIME 2 / DIAGNOSTICS",11);
+        title.setGravity(Gravity.CENTER);
+        root.addView(title,new LinearLayout.LayoutParams(-1,dp(26)));
+        root.addView(surface,new LinearLayout.LayoutParams(-1,0,1));
+        diagnosticStatus=label("Waiting for genuine PebbleOS frame",10);
+        diagnosticStatus.setGravity(Gravity.CENTER);
+        root.addView(diagnosticStatus,new LinearLayout.LayoutParams(-1,dp(52)));
 
         LinearLayout controls=new LinearLayout(this);
-        controls.setOrientation(LinearLayout.HORIZONTAL);
-        for(String name:new String[]{"BACK","UP","OK","DOWN"}) {
+        for(EmeryQmpCommands.Button key:EmeryQmpCommands.Button.values()){
             Button button=new Button(this);
-            button.setText(name); button.setAllCaps(false); button.setTextSize(10);
-            button.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
+            button.setText(key==EmeryQmpCommands.Button.SELECT?"OK":key.name());
+            button.setAllCaps(false);
+            button.setTextSize(11);
             button.setTextColor(BG);
+            button.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
             GradientDrawable background=new GradientDrawable();
-            background.setColor(ORANGE); background.setCornerRadius(0);
+            background.setColor(ORANGE);
             button.setBackground(background);
-            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(40),1);
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(48),1);
             params.setMargins(dp(2),0,dp(2),0);
             controls.addView(button,params);
             button.setOnClickListener(view->{
-                EmeryQmpCommands.Button key = "OK".equals(name)
-                    ? EmeryQmpCommands.Button.SELECT
-                    : EmeryQmpCommands.Button.valueOf(name);
-                if(runtime!=null && runtime.isConnected()){
-                    runtime.press(key);
-                    output.setText(name+" [QMP COMMAND]");
-                }else output.setText(name+" [INPUT PROBE / NO VM]");
+                if(runtime!=null&&runtime.isConnected())runtime.press(key);
             });
         }
         root.addView(controls);
-        footer=label("NOT AN ACTIVE PEBBLEOS SESSION",9);
-        footer.setGravity(Gravity.CENTER);
-        root.addView(footer,new LinearLayout.LayoutParams(-1,dp(25)));
         setContentView(root);
-        if(EmeryAssets.isBundled(this)){
-            runtime=new EmeryRuntime(this,new EmeryRuntime.Listener(){
-                @Override public void status(String message){
-                    runOnUiThread(()->{
-                        if(isFinishing()||isDestroyed())return;
-                        output.setText(message);
-                        footer.setText("EMERY LAB / REAL FIRMWARE TEST");
-                    });
-                }
-                @Override public void frame(android.graphics.Bitmap image){
-                    runOnUiThread(()->{
-                        if(!isFinishing()&&!isDestroyed())surface.setFrame(image);
-                    });
-                }
-            });
-            runtime.start();
-        }else{
-            output.setText("NO FIRMWARE/QEMU ASSETS — INPUT PROBE ONLY");
-        }
+    }
+
+    private void scheduleGestureTimeout(){
+        handler.removeCallbacks(gestureTimeout);
+        if(gestures==null)return;
+        long next=gestures.nextDeadlineMs();
+        if(next>=0)handler.postDelayed(gestureTimeout,
+                Math.max(1,next-SystemClock.uptimeMillis()));
+    }
+
+    private void enterImmersive(){
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                |View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                |View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                |View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                |View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus){
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)enterImmersive();
+    }
+
+    @Override protected void onPause(){
+        handler.removeCallbacks(gestureTimeout);
+        if(gestures!=null)gestures.reset();
+        super.onPause();
     }
 
     @Override protected void onDestroy(){
+        handler.removeCallbacks(gestureTimeout);
+        if(gestures!=null)gestures.reset();
         if(runtime!=null)runtime.close();
         super.onDestroy();
     }
 
-    private TextView label(String message,int size) {
+    private TextView label(String message,int size){
         TextView view=new TextView(this);
         view.setText(message);
         view.setTextColor(ORANGE);
@@ -114,5 +180,7 @@ public final class RearActivity extends Activity {
         view.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
         return view;
     }
-    private int dp(float x) { return (int)(x*getResources().getDisplayMetrics().density+.5f); }
+    private int dp(float x){
+        return (int)(x*getResources().getDisplayMetrics().density+.5f);
+    }
 }

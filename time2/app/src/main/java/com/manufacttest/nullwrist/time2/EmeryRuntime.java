@@ -249,26 +249,32 @@ public final class EmeryRuntime {
                 if(closing)return;
                 if(appLink==null)throw new IOException("Pebble UART unavailable: "+last);
                 EmeryPbwInstaller installer=new EmeryPbwInstaller(appLink,this::emit);
-                if(deleting!=null){
-                    installer.uninstall(java.util.UUID.fromString(deleting));
-                    if(deleting.equals(pref.getString("last_installed_uuid",null)))
-                        pref.edit().remove("last_installed_uuid").apply();
+                try {
+                    if(deleting!=null){
+                        installer.uninstall(java.util.UUID.fromString(deleting));
+                        if(deleting.equals(pref.getString("last_installed_uuid",null)))
+                            pref.edit().remove("last_installed_uuid").apply();
+                    }
+                    if(chosen!=null){
+                        java.util.UUID id=java.util.UUID.fromString(chosen);
+                        File file=new File(new File(context.getFilesDir(),"time2/pbws"),
+                                id+".pbw");
+                        if(!file.isFile())throw new IOException("Selected PBW is missing");
+                        String prior=pref.getString("last_installed_uuid",null);
+                        boolean running=installer.install(file,prior);
+                        pref.edit().putString("last_transferred_uuid",chosen).apply();
+                        if(running)pref.edit().putString("last_installed_uuid",chosen).apply();
+                        else emit("PBW installed but guest launch NOT confirmed: "+chosen);
+                    }
+                } catch(Exception installError) {
+                    // Do not disconnect the virtual phone after a failed PBW
+                    // transfer. The Pebble guest needs AppVersion/phone traffic
+                    // even while it displays its own watchface failure UI.
+                    if(!closing)emit("PEBBLE APP TASK FAILED: "+installError.getMessage());
                 }
-                if(chosen!=null){
-                    java.util.UUID id=java.util.UUID.fromString(chosen);
-                    File file=new File(new File(context.getFilesDir(),"time2/pbws"),
-                            id+".pbw");
-                    if(!file.isFile())throw new IOException("Selected PBW is missing");
-                    String prior=pref.getString("last_installed_uuid",null);
-                    boolean running=installer.install(file,prior);
-                    pref.edit().putString("last_transferred_uuid",chosen).apply();
-                    if(running)pref.edit().putString("last_installed_uuid",chosen).apply();
-                    else emit("PBW transfer completed but guest did not confirm running: "+chosen);
-                }
-                emit("Pebble serial companion connected");
-                // Stay connected even on ordinary boots with no pending install.
-                // This does not implement PebbleKit JS or weather by itself.
-                while(!closing && process!=null && process.isAlive()){
+                if(!closing)emit("Pebble serial companion connected");
+                // Keep the companion alive on success *and* recoverable failure.
+                while(!closing && process!=null && process.isAlive() && appLink!=null){
                     appLink.serviceOnce(1);
                 }
             }catch(InterruptedException interrupted){

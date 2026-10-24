@@ -173,6 +173,21 @@ public final class MainActivity extends Activity {
         text(info,"Only a guest RUNNING response confirms launch",
                 10,MUTED,Gravity.START,8);
 
+        // A failed install must be visible even when the rear screen still
+        // displays the guest's own error dialog.
+        android.content.SharedPreferences pbwState=getSharedPreferences(
+                "time2-pbw-install",MODE_PRIVATE);
+        String failure=pbwState.getString("last_operation_error",null);
+        String status=pbwState.getString("last_operation_status",null);
+        if(failure!=null && !failure.isEmpty()) {
+            TextView warning=text(hero,failure,12,Color.rgb(255,120,92),
+                    Gravity.START,12);
+            warning.setMaxLines(5);
+        } else if(status!=null && !status.isEmpty()) {
+            TextView progress=text(hero,status,11,MUTED,Gravity.START,12);
+            progress.setMaxLines(4);
+        }
+
         TextView launch=action("OPEN PEBBLEOS",true,()->openWatch(false));
         LinearLayout.LayoutParams actionParams=new LinearLayout.LayoutParams(-1,dp(51));
         actionParams.topMargin=dp(14);

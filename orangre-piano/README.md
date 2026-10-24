@@ -47,4 +47,5 @@ Project name is intentionally spelled **orangre piano**.
 - Tap time to open the clock; tap date to open the calendar (uses standard Android intents).
 - Built-in English and Russian UI setting, including date locale.
 - Optional hide top status bar on this launcher; Android does not allow a normal app to disable the notification shade system-wide. System pull-down remains available.
-- Existing favorites, wallpaper and preferences persist when updating v0.1.
+- **v0.1 → v0.2 signing caveat:** the initial APK was built with an ephemeral GitHub debug certificate; v0.2 is signed by a different key. Android will reject an in-place upgrade. Uninstall v0.1 before installing v0.2; this clears its local app preferences and custom wallpaper. NullWrist remains untouched.
+- For future upgrades, configure a persistent, private Android signing key through GitHub Actions secrets (never publish the key in this public repository).

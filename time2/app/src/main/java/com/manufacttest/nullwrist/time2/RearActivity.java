@@ -26,6 +26,7 @@ public final class RearActivity extends Activity {
 
     private static final int ORANGE=Color.rgb(255,109,0);
     private static final int BG=Color.rgb(8,9,13);
+    private TripleTapSelectRecognizer gestures;
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable gestureTimeout=()->{
         if(gestures==null)return;
@@ -34,7 +35,6 @@ public final class RearActivity extends Activity {
     };
 
     private EmulatorSurfaceView surface;
-    private TripleTapSelectRecognizer gestures;
     private EmeryRuntime runtime;
     private TextView diagnosticStatus;
     private boolean diagnostics;

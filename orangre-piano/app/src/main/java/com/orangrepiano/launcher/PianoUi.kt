@@ -2,6 +2,7 @@ package com.orangrepiano.launcher
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -137,6 +138,44 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     val context = LocalContext.current
     val prefs = remember { LauncherPrefs(context) }
     val scope = rememberCoroutineScope()
+    val weatherRepo = remember(context) { PianoWeatherRepository(context) }
+    var weather by remember { mutableStateOf(weatherRepo.cached()) }
+    var weatherLoading by remember { mutableStateOf(false) }
+    var locationEnabled by remember { mutableStateOf(weatherRepo.hasLocationPermission()) }
+    var notificationEnabled by remember { mutableStateOf(hasNotificationAccess(context)) }
+    var showSetup by remember { mutableStateOf(!prefs.setupFinished) }
+    var quickChooser by remember { mutableStateOf<String?>(null) }
+    var quickFilter by remember { mutableStateOf("") }
+    val unread = PianoNotificationCounts.counts
+
+    val locationRequest = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { allowed ->
+        locationEnabled = allowed || weatherRepo.hasLocationPermission()
+        if (locationEnabled) scope.launch {
+            weatherLoading = true
+            try { weather = weatherRepo.refresh(force = true) }
+            finally { weatherLoading = false }
+        }
+    }
+
+    fun refreshWeather(force: Boolean = false) {
+        if (!weatherRepo.hasLocationPermission()) {
+            locationRequest.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+            return
+        }
+        if (weatherLoading) return
+        scope.launch {
+            weatherLoading = true
+            try { weather = weatherRepo.refresh(force) }
+            finally { weatherLoading = false }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (weatherRepo.hasLocationPermission()) refreshWeather()
+    }
+
     var installed by remember { mutableStateOf(installedApps(context)) }
     var favorites by remember { mutableStateOf(prefs.favorites) }
     var slots by remember { mutableIntStateOf(prefs.slots) }
@@ -223,6 +262,9 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
             if (event == Lifecycle.Event.ON_RESUME) {
                 installed = installedApps(context)
                 favorites = prefs.favorites
+                notificationEnabled = hasNotificationAccess(context)
+                locationEnabled = weatherRepo.hasLocationPermission()
+                if (locationEnabled) refreshWeather()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -247,6 +289,20 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     }
     fun goHome() { page = Page.HOME; filter = "" }
     fun goDrawer() { page = Page.DRAWER }
+    fun showQuickChooser(kind: String) {
+        quickFilter = ""
+        quickChooser = kind
+    }
+    fun openQuickApp(kind: String) {
+        val saved = if (kind == "wallet") prefs.walletApp else prefs.phoneApp
+        val chosen = installed.firstOrNull { it.key == saved && saved.isNotBlank() }
+        if (chosen != null) {
+            openApp(context, chosen)
+        } else if (kind == "phone") {
+            try { context.startActivity(Intent(Intent.ACTION_DIAL)) }
+            catch (_: Exception) { showQuickChooser("phone") }
+        } else showQuickChooser("wallet")
+    }
 
     BackHandler(enabled = page != Page.HOME || selectingSlot >= 0) {
         if (selectingSlot >= 0) selectingSlot = -1 else goHome()
@@ -343,6 +399,11 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                         onCalendar = { openDefaultCalendar(context, language) },
                         onCamera = { openDefaultCamera(context, language) },
                         onTorch = ::requestTorch,
+                        onPhone = { openQuickApp("phone") },
+                        onWallet = { openQuickApp("wallet") },
+                        weather = weather, weatherLoading = weatherLoading,
+                        onWeather = { refreshWeather(force = true) },
+                        unreadCounts = if (notificationEnabled) unread else emptyMap(),
                         torchEnabled = torchEnabled,
                         onOpen = { openApp(context, it) },
                         onChoose = ::chooseFavorite,
@@ -381,10 +442,85 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                             removeWallpaper(context)
                             wallpaper = null
                         },
-                        onSetHome = onRequestHome
+                        onSetHome = onRequestHome,
+                        onSetup = { showSetup = true },
+                        onChooseWallet = { showQuickChooser("wallet") },
+                        onChoosePhone = { showQuickChooser("phone") },
+                        onWeather = { refreshWeather(force = true) },
+                        onNotificationAccess = { openNotificationAccessSettings(context) }
                     )
                 }
             }
+        }
+
+        if (showSetup) {
+            PianoSetupDialog(
+                language = language,
+                notificationEnabled = notificationEnabled,
+                weatherEnabled = locationEnabled,
+                hideStatusBar = hideStatusBar,
+                onHome = onRequestHome,
+                onNotification = { openNotificationAccessSettings(context) },
+                onLocation = { locationRequest.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
+                onHideBar = {
+                    prefs.setHideStatusBar(it)
+                    hideStatusBar = it
+                    onStatusBarChanged(it)
+                },
+                onDone = {
+                    prefs.finishSetup()
+                    showSetup = false
+                }
+            )
+        }
+        if (quickChooser != null) {
+            val kind = quickChooser ?: ""
+            val matches = installed.filter {
+                it.label.contains(quickFilter, ignoreCase = true)
+            }
+            AlertDialog(
+                onDismissRequest = { quickChooser = null },
+                containerColor = Color(0xFF25201F),
+                title = {
+                    Text(tr(language,
+                        if (kind == "phone") "SELECT PHONE APP" else "SELECT WALLET APP",
+                        if (kind == "phone") "ВЫБРАТЬ ЗВОНИЛКУ" else "ВЫБРАТЬ КОШЕЛЁК"),
+                        color = Peach, fontSize = 17.sp)
+                },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = quickFilter, onValueChange = { quickFilter = it },
+                            label = { Text(tr(language, "Find an app", "Найти приложение")) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                            items(matches, key = { it.key }) { entry ->
+                                Text(entry.label, color = Cream,
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        if (kind == "phone") prefs.setPhoneApp(entry.key)
+                                        else prefs.setWalletApp(entry.key)
+                                        quickChooser = null
+                                        openApp(context, entry)
+                                    }.padding(vertical = 11.dp))
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { quickChooser = null }) {
+                        Text(tr(language, "CANCEL", "ОТМЕНА"))
+                    }
+                },
+                dismissButton = {
+                    if (kind == "phone") TextButton(onClick = {
+                        prefs.setPhoneApp("")
+                        quickChooser = null
+                        openQuickApp("phone")
+                    }) { Text(tr(language, "SYSTEM DIALER", "СИСТЕМНАЯ ЗВОНИЛКА")) }
+                }
+            )
         }
 
         if (selectingSlot >= 0) {
@@ -472,6 +608,12 @@ private fun HomePage(
     onCalendar: () -> Unit,
     onCamera: () -> Unit,
     onTorch: () -> Unit,
+    onPhone: () -> Unit,
+    onWallet: () -> Unit,
+    weather: PianoWeather?,
+    weatherLoading: Boolean,
+    onWeather: () -> Unit,
+    unreadCounts: Map<String, Int>,
     torchEnabled: Boolean,
     onOpen: (AppEntry) -> Unit,
     onChoose: (Int) -> Unit,
@@ -506,22 +648,44 @@ private fun HomePage(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ClockBlock(compact = compact, language = language, quiet = quiet, onClock = onClock, onCalendar = onCalendar)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PianoSquareButton(
-                        icon = PianoIcon.Camera,
-                        description = tr(language, "Open camera", "Открыть камеру"),
-                        onClick = onCamera, edge = if (compact) 37.dp else 41.dp
+                Column {
+                    ClockBlock(
+                        compact = compact, language = language, quiet = quiet,
+                        onClock = onClock, onCalendar = onCalendar
                     )
-                    PianoSquareButton(
-                        icon = PianoIcon.Flashlight,
-                        description = tr(language,
-                            if (torchEnabled) "Turn off flashlight" else "Turn on flashlight",
-                            if (torchEnabled) "Выключить фонарик" else "Включить фонарик"),
-                        onClick = onTorch,
-                        active = torchEnabled,
-                        edge = if (compact) 37.dp else 41.dp
+                    PianoWeatherLine(
+                        weather = weather, language = language,
+                        loading = weatherLoading, onClick = onWeather
                     )
+                }
+                val keySize = if (compact) 37.dp else 41.dp
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        PianoSquareButton(
+                            icon = PianoIcon.Camera,
+                            description = tr(language, "Open camera", "Открыть камеру"),
+                            onClick = onCamera, edge = keySize
+                        )
+                        PianoSquareButton(
+                            icon = PianoIcon.Flashlight,
+                            description = tr(language,
+                                if (torchEnabled) "Turn off flashlight" else "Turn on flashlight",
+                                if (torchEnabled) "Выключить фонарик" else "Включить фонарик"),
+                            onClick = onTorch, active = torchEnabled, edge = keySize
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        PianoSquareButton(
+                            icon = PianoIcon.Phone,
+                            description = tr(language, "Open dialer", "Открыть телефон"),
+                            onClick = onPhone, edge = keySize
+                        )
+                        PianoSquareButton(
+                            icon = PianoIcon.Wallet,
+                            description = tr(language, "Open wallet", "Открыть кошелёк"),
+                            onClick = onWallet, edge = keySize
+                        )
+                    }
                 }
             }
             GlassPanel(enabled = glass, modifier = Modifier.fillMaxWidth()) {
@@ -530,34 +694,16 @@ private fun HomePage(
                         val entry = apps.firstOrNull { it.key == favorites.getOrNull(index) }
                         val interaction = remember { MutableInteractionSource() }
                         val pressed by interaction.collectIsPressedAsState()
-                        // ATELIER polish: the number and the copper marker are isolated
-                        // from the glass name surface. Every row shares the same quiet
-                        // material: no alternating full-width tint or colliding edges.
-                        val insetScale by animateFloatAsState(
-                            targetValue = if (pressed && !quiet) .985f else 1f,
-                            animationSpec = tween(if (quiet) 1 else 145, easing = FastOutSlowInEasing),
-                            label = "favorite_label_press"
-                        )
-                        val insetTint by animateColorAsState(
-                            targetValue = if (pressed) Color(0x594F362F) else Color(0x0CFFF2E3),
-                            animationSpec = tween(if (quiet) 1 else 190),
-                            label = "favorite_label_tint"
-                        )
-                        val insetBorder by animateColorAsState(
-                            targetValue = if (pressed) PianoTone.peach.copy(alpha = .42f)
-                                else PianoTone.peach.copy(alpha = .065f),
-                            animationSpec = tween(if (quiet) 1 else 190),
-                            label = "favorite_label_edge"
-                        )
-                        val insetShape = RoundedCornerShape(8.dp)
+                        val count = if (entry == null) 0
+                            else (unreadCounts[entry.packageName] ?: 0)
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(lineHeight)
+                            modifier = Modifier.fillMaxWidth().height(lineHeight)
                                 .combinedClickable(
                                     interactionSource = interaction,
                                     indication = null,
-                                    onClick = { if (entry == null) onChoose(index) else onOpen(entry) },
+                                    onClick = {
+                                        if (entry == null) onChoose(index) else onOpen(entry)
+                                    },
                                     onLongClick = { onChoose(index) }
                                 ),
                             verticalAlignment = Alignment.CenterVertically
@@ -566,46 +712,38 @@ private fun HomePage(
                                 (index + 1).toString().padStart(2, '0'),
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 10.sp,
-                                color = PianoTone.copper.copy(alpha = .70f),
-                                modifier = Modifier.width(30.dp)
+                                color = PianoTone.copper.copy(alpha = .7f),
+                                modifier = Modifier.width(35.dp)
                             )
-                            Spacer(Modifier.width(7.dp))
-                            Box(
-                                modifier = Modifier.weight(1f).fillMaxHeight()
-                                    .padding(vertical = 2.dp)
-                                    .graphicsLayer(scaleX = insetScale, scaleY = insetScale)
-                                    .clip(insetShape)
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            listOf(insetTint, insetTint.copy(alpha = .66f))
-                                        )
-                                    )
-                                    .border(1.dp, insetBorder, insetShape)
-                                    .padding(horizontal = 10.dp),
-                                contentAlignment = Alignment.CenterStart
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)
                             ) {
                                 Text(
-                                    entry?.label ?: tr(
-                                        language,
-                                        "+  assign application",
-                                        "+  выбрать приложение"
-                                    ),
-                                    color = if (entry == null) Subtle.copy(alpha = .70f) else Cream,
+                                    entry?.label ?: tr(language,
+                                        "+  assign application", "+  выбрать приложение"),
+                                    color = if (entry == null) Subtle.copy(alpha = .7f)
+                                        else if (pressed) PianoTone.peach else Cream,
                                     fontSize = if (compact) 16.sp else 18.sp,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
                                 )
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Box(
-                                Modifier.size(5.dp)
-                                    .clip(RoundedCornerShape(1.dp))
-                                    .background(
-                                        if (entry == null) Color.Transparent
-                                        else if (pressed) PianoTone.pearl
-                                        else PianoTone.copper.copy(alpha = .78f)
+                                if (count > 0) {
+                                    Text(
+                                        if (count > 99) "99+" else count.toString(),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = PianoTone.pearl,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(PianoTone.copper.copy(alpha = .55f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
-                            )
+                                }
+                            }
                         }
                     }
                 }
@@ -846,7 +984,12 @@ private fun SettingsPage(
     onHideFavorites: (Boolean) -> Unit,
     onWallpaper: () -> Unit,
     onClearWallpaper: () -> Unit,
-    onSetHome: () -> Unit
+    onSetHome: () -> Unit,
+    onSetup: () -> Unit,
+    onChooseWallet: () -> Unit,
+    onChoosePhone: () -> Unit,
+    onWeather: () -> Unit,
+    onNotificationAccess: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         .padding(horizontal = 19.dp, vertical = 6.dp)) {
@@ -927,11 +1070,29 @@ private fun SettingsPage(
                 "Скрывается только верхняя строка на экране лаунчера. Шторка уведомлений Android по-прежнему открывается свайпом."),
             color = Subtle, fontSize = 11.sp, lineHeight = 15.sp
         )
-        TextButton(onClick = onSetHome) { Text(tr(language, "SET AS DEFAULT HOME", "СДЕЛАТЬ ГЛАВНЫМ ЭКРАНОМ"), color = Orange) }
+        TextButton(onClick = onSetHome) {
+            Text(tr(language, "SET AS DEFAULT HOME", "СДЕЛАТЬ ГЛАВНЫМ ЭКРАНОМ"), color = Orange)
+        }
+        SectionTitle(tr(language, "05 / SHORTCUTS & PRIVACY", "05 / КНОПКИ И ДОСТУП"))
+        TextButton(onClick = onChoosePhone) {
+            Text(tr(language, "CHOOSE PHONE APP", "ВЫБРАТЬ ЗВОНИЛКУ"), color = Orange)
+        }
+        TextButton(onClick = onChooseWallet) {
+            Text(tr(language, "CHOOSE WALLET APP", "ВЫБРАТЬ КОШЕЛЁК"), color = Orange)
+        }
+        TextButton(onClick = onWeather) {
+            Text(tr(language, "UPDATE WEATHER / LOCATION", "ОБНОВИТЬ ПОГОДУ"), color = Orange)
+        }
+        TextButton(onClick = onNotificationAccess) {
+            Text(tr(language, "NOTIFICATION COUNTS ACCESS", "ДОСТУП К УВЕДОМЛЕНИЯМ"), color = Orange)
+        }
+        TextButton(onClick = onSetup) {
+            Text(tr(language, "FIRST-RUN SETUP", "ПЕРВОНАЧАЛЬНАЯ НАСТРОЙКА"), color = Orange)
+        }
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · atelier edition 1.0", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · atelier edition 1.1", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

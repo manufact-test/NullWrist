@@ -161,3 +161,16 @@ private fun launchFirstActivity(
         android.widget.Toast.LENGTH_SHORT
     ).show()
 }
+
+fun openDefaultCamera(context: Context, language: String) {
+    launchFirstActivity(
+        context,
+        listOf(
+            Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA),
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_CAMERA)
+        ),
+        language,
+        "Camera app not found",
+        "Приложение камеры не найдено"
+    )
+}

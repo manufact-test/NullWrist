@@ -37,21 +37,21 @@ jobs:
           path: orangre-piano/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publish orangre piano v0.2.0 to GitHub Releases
+      - name: Publish orangre piano v0.3.0 to GitHub Releases
         if: github.event_name == 'push' && github.ref == 'refs/heads/orangre-piano/dev'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v0.2.0.apk
-          TAG="orangre-piano-v0.2.0"
+          cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v0.3.0.apk
+          TAG="orangre-piano-v0.3.0"
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG" ../orangre-piano-v0.2.0.apk \
+            gh release create "$TAG" ../orangre-piano-v0.3.0.apk \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
-              --title "orangre piano v0.2.0 (Titan 2)" \
-              --notes "Personal Titan 2 text-only launcher beta. Compact home, tap-to-open clock/calendar, RU/EN language selection and optional status bar hiding. Due to different temporary debug signing keys, uninstall v0.1.0 before installing v0.2.0; settings and custom wallpaper will reset. Independent from NullWrist." \
+              --title "orangre piano v0.3.0 (Titan 2)" \
+              --notes "Titan 2 text-only launcher beta. More compact app drawer, square navigation buttons, camera shortcut and toggle flashlight, slightly lowered home clock. Due to per-run debug signing keys, uninstall previous test versions before installing; app-specific settings and wallpaper will reset. Independent from NullWrist." \
               --prerelease
           else
-            gh release upload "$TAG" ../orangre-piano-v0.2.0.apk --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ../orangre-piano-v0.3.0.apk --clobber --repo "$GITHUB_REPOSITORY"
           fi

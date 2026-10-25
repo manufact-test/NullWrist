@@ -1,5 +1,10 @@
 package com.orangrepiano.launcher
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.graphics.Bitmap
 import android.os.Build
 import android.view.KeyEvent as AndroidKeyEvent
@@ -15,6 +20,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -135,6 +141,71 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     var selectingSlot by remember { mutableIntStateOf(-1) }
     var pickerSearch by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
+    val cameraManager = remember(context) {
+        context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+    }
+    val flashCameraId = remember(cameraManager) {
+        try {
+            val flashDevices = cameraManager.cameraIdList.filter { id ->
+                cameraManager.getCameraCharacteristics(id)
+                    .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+            }
+            flashDevices.firstOrNull { id ->
+                cameraManager.getCameraCharacteristics(id)
+                    .get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK
+            } ?: flashDevices.firstOrNull()
+        } catch (_: Exception) {
+            null
+        }
+    }
+    var torchEnabled by remember { mutableStateOf(false) }
+
+    DisposableEffect(cameraManager, flashCameraId) {
+        val callback = object : CameraManager.TorchCallback() {
+            override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
+                if (cameraId == flashCameraId) torchEnabled = enabled
+            }
+            override fun onTorchModeUnavailable(cameraId: String) {
+                if (cameraId == flashCameraId) torchEnabled = false
+            }
+        }
+        try { cameraManager.registerTorchCallback(context.mainExecutor, callback) }
+        catch (_: Exception) { }
+        onDispose {
+            try { cameraManager.unregisterTorchCallback(callback) }
+            catch (_: Exception) { }
+        }
+    }
+
+    fun toggleTorch() {
+        if (flashCameraId == null) {
+            Toast.makeText(context, tr(language, "No flashlight available", "Фонарик недоступен"), Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            cameraManager.setTorchMode(flashCameraId, !torchEnabled)
+        } catch (_: Exception) {
+            Toast.makeText(context,
+                tr(language, "Flashlight is busy or unavailable", "Фонарик занят или недоступен"),
+                Toast.LENGTH_SHORT).show()
+        }
+    }
+    val torchPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) toggleTorch()
+        else Toast.makeText(context,
+            tr(language, "Camera permission needed for flashlight", "Для фонарика требуется разрешение камеры"),
+            Toast.LENGTH_SHORT).show()
+    }
+    fun requestTorch() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED) {
+            toggleTorch()
+        } else {
+            torchPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -248,6 +319,9 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                         language = language,
                         onClock = { openDefaultClock(context, language) },
                         onCalendar = { openDefaultCalendar(context, language) },
+                        onCamera = { openDefaultCamera(context, language) },
+                        onTorch = ::requestTorch,
+                        torchEnabled = torchEnabled,
                         onOpen = { openApp(context, it) },
                         onChoose = ::chooseFavorite,
                         onDrawer = ::goDrawer,
@@ -357,18 +431,6 @@ private fun PixelMotif() {
 }
 
 @Composable
-private fun BrandHeader(rightLabel: String, onRight: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("orangre", fontFamily = FontFamily.Monospace, color = Orange, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text("  /  PIANO", fontFamily = FontFamily.Monospace, color = Subtle, fontSize = 10.sp)
-        }
-        Text(rightLabel, fontFamily = FontFamily.Monospace, color = Orange, fontSize = 11.sp,
-            modifier = Modifier.clickable(onClick = onRight).padding(vertical = 7.dp, horizontal = 3.dp))
-    }
-}
-
-@Composable
 private fun GlassPanel(enabled: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(18.dp)
     Box(
@@ -390,6 +452,9 @@ private fun HomePage(
     language: String,
     onClock: () -> Unit,
     onCalendar: () -> Unit,
+    onCamera: () -> Unit,
+    onTorch: () -> Unit,
+    torchEnabled: Boolean,
     onOpen: (AppEntry) -> Unit,
     onChoose: (Int) -> Unit,
     onDrawer: () -> Unit,
@@ -417,7 +482,30 @@ private fun HomePage(
             Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 7.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            ClockBlock(compact = compact, language = language, onClock = onClock, onCalendar = onCalendar)
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(top = if (compact) 15.dp else 21.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ClockBlock(compact = compact, language = language, onClock = onClock, onCalendar = onCalendar)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PianoSquareButton(
+                        icon = PianoIcon.Camera,
+                        description = tr(language, "Open camera", "Открыть камеру"),
+                        onClick = onCamera, edge = if (compact) 37.dp else 41.dp
+                    )
+                    PianoSquareButton(
+                        icon = PianoIcon.Flashlight,
+                        description = tr(language,
+                            if (torchEnabled) "Turn off flashlight" else "Turn on flashlight",
+                            if (torchEnabled) "Выключить фонарик" else "Включить фонарик"),
+                        onClick = onTorch,
+                        active = torchEnabled,
+                        edge = if (compact) 37.dp else 41.dp
+                    )
+                }
+            }
             GlassPanel(enabled = glass, modifier = Modifier.fillMaxWidth()) {
                 Column {
                     repeat(slots) { index ->
@@ -529,12 +617,13 @@ private fun DrawerPage(
     }
 
     Column(Modifier.fillMaxSize().padding(start = 18.dp, end = 11.dp, top = 5.dp)) {
-        BrandHeader(tr(language, "← HOME", "← ДОМОЙ"), onHome)
-        Spacer(Modifier.height(10.dp))
-        Text(tr(language, "ALL APPLICATIONS", "ВСЕ ПРИЛОЖЕНИЯ"), color = Peach, fontSize = 21.sp,
-            fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-        Text(tr(language, "${results.size} AVAILABLE", "НАЙДЕНО: ${results.size}"), color = Subtle, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
-        Spacer(Modifier.height(10.dp))
+        PianoSquareButton(
+            icon = PianoIcon.Back,
+            description = tr(language, "Back to home", "На главный экран"),
+            onClick = onHome,
+            edge = 36.dp
+        )
+        Spacer(Modifier.height(4.dp))
         OutlinedTextField(
             value = filter, onValueChange = onFilter, singleLine = true,
             label = { Text(tr(language, "Search / type to filter", "Поиск по названию"), fontSize = 12.sp) },
@@ -601,7 +690,12 @@ private fun SettingsPage(
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         .padding(horizontal = 19.dp, vertical = 6.dp)) {
-        BrandHeader(tr(language, "← HOME", "← ДОМОЙ"), onBack)
+        PianoSquareButton(
+            icon = PianoIcon.Back,
+            description = tr(language, "Back to home", "На главный экран"),
+            onClick = onBack,
+            edge = 36.dp
+        )
         Spacer(Modifier.height(12.dp))
         Text(tr(language, "PREFERENCES", "НАСТРОЙКИ"), color = Peach, fontFamily = FontFamily.Monospace,
             fontSize = 23.sp, fontWeight = FontWeight.Bold)
@@ -667,7 +761,7 @@ private fun SettingsPage(
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · personal build 0.2.0", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · personal build 0.3.0", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

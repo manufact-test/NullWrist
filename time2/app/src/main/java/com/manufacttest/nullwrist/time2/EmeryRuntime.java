@@ -282,6 +282,12 @@ public final class EmeryRuntime {
                     // even while it displays its own watchface failure UI.
                     if(!closing)emit("PEBBLE APP TASK FAILED: "+installError.getMessage());
                 }
+                // The old Android parser reported a partial idle frame as a
+                // fatal error. Clear only that exact stale pre-fix error once
+                // we have an actual, established live companion connection.
+                String priorError=pref.getString("last_operation_error",null);
+                if(priorError!=null && priorError.contains("QEMU serial body was not received"))
+                    pref.edit().remove("last_operation_error").apply();
                 if(!closing)emit("Pebble serial companion connected");
                 // Keep the companion alive on success *and* recoverable failure.
                 while(!closing && process!=null && process.isAlive() && appLink!=null){

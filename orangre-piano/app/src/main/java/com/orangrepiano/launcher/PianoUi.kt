@@ -19,6 +19,8 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -92,6 +94,9 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -304,8 +309,21 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
             AnimatedContent(
                 targetState = page,
                 transitionSpec = {
-                    if (quiet) fadeIn(tween(1)) togetherWith fadeOut(tween(1))
-                    else fadeIn(tween(180)) togetherWith fadeOut(tween(130))
+                    if (quiet) {
+                        fadeIn(tween(1)) togetherWith fadeOut(tween(1))
+                    } else if (initialState == Page.HOME && targetState == Page.DRAWER) {
+                        (slideInVertically(animationSpec = tween(265), initialOffsetY = { it }) +
+                            fadeIn(tween(210))) togetherWith
+                            (slideOutVertically(animationSpec = tween(265), targetOffsetY = { -it / 5 }) +
+                                fadeOut(tween(210)))
+                    } else if (initialState == Page.DRAWER && targetState == Page.HOME) {
+                        (slideInVertically(animationSpec = tween(265), initialOffsetY = { -it / 5 }) +
+                            fadeIn(tween(215))) togetherWith
+                            (slideOutVertically(animationSpec = tween(265), targetOffsetY = { it }) +
+                                fadeOut(tween(215)))
+                    } else {
+                        fadeIn(tween(180)) togetherWith fadeOut(tween(130))
+                    }
                 },
                 label = "piano_navigation",
                 modifier = Modifier
@@ -616,20 +634,43 @@ private fun DrawerPage(
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(start = 18.dp, end = 11.dp, top = 5.dp)) {
-        PianoSquareButton(
-            icon = PianoIcon.Back,
-            description = tr(language, "Back to home", "На главный экран"),
-            onClick = onHome,
-            edge = 36.dp
-        )
-        Spacer(Modifier.height(4.dp))
-        OutlinedTextField(
-            value = filter, onValueChange = onFilter, singleLine = true,
-            label = { Text(tr(language, "Search / type to filter", "Поиск по названию"), fontSize = 12.sp) },
-            modifier = Modifier.fillMaxWidth().padding(end = 21.dp)
-        )
-        Spacer(Modifier.height(8.dp))
+    // Observe finger movement before child scrolling consumes it. Close only when
+    // the alphabetical list was already at its beginning as the swipe began.
+    // A swipe inside a scrolled list continues normal list navigation.
+    val downwardToHome = Modifier.pointerInput(list, onHome) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val startedAtTop = list.firstVisibleItemIndex == 0 && list.firstVisibleItemScrollOffset == 0
+            var verticalTravel = 0f
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val pointer = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!pointer.pressed) break
+                verticalTravel += pointer.position.y - pointer.previousPosition.y
+            } while (true)
+            if (startedAtTop && verticalTravel > 82.dp.toPx()) onHome()
+        }
+    }
+    Column(Modifier.fillMaxSize().then(downwardToHome)
+        .padding(start = 18.dp, end = 11.dp, top = 5.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            OutlinedTextField(
+                value = filter, onValueChange = onFilter, singleLine = true,
+                label = { Text(tr(language, "Search / type to filter", "Поиск по названию"), fontSize = 12.sp) },
+                modifier = Modifier.weight(1f)
+            )
+            PianoSquareButton(
+                icon = PianoIcon.Back,
+                description = tr(language, "Back to home", "На главный экран"),
+                onClick = onHome,
+                edge = 40.dp
+            )
+        }
+        Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxSize()) {
             LazyColumn(modifier = Modifier.weight(1f).fillMaxHeight(), state = list) {
                 groups.forEach { (letter, entries) ->
@@ -690,15 +731,21 @@ private fun SettingsPage(
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         .padding(horizontal = 19.dp, vertical = 6.dp)) {
-        PianoSquareButton(
-            icon = PianoIcon.Back,
-            description = tr(language, "Back to home", "На главный экран"),
-            onClick = onBack,
-            edge = 36.dp
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(tr(language, "PREFERENCES", "НАСТРОЙКИ"), color = Peach, fontFamily = FontFamily.Monospace,
-            fontSize = 23.sp, fontWeight = FontWeight.Bold)
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(tr(language, "PREFERENCES", "НАСТРОЙКИ"), color = Peach,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 23.sp, fontWeight = FontWeight.Bold)
+            PianoSquareButton(
+                icon = PianoIcon.Back,
+                description = tr(language, "Back to home", "На главный экран"),
+                onClick = onBack,
+                edge = 40.dp
+            )
+        }
         Spacer(Modifier.height(17.dp))
         SectionTitle(tr(language, "01 / FAVORITE KEYS", "01 / ИЗБРАННОЕ"))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

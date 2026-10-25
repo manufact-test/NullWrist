@@ -58,3 +58,11 @@ Project name is intentionally spelled **orangre piano**.
 - Flashlight uses Android CameraManager torch mode and runtime CAMERA permission only on first flashlight use; it does not capture images. Camera app shortcut uses an implicit Android intent and does not request camera permission.
 - Flashlight on/off styling follows torch status via CameraManager.TorchCallback. If other apps use the camera, torch may become unavailable.
 - Debug APK signing currently changes between CI runners: uninstall the old test APK before installing this version, losing launcher-local settings. Fix requires a persistent private signing key.
+
+## v0.3.1 — gesture navigation refinement
+
+- A-Z drawer back arrow moved to the top-right, inline with the search field. Search stays at the top with more room for the list.
+- Preferences back arrow moved to the top-right, alongside the PREFERENCES / НАСТРОЙКИ heading.
+- Swipe up on home opens the app drawer from below; swipe down **from the top of the drawer list** returns home using a matching vertical transition.
+- Closing gesture listens to touch movement without consuming it, to avoid breaking regular vertical list scrolling and letter selection. If the list has been scrolled down, scroll to the beginning before swiping down to close.
+- Android back button and the visible square arrow continue to work. The existing reduced-animation option still applies.

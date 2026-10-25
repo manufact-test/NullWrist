@@ -79,7 +79,7 @@ jobs:
           for name,key in [('pebbleos.elf','firmware_sha256'),('qemu_micro_flash.bin','micro_flash_sha256'),('qemu_spi_flash.bin','spi_flash_sha256')]:
               digest=hashlib.sha256((firmware/name).read_bytes()).hexdigest()
               assert digest==proof[key], name+' differs from pinned evidence'
-          (firmware/'source-provenance.json').write_text(json.dumps({'pebbleos_sha':revision,'qemu_sha':lock['qemu']['sha'],'sdk':lock['pebbleos_sdk']['version'],'fixed_source_run':proof['firmware_run_id'],'firmware_sha256':proof['firmware_sha256'],'device_status':'NOT VERIFIED ON TITAN 2'},indent=2)+'\\n')
+          (firmware/'source-provenance.json').write_text(json.dumps({'pebbleos_sha':revision,'qemu_sha':lock['qemu']['sha'],'sdk':lock['pebbleos_sdk']['version'],'fixed_source_run':proof['firmware_run_id'],'firmware_sha256':proof['firmware_sha256'],'device_status':'NOT VERIFIED ON TITAN 2'},indent=2)+chr(10))
           print('PASS: fixed-source firmware, both usermode wrappers, pinned checksums')
           PY
           ( cd "$dest_assets"; sha256sum --check SHA256SUMS )

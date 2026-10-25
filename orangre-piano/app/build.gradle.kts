@@ -6,18 +6,53 @@ plugins {
 
 android {
     namespace = "com.orangrepiano.launcher"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.orangrepiano.launcher"
         minSdk = 28
-        targetSdk = 35
-        versionCode = 5
-        versionName = "0.4.0"
+        targetSdk = 36
+        versionCode = 100
+        versionName = "1.0.0"
+    }
+
+    // Never commit the private release key. GitHub Actions passes it through
+    // protected repository secrets; without all four values only debug is built.
+    val productionKeyFile = System.getenv("PIANO_KEYSTORE_PATH")
+    val productionStorePassword = System.getenv("PIANO_STORE_PASSWORD")
+    val productionAlias = System.getenv("PIANO_KEY_ALIAS")
+    val productionKeyPassword = System.getenv("PIANO_KEY_PASSWORD")
+    val releaseKeyAvailable = listOf(
+        productionKeyFile, productionStorePassword,
+        productionAlias, productionKeyPassword
+    ).all { !it.isNullOrBlank() }
+
+    signingConfigs {
+        if (releaseKeyAvailable) {
+            create("production") {
+                storeFile = file(productionKeyFile!!)
+                storePassword = productionStorePassword!!
+                keyAlias = productionAlias!!
+                keyPassword = productionKeyPassword!!
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
     }
 
     buildTypes {
-        release { isMinifyEnabled = false }
+        getByName("debug") {
+            versionNameSuffix = "-rc1"
+        }
+        getByName("release") {
+            isMinifyEnabled = false // Preserve the tested implementation for first release.
+            isDebuggable = false
+            if (releaseKeyAvailable) {
+                signingConfig = signingConfigs.getByName("production")
+            }
+        }
     }
 
     compileOptions {

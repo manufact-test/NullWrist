@@ -4,7 +4,7 @@ Minimalist, text-only, orange-black Android HOME launcher designed for the squar
 
 An entirely separate Android application from NullWrist. Does not change the rear screen, Pebble runtime, or main NullWrist application.
 
-## v0.3 scope
+## Current scope
 
 - Android HOME role (no root), safe to swap back to the stock launcher.
 - 5 or 6 selectable and reorderable favorite apps, no app icons.
@@ -79,3 +79,11 @@ Premium visual / motion system refresh while retaining working Titan 2 features.
 - Settings gain a consistent glass/metal hierarchy, refined toggles, and section hairlines.
 - Existing quiet animation setting reduces transitions and haptic effects. The reduced motion option is local to the launcher.
 - **Signed debug APK caveat:** ephemeral CI signing keys still require uninstalling the previous build (local settings/wallpaper cleared). A privately stored persistent signing key is necessary for smooth upgrade installs.
+
+## v1.0.0 Release Candidate
+
+- Corrected alphabet glyph optical alignment in each animated capsule by rasterizing exact glyph bounds on Canvas, including Cyrillic/Latin.
+- Created bespoke copper/pixel piano Android adaptive icon and monochrome themed variant; available on Android app lists and system surfaces through manifest icon references.
+- Upgraded build tooling and target to Android 16 / API 36 for Google Play 2026 minimum target requirements.
+- Automated preview lint, APK signature verification, icon/package checks, and production APK/AAB generation **only** with persistent signing secrets; see [RELEASE.md](RELEASE.md).
+- No signing secrets committed. An unsigned production release is **not** published as stable; debug-signed RC1 is installable after uninstalling former preview APKs.

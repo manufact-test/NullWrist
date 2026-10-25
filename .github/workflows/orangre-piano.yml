@@ -1,4 +1,4 @@
-name: orangre piano APK
+name: orangre piano — Android release
 
 on:
   push:
@@ -10,6 +10,10 @@ on:
 
 permissions:
   contents: write
+
+concurrency:
+  group: orangre-piano-release-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -25,33 +29,102 @@ jobs:
           java-version: "17"
       - uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+          packages: "platform-tools platforms;android-36 build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
-      - name: Assemble independent debug APK
-        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Build and lint store-targeted preview
+        run: gradle :app:assembleDebug :app:lintDebug --stacktrace
+
+      - name: Verify preview package and cryptographic signature
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/orangre-badging.txt"
+          grep -q "package: name='com.orangrepiano.launcher'" "$RUNNER_TEMP/orangre-badging.txt"
+          grep -q "targetSdkVersion:'36'" "$RUNNER_TEMP/orangre-badging.txt"
+          grep -q "application: label='orangre piano'" "$RUNNER_TEMP/orangre-badging.txt"
+          grep -q "application-icon-" "$RUNNER_TEMP/orangre-badging.txt"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-debug-apk
+          name: orangre-piano-1.0.0-rc1-debug-apk
           path: orangre-piano/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publish orangre piano v0.4.0 to GitHub Releases
-        if: github.event_name == 'push' && github.ref == 'refs/heads/orangre-piano/dev'
+      - name: Prepare protected production signing
+        env:
+          PIANO_KEYSTORE_B64: ${{ secrets.PIANO_KEYSTORE_B64 }}
+          PIANO_STORE_PASSWORD: ${{ secrets.PIANO_STORE_PASSWORD }}
+          PIANO_KEY_ALIAS: ${{ secrets.PIANO_KEY_ALIAS }}
+          PIANO_KEY_PASSWORD: ${{ secrets.PIANO_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$PIANO_KEYSTORE_B64" && -n "$PIANO_STORE_PASSWORD" && -n "$PIANO_KEY_ALIAS" && -n "$PIANO_KEY_PASSWORD" ]]; then
+            umask 077
+            printf '%s' "$PIANO_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/orangre-piano-release.jks"
+            keytool -list -keystore "$RUNNER_TEMP/orangre-piano-release.jks" \
+              -storepass "$PIANO_STORE_PASSWORD" -alias "$PIANO_KEY_ALIAS" >/dev/null
+            echo "PIANO_RELEASE_READY=true" >> "$GITHUB_ENV"
+          else
+            echo "PIANO_RELEASE_READY=false" >> "$GITHUB_ENV"
+            echo "::notice::No protected signing key configured. Publishing a debug-signed release candidate, not a Play Store release."
+          fi
+
+      - name: Build signed production APK and AAB
+        if: env.PIANO_RELEASE_READY == 'true'
+        env:
+          PIANO_KEYSTORE_PATH: ${{ runner.temp }}/orangre-piano-release.jks
+          PIANO_STORE_PASSWORD: ${{ secrets.PIANO_STORE_PASSWORD }}
+          PIANO_KEY_ALIAS: ${{ secrets.PIANO_KEY_ALIAS }}
+          PIANO_KEY_PASSWORD: ${{ secrets.PIANO_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          gradle :app:assembleRelease :app:bundleRelease --stacktrace
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+          test -s app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload production deliverables
+        if: env.PIANO_RELEASE_READY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: orangre-piano-v1.0.0-signed-release
+          path: |
+            orangre-piano/app/build/outputs/apk/release/app-release.apk
+            orangre-piano/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Publish GitHub preview or signed release
+        if: github.ref == 'refs/heads/orangre-piano/dev'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v0.4.0.apk
-          TAG="orangre-piano-v0.4.0"
-          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG" ../orangre-piano-v0.4.0.apk \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "orangre piano v0.4.0 (Titan 2)" \
-              --notes "orangre piano 0.4 — Atelier Design Pass. Custom rendered 5x7 pixel clock, polished layered copper/pearl glass, quiet background grid and light, animated press states, magnetic bilingual A-Z letter rail with haptic navigation and floating letter loupe, unified refined settings. Same core launcher, camera, torch, wallpapers and keyboard search. DEBUG signing changes between GitHub runners: uninstall previous test APK before installing. NullWrist remains independent." \
-              --prerelease
+          if [[ "$PIANO_RELEASE_READY" == "true" ]]; then
+            TAG="orangre-piano-v1.0.0"
+            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.0.0.apk
+            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.0.0.aab
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$TAG" ../orangre-piano-v1.0.0.apk ../orangre-piano-v1.0.0.aab --clobber --repo "$GITHUB_REPOSITORY"
+            else
+              gh release create "$TAG" ../orangre-piano-v1.0.0.apk ../orangre-piano-v1.0.0.aab \
+                --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+                --title "orangre piano 1.0.0 — ATELIER" \
+                --notes "Signed production APK and Android App Bundle. Dedicated Titan 2 launcher, premium ATELIER styling, optical letter alignment and bespoke adaptive piano icon. No ads, analytics or internet permission."
+            fi
           else
-            gh release upload "$TAG" ../orangre-piano-v0.4.0.apk --clobber --repo "$GITHUB_REPOSITORY"
+            TAG="orangre-piano-v1.0.0-rc1"
+            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.0.0-rc1.apk
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$TAG" ../orangre-piano-v1.0.0-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
+            else
+              gh release create "$TAG" ../orangre-piano-v1.0.0-rc1.apk \
+                --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+                --title "orangre piano 1.0.0 RC1 — ATELIER" \
+                --notes "Installable preview with optical A-Z rail centering, custom piano adaptive/monochrome icon, target Android 16 (API 36), and full launcher functionality. DEBUG signature changes between CI runners: uninstall the previous build first, losing app-local settings. Not a signed Play Store release; to enable stable upgrades, configure protected signing secrets documented in orangre-piano/RELEASE.md." \
+                --prerelease
+            fi
           fi

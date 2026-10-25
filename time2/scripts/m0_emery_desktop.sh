@@ -45,6 +45,11 @@ test "$(git -C "$LAB/PebbleOS" rev-parse HEAD)" = "$PEBBLEOS_REV" || {
   echo "PebbleOS source revision differs from upstream lock" >&2; exit 1;
 }
 git -C "$LAB/PebbleOS" submodule update --init --recursive
+if [[ "${EMERY_LEGACY_STACK_EXPERIMENT:-0}" == "1" ]]; then
+    echo "=== Candidate: legacy Basalt 3.x 4KiB stack on Emery, MPU unchanged ==="
+    python3 "$REPO_ROOT/time2/scripts/experiment_emery_legacy_stack.py" \
+      "$LAB/PebbleOS/fw/process_management/app_manager.c" "$LOGS/legacy-stack-experiment.json"
+fi
 echo "=== Verify both source privilege-entry paths before any build ==="
 python3 "$REPO_ROOT/time2/scripts/verify_emery_privilege_fix.py" --source "$LAB/PebbleOS" --report "$LOGS/privilege-source.json"
 cd "$LAB/PebbleOS"

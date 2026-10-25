@@ -224,3 +224,7 @@ Known blockers/risks:
 - [ ] Only then migrate proven old NullWrist app installer/registry/service patterns into isolated Time2.
 - [ ] Add stable running health state and trustworthy front UI diagnostics, not ephemeral `RUNNING`/static screenshot.
 - [ ] Extend compatibility matrix to all six and guest workers, then pursue phone integrations.
+
+## 2026-10-26 — Pixel Miner / приложение сохраняет прогресс
+
+Проверка владельца на Titan 2: Pixel Miner UUID `808903cb-fa37-4247-b012-7dfe5c9269e1` успешно проходит AppFetch/PutBytes/RUNNING, но прогресс после закрытия не сохраняется. UART2 показал `Stack overflow [task: App <Pixel Mine]` и `App fault!`. См. [отдельный контрольный план и результаты](PIXEL-MINER-PERSISTENCE-GATE.md). Это добавляет обязательный gate постоянной памяти и аварий после RUNNING, **не** доказывает, что вся система хранения данных неисправна. Исправлять в порядке: сервис-владелец QEMU, отсутствие повторных установок, мягкая остановка guest, PFS-сохранения и воспроизводимость stack fault. Не отключать MPU.

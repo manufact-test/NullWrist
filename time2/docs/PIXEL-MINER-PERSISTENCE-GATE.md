@@ -39,3 +39,12 @@ UUID `808903cb-fa37-4247-b012-7dfe5c9269e1`, platform Basalt SDK
 
 No claim of Pixel Miner save correctness or a production stack fix before
 the tests. Do not patch the user’s PBW binary or disable MPU.
+
+## 2026-10-26 — фактическое испытание Linux, промежуточно
+
+- Источник Pixel Miner: предоставленный владельцем PBW, проверен SHA256, платформа Basalt, app UUID совпадает.
+- `coredevices/PebbleOS@3b69e4b8` имеет 2 KiB стек для legacy 3.x и 4 KiB для SDK 4.x на Emery. Опциональная проверочная прошивка 4KiB была собрана из официального source pin с единственным изменением layout legacy stack, сохранёнными MPU/guard и прежним RAM-segment.
+- Linux CI кандидат: https://github.com/manufact-test/NullWrist/actions/runs/40244566798 — PASS, включая официальные QEMU smoke; это **экспериментальный**, не выпускаемый firmware.
+- С этим кандидатом Pixel Miner в Linux QEMU показал реальную графику/счётчик 60s, оставался RUNNING, без `Stack overflow` или `App fault` в UART2. Однако 2KiB официальный baseline во время ограниченной локальной интерактивной проверки не воспроизвёл аварии, поэтому причинность патча не доказана. Не заменять действующую официальную Android прошивку без сравнения и физического теста.
+- Linux QEMU эксперимент с кандидатом 4KiB: первая игра пишет `game_load ... E_DOES_NOT_EXIST`, после касаний и штатного `AppRunStateStop` SPI изменяется; последующий cold start с той же SPI и AppRunStateStart без PBW передачи успешно запускает игру без повторного `E_DOES_NOT_EXIST`. Это обоснованное свидетельство создания persist-записи, **но не численного сохранения score**. Сами PBW и личные файлы остаются вне публичного GitHub.
+- Рабочая ветка теперь содержит Activity-независимый foreground emulator service, сериализованный guest protocol, быстрый запуск без BlobDB overwrite, ledger fingerprint и мягкую остановку приложения при Stop. Реальный Titan 2 ещё не проверял эту новую архитектуру. FGS/type specialUse и энергопотребление требуют тестов.

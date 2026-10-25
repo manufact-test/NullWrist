@@ -82,6 +82,12 @@ public final class EmeryFlashBackup {
                 // A different SPI image can contain different app versions/IDs.
                 // Do not reuse stale Android-side proof of prior guest transfers.
                 new EmeryInstallLedger(context).invalidate();
+                // A restored SPI may have a different active UUID and no pending
+                // companion operation. Keep user's private PBW files untouched.
+                context.getSharedPreferences("time2-pbw-install",Context.MODE_PRIVATE)
+                        .edit().remove("last_installed_uuid").remove("last_transferred_uuid")
+                        .remove("pending_uuid").remove("pending_delete_uuid")
+                        .remove("pending_force_reinstall_uuid").commit();
             }catch(java.nio.file.AtomicMoveNotSupportedException unsupported){
                 throw new IOException("Atomic flash restore unsupported; preserving old data",
                         unsupported);

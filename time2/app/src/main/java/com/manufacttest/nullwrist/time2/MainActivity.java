@@ -343,7 +343,7 @@ public final class MainActivity extends Activity {
                                     showMessage("Stopping PebbleOS","The guest process will be stopped. Only close it after saving app progress.");
                                     break;
                                 }
-                        case 5:showMessage("NullWrist Time 2 / recovery-lab",
+                        case 5:showMessage("NullWrist Time 2 / 0.8.0-persistence-lab",
                                 "Real Emery firmware display was verified on Titan 2. "
                                 +"Third-party watchface execution is still experimental. "
                                 +"Triple-tap sends Pebble SELECT. "

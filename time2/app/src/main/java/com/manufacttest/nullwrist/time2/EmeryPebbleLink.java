@@ -123,6 +123,17 @@ public final class EmeryPebbleLink implements Closeable {
                 done+=n;
             }catch(SocketTimeoutException retry){
                 // Bounded timeouts permit interruption while the guest boots.
+            }catch(IOException candidate){
+                // Android LocalSocket may expose a normal SO_RCVTIMEO EAGAIN as
+                // IOException("Try again"), rather than SocketTimeoutException.
+                // A prior 0.6.1 install completed successfully, then the idle
+                // companion loop disconnected because this was treated as fatal.
+                // Continue only for this specific transient receive condition.
+                String reason=candidate.getMessage();
+                if(!closed && ("Try again".equals(reason) ||
+                        "EAGAIN".equals(reason) ||
+                        "Resource temporarily unavailable".equals(reason)))continue;
+                throw candidate;
             }
         }
         return buffer;

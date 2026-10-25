@@ -34,6 +34,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Typeface
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -62,6 +70,7 @@ internal fun PianoLetterRail(
     val itemHeight = 23.dp
     val density = androidx.compose.ui.platform.LocalDensity.current
     val rowHeightPx = with(density) { itemHeight.toPx() }
+    val glyphSizePx = with(density) { 11.sp.toPx() }
     var lastTouched by remember(letters) { mutableStateOf<String?>(null) }
 
     fun choose(letter: String) {
@@ -111,13 +120,30 @@ internal fun PianoLetterRail(
                     .clickable { choose(letter); lastTouched = null },
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = letter, fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                    color = if (active) PianoTone.pearl else PianoTone.secondary.copy(alpha = .78f),
-                    modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale)
-                )
+                // Center the *visible glyph bounds*, not the font's line box/baseline.
+                // Latin and Cyrillic capitals have different side bearings and top metrics.
+                Canvas(
+                    Modifier.fillMaxSize()
+                        .graphicsLayer(scaleX = scale, scaleY = scale)
+                        .semantics { contentDescription = letter }
+                ) {
+                    val colorInt = (if (active) PianoTone.pearl
+                        else PianoTone.secondary.copy(alpha = .78f)).toArgb()
+                    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = colorInt
+                        textSize = glyphSizePx
+                        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                        textAlign = Paint.Align.LEFT
+                        isSubpixelText = true
+                    }
+                    val bounds = Rect()
+                    paint.getTextBounds(letter, 0, letter.length, bounds)
+                    // Accounting for actual bitmap extents removes the optical offset
+                    // caused by Text() font padding and baseline alignment.
+                    val x = center.x - (bounds.left + bounds.right) / 2f
+                    val y = center.y - (bounds.top + bounds.bottom) / 2f
+                    drawContext.canvas.nativeCanvas.drawText(letter, x, y, paint)
+                }
             }
         }
     }

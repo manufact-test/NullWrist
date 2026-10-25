@@ -225,8 +225,8 @@ public final class EmeryRuntime {
                 "time2-pbw-install",Context.MODE_PRIVATE);
         String chosen=pref.getString("pending_uuid",null);
         String deleting=pref.getString("pending_delete_uuid",null);
-        // Do not repeat an already-failed operation on every watch boot.
-        pref.edit().remove("pending_uuid").remove("pending_delete_uuid").apply();
+        // The pending guest delete is durable until PebbleOS acknowledges it.
+        // Removing it here lost deletes when QEMU exited or serial timed out.
         if(chosen!=null || deleting!=null) {
             pref.edit().remove("last_operation_error")
                     .putString("last_operation_status",chosen!=null
@@ -252,6 +252,9 @@ public final class EmeryRuntime {
                 try {
                     if(deleting!=null){
                         installer.uninstall(java.util.UUID.fromString(deleting));
+                        // ACK received: only now acknowledge our durable tombstone.
+                        if(deleting.equals(pref.getString("pending_delete_uuid",null)))
+                            pref.edit().remove("pending_delete_uuid").apply();
                         if(deleting.equals(pref.getString("last_installed_uuid",null)))
                             pref.edit().remove("last_installed_uuid").apply();
                     }
@@ -263,10 +266,17 @@ public final class EmeryRuntime {
                         String prior=pref.getString("last_installed_uuid",null);
                         boolean running=installer.install(file,prior);
                         pref.edit().putString("last_transferred_uuid",chosen).apply();
+                        // Confirmation is only assigned after sustained RUNNING.
                         if(running)pref.edit().putString("last_installed_uuid",chosen).apply();
                         else emit("PBW installed but guest launch NOT confirmed: "+chosen);
+                        if(chosen.equals(pref.getString("pending_uuid",null)))
+                            pref.edit().remove("pending_uuid").apply();
                     }
                 } catch(Exception installError) {
+                    // Retry only when user explicitly requests install again;
+                    // do not repeatedly install a failed PBW on every boot.
+                    if(chosen!=null && chosen.equals(pref.getString("pending_uuid",null)))
+                        pref.edit().remove("pending_uuid").apply();
                     // Do not disconnect the virtual phone after a failed PBW
                     // transfer. The Pebble guest needs AppVersion/phone traffic
                     // even while it displays its own watchface failure UI.
@@ -363,7 +373,7 @@ public final class EmeryRuntime {
             if(text.startsWith("PEBBLE APP TASK FAILED") ||
                     text.contains("NOT confirmed"))
                 update.putString("last_operation_error",text);
-            else if(text.startsWith("PebbleOS confirmed watchface running") ||
+            else if(text.startsWith("PebbleOS confirmed RUNNING_STABLE") ||
                     text.startsWith("PebbleOS deleted watchface"))
                 update.remove("last_operation_error");
             update.apply();

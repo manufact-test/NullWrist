@@ -136,7 +136,7 @@ public final class EmeryPbwInstaller {
             // first matching RUNNING status proves a launch; otherwise
             // retain the PBW in the library for a manual retry.
             boolean active=awaitRunning(uuid,12);
-            if(active)progress.update("PebbleOS confirmed watchface running: "+info.name);
+            if(active)progress.update("PebbleOS confirmed RUNNING_STABLE: "+info.name);
             else progress.update("PBW installed but launch NOT confirmed: "+info.name+
                     " — inspect guest diagnostics");
             return active;
@@ -173,22 +173,34 @@ public final class EmeryPbwInstaller {
         progress.update("PebbleOS deleted watchface "+uuid);
     }
 
-    private boolean awaitRunning(UUID uuid,int seconds)throws IOException {
-        byte[] expected=uuidBytes(uuid);
-        long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(seconds);
+    /**
+     * A transient AppRunState RUNNING is not sufficient: wait for matching
+     * UUID for ten real seconds, polling the real guest continuously.
+     * No attempt counter: unrelated/fast responses must not exhaust a clock.
+     */
+    private boolean awaitRunning(UUID uuid,int initialSeconds)throws IOException {
+        long begin=System.nanoTime();
+        long deadline=begin+java.util.concurrent.TimeUnit.SECONDS.toNanos(initialSeconds+12L);
+        EmeryRunStateTracker tracker=new EmeryRunStateTracker(uuid,10);
         byte[] query=new byte[17];query[0]=3;
-        int attempts=0;
-        while(System.nanoTime()<deadline && attempts++<7){
+        while(System.nanoTime()<deadline){
+            if(Thread.currentThread().isInterrupted())
+                throw new IOException("Watchface validation interrupted");
             link.send(0x34,query);
-            try {
+            try{
                 EmeryPebbleWire.Packet state=link.waitFor(0x34,2);
                 if(state.payload.length>=17 && state.payload[0]==1){
-                    boolean matches=true;
-                    for(int i=0;i<16;i++)if(state.payload[i+1]!=expected[i])matches=false;
-                    if(matches)return true;
+                    boolean stable=tracker.observe(
+                            state.payload,System.nanoTime());
+                    if(stable)return true;
                 }
-            }catch(IOException e){
-                if(!e.getMessage().contains("timed out"))throw e;
+            }catch(IOException timeout){
+                if(timeout.getMessage()==null ||
+                        !timeout.getMessage().contains("timed out"))throw timeout;
+            }
+            try{Thread.sleep(350);}catch(InterruptedException stopped){
+                Thread.currentThread().interrupt();
+                throw new IOException("Watchface validation interrupted",stopped);
             }
         }
         return false;

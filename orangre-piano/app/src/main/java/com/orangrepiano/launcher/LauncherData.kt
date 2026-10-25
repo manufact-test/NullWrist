@@ -65,6 +65,9 @@ class LauncherPrefs(context: Context) {
     val hideFavoritesInDrawer: Boolean get() = prefs.getBoolean("hide_favorites_drawer", false)
     val language: String get() = prefs.getString("language", "en").let { if (it == "ru") "ru" else "en" }
     val hideStatusBar: Boolean get() = prefs.getBoolean("hide_status_bar", false)
+    val setupFinished: Boolean get() = prefs.getBoolean("setup_finished", false)
+    val walletApp: String get() = prefs.getString("wallet_app", "") ?: ""
+    val phoneApp: String get() = prefs.getString("phone_app", "") ?: ""
 
     fun setFavorite(index: Int, key: String) {
         val current = favorites.toMutableList()
@@ -92,6 +95,9 @@ class LauncherPrefs(context: Context) {
     fun setHideFavorites(v: Boolean) { prefs.edit().putBoolean("hide_favorites_drawer", v).apply() }
     fun setLanguage(v: String) { prefs.edit().putString("language", if (v == "ru") "ru" else "en").apply() }
     fun setHideStatusBar(v: Boolean) { prefs.edit().putBoolean("hide_status_bar", v).apply() }
+    fun finishSetup() { prefs.edit().putBoolean("setup_finished", true).apply() }
+    fun setWalletApp(v: String) { prefs.edit().putString("wallet_app", v).apply() }
+    fun setPhoneApp(v: String) { prefs.edit().putString("phone_app", v).apply() }
 }
 
 private fun decodeScaled(input: java.io.InputStream, sample: Int): Bitmap? =

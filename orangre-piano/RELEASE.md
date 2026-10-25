@@ -48,3 +48,18 @@ Once all four secrets exist, GitHub Actions builds signed `assembleRelease` APK 
 
 ## Google Play still needs human-account steps
 An AAB, store listing artwork, privacy policy hosting, device screenshots, Play Console account, app content/data safety declarations, signing/Play App Signing selection, and closed/open testing must be completed in the Play developer account. Repository build success is **not** proof of Play review approval.
+
+## Alternative developer build with numeric notification badges
+
+The Play Protect-friendly Standard edition is the distribution baseline.
+`badgesDebug` is a separate alternative with the same `applicationId`, not
+an in-app toggle of forbidden permissions. Use it for controlled Android
+developer testing. It contains a declared notification listener, requests
+Notification Access in onboarding and derives count values locally. Do not
+disable Play Protect; browser/file-manager sideloads may be blocked. An Android
+Debug Bridge installation during development may work where permitted.
+
+GitHub Actions publishes `orangre-piano-v1.1.2-rc1.apk` (standard) and
+`orangre-piano-v1.1.2-badges-rc1.apk` (developer badges). Stable signed
+release builds only the Standard AAB unless the future Play distribution
+policy is reviewed and approved.

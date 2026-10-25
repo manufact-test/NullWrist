@@ -130,3 +130,33 @@ notification-listener access. This affected the 1.1.0 RC1 direct download.
 - Play Protect stays enabled. Passing the permission-based block is expected,
   but installation still depends on Google's other malware and reputation checks.
 - Stable updates remain gated on a persistent, privately held signing key.
+
+## v1.1.2 RC1 — smaller weather, round coin and real notification counts
+
+- Home shows no `OPEN-METEO` footer; the forecast is a single slim line. The
+  required weather-data attribution remains in the app's first-run setup and README.
+- Bottom-right home settings launcher is now a simple, accessible `⋮`.
+- Wallet shortcut is now a single circular coin with a subtle inner rim and
+  tiny piano motif; opens the same selectable wallet app as before.
+- **Two official Android variants from one codebase:**
+  - `standard`: safe default APK with no NotificationListenerService or
+    `BIND_NOTIFICATION_LISTENER_SERVICE` declaration; suitable for direct
+    downloads, but cannot display other apps' notification counts.
+  - `badges`: an opt-in developer APK with the platform
+    `NotificationListenerService`; aggregates active, clearable notifications
+    per package locally and shows numeric badges only for count > 0.
+    The service does not save notification text, contacts, payloads or histories.
+    It requires a user-granted Notification Access setting.
+- Google Play Protect has a documented installation block for APKs with this
+  sensitive capability downloaded through browsers/file managers. Do not disable
+  Play Protect to sideload the badge edition. Developers can test via a USB
+  Android Debug Bridge deployment, if the device's policies permit it:
+  `adb install -r orangre-piano-v1.1.2-badges-rc1.apk`
+  then enable notification access within Android settings.
+  This does not guarantee installation nor override device policies.
+- Both variants use the **same applicationId**. They are mutually exclusive
+  alternatives, not two icons/apps at once. Future badge support in standard
+  distribution depends on an approved distribution channel.
+- CI assembles and lints both variants; APK inspection asserts the listener is
+  absent in standard and present in badges. Debug signing remains ephemeral
+  between CI runs; persistent signing secrets are still required for upgrades.

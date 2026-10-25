@@ -34,31 +34,43 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
-      - name: Build and lint store-targeted preview
-        run: gradle :app:assembleDebug :app:lintDebug --stacktrace
+      - name: Build and lint both variants
+        run: gradle :app:assembleStandardDebug :app:lintStandardDebug :app:assembleBadgesDebug :app:lintBadgesDebug --stacktrace
 
-      - name: Verify preview package and cryptographic signature
+      - name: Verify both variants and distinct permissions
         run: |
           set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          test -s "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/orangre-badging.txt"
-          grep -q "package: name='com.orangrepiano.launcher'" "$RUNNER_TEMP/orangre-badging.txt"
-          grep -q "targetSdkVersion:'36'" "$RUNNER_TEMP/orangre-badging.txt"
-          grep -q "application: label='orangre piano'" "$RUNNER_TEMP/orangre-badging.txt"
-          grep -q "application-icon-" "$RUNNER_TEMP/orangre-badging.txt"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump xmltree "$APK" AndroidManifest.xml > "$RUNNER_TEMP/orangre-manifest.txt"
-          if grep -Eq 'BIND_NOTIFICATION_LISTENER_SERVICE|PianoNotificationListener' "$RUNNER_TEMP/orangre-manifest.txt"; then
-            echo "::error::Sideload candidate still declares sensitive notification access."
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          SIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          SAFE="app/build/outputs/apk/standard/debug/app-standard-debug.apk"
+          BADGES="app/build/outputs/apk/badges/debug/app-badges-debug.apk"
+          for APK in "$SAFE" "$BADGES"; do
+            test -s "$APK"
+            "$SIGNER" verify --verbose "$APK"
+            "$AAPT" dump badging "$APK" | tee "$RUNNER_TEMP/$(basename "$APK").badging"
+            "$AAPT" dump xmltree "$APK" AndroidManifest.xml > "$RUNNER_TEMP/$(basename "$APK").manifest"
+            grep -q "package: name='com.orangrepiano.launcher'" "$RUNNER_TEMP/$(basename "$APK").badging"
+            grep -q "targetSdkVersion:'36'" "$RUNNER_TEMP/$(basename "$APK").badging"
+            grep -q "application-icon-" "$RUNNER_TEMP/$(basename "$APK").badging"
+          done
+          if grep -Eq 'BIND_NOTIFICATION_LISTENER_SERVICE|PianoNotificationListener' "$RUNNER_TEMP/app-standard-debug.apk.manifest"; then
+            echo "::error::Standard install must not request notification listener access!"
             exit 1
           fi
-          echo "Notification listener access absent from packaged APK"
+          grep -q 'BIND_NOTIFICATION_LISTENER_SERVICE' "$RUNNER_TEMP/app-badges-debug.apk.manifest"
+          grep -q 'PianoNotificationListener' "$RUNNER_TEMP/app-badges-debug.apk.manifest"
+          echo "Both APKs verified: standard has no notification listener, badges declares it."
 
       - uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-1.1.1-rc1-debug-apk
-          path: orangre-piano/app/build/outputs/apk/debug/app-debug.apk
+          name: orangre-piano-1.1.2-rc1-standard-apk
+          path: orangre-piano/app/build/outputs/apk/standard/debug/app-standard-debug.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orangre-piano-1.1.2-rc1-badges-apk
+          path: orangre-piano/app/build/outputs/apk/badges/debug/app-badges-debug.apk
           if-no-files-found: error
 
       - name: Prepare protected production signing
@@ -89,18 +101,18 @@ jobs:
           PIANO_KEY_PASSWORD: ${{ secrets.PIANO_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          gradle :app:assembleRelease :app:bundleRelease --stacktrace
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
-          test -s app/build/outputs/bundle/release/app-release.aab
+          gradle :app:assembleStandardRelease :app:bundleStandardRelease --stacktrace
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/standard/release/app-standard-release.apk
+          test -s app/build/outputs/bundle/standardRelease/app-standard-release.aab
 
       - name: Upload production deliverables
         if: env.PIANO_RELEASE_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-v1.1.1-signed-release
+          name: orangre-piano-v1.1.2-signed-release
           path: |
-            orangre-piano/app/build/outputs/apk/release/app-release.apk
-            orangre-piano/app/build/outputs/bundle/release/app-release.aab
+            orangre-piano/app/build/outputs/apk/standard/release/app-standard-release.apk
+            orangre-piano/app/build/outputs/bundle/standardRelease/app-standard-release.aab
           if-no-files-found: error
 
       - name: Publish GitHub preview or signed release
@@ -110,27 +122,28 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PIANO_RELEASE_READY" == "true" ]]; then
-            TAG="orangre-piano-v1.1.1"
-            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.1.1.apk
-            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.1.1.aab
+            TAG="orangre-piano-v1.1.2"
+            cp app/build/outputs/apk/standard/release/app-standard-release.apk ../orangre-piano-v1.1.2.apk
+            cp app/build/outputs/bundle/standardRelease/app-standard-release.aab ../orangre-piano-v1.1.2.aab
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.1.1.apk ../orangre-piano-v1.1.1.aab --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.2.apk ../orangre-piano-v1.1.2.aab --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.1.1.apk ../orangre-piano-v1.1.1.aab \
+              gh release create "$TAG" ../orangre-piano-v1.1.2.apk ../orangre-piano-v1.1.2.aab \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.1.1 — ATELIER" \
-                --notes "Signed production APK and AAB of orangre piano. The notification listener is intentionally absent to avoid requesting sensitive permissions. Includes minimal weather, camera/torch and phone/wallet quick actions."
+                --title "orangre piano 1.1.2 — ATELIER" \
+                --notes "Signed standard build, no sensitive notification listener. Compact one-line weather, round coin icon, three-dot settings. Badge-enabled developer edition is built as a separate opt-in variant and is not included as the standard Play release."
             fi
           else
-            TAG="orangre-piano-v1.1.1-rc1"
-            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.1.1-rc1.apk
+            TAG="orangre-piano-v1.1.2-rc1"
+            cp app/build/outputs/apk/standard/debug/app-standard-debug.apk ../orangre-piano-v1.1.2-rc1.apk
+            cp app/build/outputs/apk/badges/debug/app-badges-debug.apk ../orangre-piano-v1.1.2-badges-rc1.apk
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.1.1-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.2-rc1.apk ../orangre-piano-v1.1.2-badges-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.1.1-rc1.apk \
+              gh release create "$TAG" ../orangre-piano-v1.1.2-rc1.apk ../orangre-piano-v1.1.2-badges-rc1.apk \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.1.1 RC1 — ATELIER" \
-                --notes "Installable debug-signed RC1 for Android 16. Fixes Play Protect Internet-sideload block by removing the NotificationListenerService permission and component entirely. Notification badges are temporarily unavailable. Preserves clean favorites, Open-Meteo weather, four quick actions and first-run Home/location/camera/status-bar setup. Google Play Protect remains enabled. Old debug-signed versions generally require uninstall before install due to different certificates." \
+                --title "orangre piano 1.1.2 RC1 — ATELIER" \
+                --notes "Two build variants. STANDARD: orangre-piano-v1.1.2-rc1.apk, intended for direct install; no sensitive notification access. BADGES: orangre-piano-v1.1.2-badges-rc1.apk, implements real app notification counts and requests Android notification listener access only with explicit user consent. Google's Play Protect may automatically block internet-sideloading the BADGES APK; for development it can be deployed via Android Debug Bridge (ADB) over USB. Do not disable Play Protect. Both builds have smaller one-line weather, the round coin button and three-dot settings. Badges show 1-99+ only when active notifications exist. Builds use temporary debug signatures, so installing over previous versions generally requires uninstall. Signed production requires protected secrets." \
                 --prerelease
             fi
           fi

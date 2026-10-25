@@ -63,3 +63,14 @@ GitHub Actions publishes `orangre-piano-v1.1.2-rc1.apk` (standard) and
 `orangre-piano-v1.1.2-badges-rc1.apk` (developer badges). Stable signed
 release builds only the Standard AAB unless the future Play distribution
 policy is reviewed and approved.
+
+## v1.1.3 — single badge-enabled distribution
+
+Only one app flavor now exists. `assembleDebug` creates the full notification
+badge-enabled launcher and GitHub publishes `orangre-piano-v1.1.3-rc1.apk`.
+Production builds (`assembleRelease`, `bundleRelease`) require private signing
+secrets and also include notification badges. Device-side Notification Access is
+always an explicit Android opt-in. Direct browser/file-manager installation
+can be blocked by Google Play Protect due to sensitive notification access;
+only use permitted developer installations (ADB) or approved stores.
+The earlier two-APK approach was discontinued at user request.

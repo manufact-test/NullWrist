@@ -160,3 +160,24 @@ notification-listener access. This affected the 1.1.0 RC1 direct download.
 - CI assembles and lints both variants; APK inspection asserts the listener is
   absent in standard and present in badges. Debug signing remains ephemeral
   between CI runs; persistent signing secrets are still required for upgrades.
+
+## v1.1.3 RC1 — single notification-enabled release
+
+- The product now has **one build variant only**. The `standard` and `badges`
+  flavors, duplicate manifests and double artifact publication are eliminated.
+- Notification counts are integral to the launcher. Android's system
+  `NotificationListenerService` aggregates active clearable notifications by
+  package, displays a compact count directly after the app name and draws
+  nothing at zero. Notification access remains a voluntary system choice;
+  content is not stored or uploaded.
+- Wallet quick button is a spare, legible outline **$** glyph, without a coin
+  circle, container or other imagery inside the existing premium square button.
+- The All Apps search field is a custom **40 dp-high** single-line BasicTextField
+  with the same vertical size and corner radius as the neighboring Back button.
+  Physical keyboard input, app-name filtering and animated A–Z navigation remain.
+- Browser-sideloaded APKs requesting notification listener access may trigger
+  Play Protect. For permitted developer deployment use ADB over USB and enable
+  the listener from Android Settings. Never advise disabling device protection.
+- CI builds and lints a single APK and verifies the signed package contains
+  the notification listener. Production signed APK/AAB still require protected
+  keystore GitHub secrets.

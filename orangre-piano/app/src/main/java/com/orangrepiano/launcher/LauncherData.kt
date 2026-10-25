@@ -55,6 +55,9 @@ fun openApp(context: Context, app: AppEntry) {
     }
 }
 
+/** Six local persistent note slots, independent of favorite applications. */
+data class PianoTodo(val text: String = "", val done: Boolean = false)
+
 class LauncherPrefs(context: Context) {
     private val prefs = context.getSharedPreferences("orangre_piano", Context.MODE_PRIVATE)
     val slots: Int get() = prefs.getInt("slots", 6).coerceIn(5, 6)
@@ -68,6 +71,12 @@ class LauncherPrefs(context: Context) {
     val setupFinished: Boolean get() = prefs.getBoolean("setup_finished", false)
     val walletApp: String get() = prefs.getString("wallet_app", "") ?: ""
     val phoneApp: String get() = prefs.getString("phone_app", "") ?: ""
+    val todos: List<PianoTodo> get() = (0 until 6).map { index ->
+        PianoTodo(
+            prefs.getString("todo_text_$index", "") ?: "",
+            prefs.getBoolean("todo_done_$index", false)
+        )
+    }
 
     fun setFavorite(index: Int, key: String) {
         val current = favorites.toMutableList()
@@ -98,6 +107,14 @@ class LauncherPrefs(context: Context) {
     fun finishSetup() { prefs.edit().putBoolean("setup_finished", true).apply() }
     fun setWalletApp(v: String) { prefs.edit().putString("wallet_app", v).apply() }
     fun setPhoneApp(v: String) { prefs.edit().putString("phone_app", v).apply() }
+    fun setTodo(index: Int, text: String, done: Boolean = false) {
+        if (index !in 0 until 6) return
+        val normalized = text.trim().take(500)
+        prefs.edit()
+            .putString("todo_text_$index", normalized)
+            .putBoolean("todo_done_$index", normalized.isNotEmpty() && done)
+            .apply()
+    }
 }
 
 private fun decodeScaled(input: java.io.InputStream, sample: Int): Bitmap? =

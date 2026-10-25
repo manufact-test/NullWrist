@@ -151,11 +151,9 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     val cameraSetupRequest = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { allowed -> cameraEnabled = allowed }
-    var notificationEnabled by remember { mutableStateOf(hasNotificationAccess(context)) }
     var showSetup by remember { mutableStateOf(!prefs.setupFinished) }
     var quickChooser by remember { mutableStateOf<String?>(null) }
     var quickFilter by remember { mutableStateOf("") }
-    val unread = PianoNotificationCounts.counts
 
     val locationRequest = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -271,7 +269,6 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
             if (event == Lifecycle.Event.ON_RESUME) {
                 installed = installedApps(context)
                 favorites = prefs.favorites
-                notificationEnabled = hasNotificationAccess(context)
                 locationEnabled = weatherRepo.hasLocationPermission()
                 cameraEnabled = ContextCompat.checkSelfPermission(
                     context, Manifest.permission.CAMERA
@@ -415,7 +412,6 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                         onWallet = { openQuickApp("wallet") },
                         weather = weather, weatherLoading = weatherLoading,
                         onWeather = { refreshWeather(force = true) },
-                        unreadCounts = if (notificationEnabled) unread else emptyMap(),
                         torchEnabled = torchEnabled,
                         onOpen = { openApp(context, it) },
                         onChoose = ::chooseFavorite,
@@ -458,8 +454,7 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                         onSetup = { showSetup = true },
                         onChooseWallet = { showQuickChooser("wallet") },
                         onChoosePhone = { showQuickChooser("phone") },
-                        onWeather = { refreshWeather(force = true) },
-                        onNotificationAccess = { openNotificationAccessSettings(context) }
+                        onWeather = { refreshWeather(force = true) }
                     )
                 }
             }
@@ -468,12 +463,10 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
         if (showSetup) {
             PianoSetupDialog(
                 language = language,
-                notificationEnabled = notificationEnabled,
                 weatherEnabled = locationEnabled,
                 cameraEnabled = cameraEnabled,
                 hideStatusBar = hideStatusBar,
                 onHome = onRequestHome,
-                onNotification = { openNotificationAccessSettings(context) },
                 onLocation = { locationRequest.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
                 onCameraAccess = { cameraSetupRequest.launch(Manifest.permission.CAMERA) },
                 onHideBar = {
@@ -627,7 +620,6 @@ private fun HomePage(
     weather: PianoWeather?,
     weatherLoading: Boolean,
     onWeather: () -> Unit,
-    unreadCounts: Map<String, Int>,
     torchEnabled: Boolean,
     onOpen: (AppEntry) -> Unit,
     onChoose: (Int) -> Unit,
@@ -708,8 +700,6 @@ private fun HomePage(
                         val entry = apps.firstOrNull { it.key == favorites.getOrNull(index) }
                         val interaction = remember { MutableInteractionSource() }
                         val pressed by interaction.collectIsPressedAsState()
-                        val count = if (entry == null) 0
-                            else (unreadCounts[entry.packageName] ?: 0)
                         Row(
                             modifier = Modifier.fillMaxWidth().height(lineHeight)
                                 .combinedClickable(
@@ -744,19 +734,7 @@ private fun HomePage(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false)
                                 )
-                                if (count > 0) {
-                                    Text(
-                                        if (count > 99) "99+" else count.toString(),
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        color = PianoTone.pearl,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(PianoTone.copper.copy(alpha = .55f))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
+
                             }
                         }
                     }
@@ -1002,8 +980,7 @@ private fun SettingsPage(
     onSetup: () -> Unit,
     onChooseWallet: () -> Unit,
     onChoosePhone: () -> Unit,
-    onWeather: () -> Unit,
-    onNotificationAccess: () -> Unit
+    onWeather: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         .padding(horizontal = 19.dp, vertical = 6.dp)) {
@@ -1096,9 +1073,6 @@ private fun SettingsPage(
         }
         TextButton(onClick = onWeather) {
             Text(tr(language, "UPDATE WEATHER / LOCATION", "ОБНОВИТЬ ПОГОДУ"), color = Orange)
-        }
-        TextButton(onClick = onNotificationAccess) {
-            Text(tr(language, "NOTIFICATION COUNTS ACCESS", "ДОСТУП К УВЕДОМЛЕНИЯМ"), color = Orange)
         }
         TextButton(onClick = onSetup) {
             Text(tr(language, "FIRST-RUN SETUP", "ПЕРВОНАЧАЛЬНАЯ НАСТРОЙКА"), color = Orange)

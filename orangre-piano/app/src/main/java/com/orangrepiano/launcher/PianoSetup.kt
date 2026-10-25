@@ -24,17 +24,15 @@ import androidx.compose.ui.unit.sp
 
 /**
  * First-launch opt-in walkthrough: system roles/settings cannot be auto-granted.
- * Nothing prevents continuing without notification or location access.
+ * All privileges are optional. No notification listener is requested by this APK.
  */
 @Composable
 internal fun PianoSetupDialog(
     language: String,
-    notificationEnabled: Boolean,
     weatherEnabled: Boolean,
     cameraEnabled: Boolean,
     hideStatusBar: Boolean,
     onHome: () -> Unit,
-    onNotification: () -> Unit,
     onLocation: () -> Unit,
     onCameraAccess: () -> Unit,
     onHideBar: (Boolean) -> Unit,
@@ -62,26 +60,18 @@ internal fun PianoSetupDialog(
                 SetupStep("01", t("DEFAULT HOME", "ГЛАВНЫЙ ЭКРАН"),
                     t("Choose orangre piano as Home", "Выбрать orangre piano"), onHome)
                 HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
-                SetupStep("02", t("NOTIFICATIONS", "УВЕДОМЛЕНИЯ"),
-                    if (notificationEnabled) t("CONNECTED ✓", "ПОДКЛЮЧЕНО ✓")
-                    else t("Enable app counters", "Включить счётчики"), onNotification)
-                Text(t(
-                    "For GitHub APKs, Android may ask: App info → ⋮ → Allow restricted settings.",
-                    "Для APK с GitHub Android может потребовать: О приложении → ⋮ → Разрешить ограниченные настройки."
-                ), fontSize = 10.sp, color = PianoTone.secondary, lineHeight = 13.sp)
-                HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
-                SetupStep("03", t("LOCAL WEATHER", "ПОГОДА"),
+                SetupStep("02", t("LOCAL WEATHER", "ПОГОДА"),
                     if (weatherEnabled) t("LOCATION ✓", "ГЕОЛОКАЦИЯ ✓")
                     else t("Allow approximate location", "Разрешить примерную геолокацию"), onLocation)
                 HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
-                SetupStep("04", t("FLASHLIGHT", "ФОНАРИК"),
+                SetupStep("03", t("FLASHLIGHT", "ФОНАРИК"),
                     if (cameraEnabled) t("CAMERA ACCESS ✓", "ДОСТУП ✓")
                     else t("Allow camera access", "Разрешить доступ к камере"), onCameraAccess)
                 HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
-                        Text("05  " + t("HIDE TOP BAR", "СКРЫТЬ ВЕРХНЮЮ СТРОКУ"),
+                        Text("04  " + t("HIDE TOP BAR", "СКРЫТЬ ВЕРХНЮЮ СТРОКУ"),
                             fontFamily = FontFamily.Monospace, fontSize = 11.sp,
                             color = PianoTone.pearl)
                         Text(t("The notification shade still works", "Шторка остаётся доступна"),
@@ -90,8 +80,8 @@ internal fun PianoSetupDialog(
                     Switch(checked = hideStatusBar, onCheckedChange = onHideBar)
                 }
                 Text(t(
-                    "Weather by Open-Meteo · location is sent only for the forecast. Notification counts are calculated on-device; no message content is saved.",
-                    "Погода: Open-Meteo · местоположение отправляется только для прогноза. Счётчики вычисляются на устройстве, тексты уведомлений не сохраняются."
+                    "Weather by Open-Meteo; location is only used for the forecast. No notification access is requested.",
+                    "Погода: Open-Meteo. Геолокация нужна только для прогноза. Доступ к уведомлениям не запрашивается."
                 ), fontSize = 10.sp, color = PianoTone.secondary, lineHeight = 14.sp)
             }
         },

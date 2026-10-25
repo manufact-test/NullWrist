@@ -91,7 +91,7 @@ public final class RearActivity extends Activity {
                 service.touch(EmeryQmpCommands.TouchPhase.valueOf(type.name()),x,y);
             }
             @Override public void select(){
-                if(runtime!=null&&runtime.isConnected())
+                if(service!=null&&service.isConnected())
                     service.press(EmeryQmpCommands.Button.SELECT);
             }
         });
@@ -152,7 +152,7 @@ public final class RearActivity extends Activity {
             params.setMargins(dp(2),0,dp(2),0);
             controls.addView(button,params);
             button.setOnClickListener(view->{
-                if(runtime!=null&&runtime.isConnected())service.press(key);
+                if(service!=null&&service.isConnected())service.press(key);
             });
         }
         root.addView(controls);

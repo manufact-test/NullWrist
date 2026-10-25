@@ -128,22 +128,24 @@ internal fun PianoSquareButton(
                         join = androidx.compose.ui.graphics.StrokeJoin.Round))
                 }
                 PianoIcon.Wallet -> {
-                    drawRoundRect(
-                        color = foreground,
-                        topLeft = Offset(w * .13f, h * .25f),
-                        size = Size(w * .74f, h * .61f),
-                        cornerRadius = CornerRadius(3.dp.toPx()),
-                        style = Stroke(stroke)
-                    )
-                    segment(.20f, .23f, .71f, .23f)
+                    // A *single round coin*, with a light second rim and pixel-scale
+                    // central piano mark. Nothing rectangular or wallet-shaped.
                     drawCircle(
-                        color = foreground,
-                        radius = w * .18f,
-                        center = Offset(w * .50f, h * .55f),
+                        color = foreground, radius = w * .375f,
+                        center = Offset(w * .50f, h * .50f),
                         style = Stroke(stroke)
                     )
-                    segment(.50f, .47f, .50f, .64f)
-                    segment(.45f, .50f, .55f, .50f)
+                    drawCircle(
+                        color = foreground.copy(alpha = .50f), radius = w * .290f,
+                        center = Offset(w * .50f, h * .50f),
+                        style = Stroke(stroke * .60f)
+                    )
+                    segment(.35f, .34f, .35f, .66f)
+                    segment(.35f, .34f, .56f, .34f)
+                    segment(.56f, .34f, .56f, .66f)
+                    segment(.35f, .66f, .56f, .66f)
+                    segment(.44f, .35f, .44f, .48f)
+                    segment(.50f, .35f, .50f, .48f)
                 }
                 PianoIcon.Flashlight -> {
                     val head = Path().apply {

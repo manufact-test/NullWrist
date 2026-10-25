@@ -748,9 +748,10 @@ private fun HomePage(
                 Text(tr(language, "↑  ALL APPS", "↑  ВСЕ ПРИЛОЖЕНИЯ"), fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Peach,
                     modifier = Modifier.clickable(onClick = onDrawer).padding(vertical = 6.dp))
-                Text(tr(language, "SETTINGS  ⋮", "НАСТРОЙКИ  ⋮"), fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp, color = Subtle,
-                    modifier = Modifier.clickable(onClick = onSettings).padding(vertical = 6.dp))
+                Text("⋮", fontFamily = FontFamily.Monospace,
+                    fontSize = 24.sp, lineHeight = 24.sp, color = Peach,
+                    modifier = Modifier.clickable(onClick = onSettings)
+                        .padding(horizontal = 12.dp, vertical = 2.dp))
             }
         }
     }

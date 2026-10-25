@@ -3,7 +3,6 @@ package com.orangrepiano.launcher
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -22,10 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * A narrow weather ticker beneath the date. The attribution stays visible.
- * It's a data label, not a giant widget or an unsolicited forecast card.
- */
+/** A single-line weather ticker under the date; provider attribution lives in Settings. */
 @Composable
 internal fun PianoWeatherLine(
     weather: PianoWeather?,
@@ -34,18 +30,17 @@ internal fun PianoWeatherLine(
     onClick: () -> Unit
 ) {
     val ru = language == "ru"
-    Column(
+    Row(
         Modifier.width(175.dp)
-            .padding(top = 7.dp)
+            .padding(top = 5.dp)
             .background(
                 Brush.horizontalGradient(listOf(Color(0x393C2926), Color.Transparent)),
                 RoundedCornerShape(5.dp)
             )
             .clickable(onClick = onClick)
-            .padding(start = 6.dp, top = 3.dp, bottom = 3.dp),
-        verticalArrangement = Arrangement.spacedBy(1.dp)
+            .padding(start = 6.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 when {
                     weather != null -> weatherSymbol(weather.code)
@@ -65,8 +60,5 @@ internal fun PianoWeatherLine(
                 fontWeight = FontWeight.Medium, fontSize = 10.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis
             )
-        }
-        Text("OPEN-METEO", color = PianoTone.secondary.copy(alpha = .65f),
-            fontFamily = FontFamily.Monospace, fontSize = 7.sp, letterSpacing = .5.sp)
     }
 }

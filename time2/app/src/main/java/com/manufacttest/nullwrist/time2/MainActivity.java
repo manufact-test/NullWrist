@@ -263,11 +263,6 @@ public final class MainActivity extends Activity {
     }
 
     private void install(EmeryPackageIndex.PackageInfo item){
-        if(EmeryRuntime.isDeviceLabActive()){
-            showMessage("PebbleOS already running",
-                    "Return from the current watch session before installing another PBW.");
-            return;
-        }
         if(!EmeryAssets.isBundled(this)){
             showMessage("Emulator unavailable",
                     "This APK does not contain the experimental Emery emulator.");
@@ -279,11 +274,6 @@ public final class MainActivity extends Activity {
     }
 
     private void confirmRemove(EmeryPackageIndex.PackageInfo item){
-        if(EmeryRuntime.isDeviceLabActive()){
-            showMessage("Close the watch first",
-                    "Return to the phone screen and close the active watch session before deleting an installed face.");
-            return;
-        }
         new AlertDialog.Builder(this)
             .setTitle("Remove "+item.name+"?")
             .setMessage("Deletes the PBW from your private library and asks PebbleOS "
@@ -319,6 +309,7 @@ public final class MainActivity extends Activity {
                 "Back up PebbleOS memory",
                 "Restore PebbleOS memory",
                 "Export emulator diagnostics",
+                "Stop running PebbleOS",
                 "Build status / About"
         };
         new AlertDialog.Builder(this)
@@ -329,7 +320,14 @@ public final class MainActivity extends Activity {
                         case 1:backupMemory();break;
                         case 2:restoreMemory();break;
                         case 3:exportDiagnostics();break;
-                        case 4:showMessage("NullWrist Time 2 / 0.6.1-lab",
+                        case 4:{
+                                    Intent stop=new Intent(this,EmeryEmulatorService.class);
+                                    stop.setAction(EmeryEmulatorService.ACTION_STOP);
+                                    startService(stop);
+                                    showMessage("Stopping PebbleOS","The guest process will be stopped. Only close it after saving app progress.");
+                                    break;
+                                }
+                        case 5:showMessage("NullWrist Time 2 / recovery-lab",
                                 "Real Emery firmware display was verified on Titan 2. "
                                 +"Third-party watchface execution is still experimental. "
                                 +"Triple-tap sends Pebble SELECT. "

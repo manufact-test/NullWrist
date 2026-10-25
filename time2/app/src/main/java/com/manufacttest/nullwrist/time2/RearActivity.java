@@ -35,7 +35,45 @@ public final class RearActivity extends Activity {
     };
 
     private EmulatorSurfaceView surface;
-    private EmeryRuntime runtime;
+    private EmeryEmulatorService service;
+    private boolean bound;
+    private final android.content.ServiceConnection serviceConnection=new android.content.ServiceConnection(){
+        @Override public void onServiceConnected(android.content.ComponentName name,
+                                                  android.os.IBinder binder){
+            service=((EmeryEmulatorService.LocalBinder)binder).getService();
+            bound=true;
+            service.addListener(uiListener);
+            service.requestPendingOperation();
+            Bitmap last=service.getLastFrame();
+            if(last!=null)surface.setFrame(last);
+        }
+        @Override public void onServiceDisconnected(android.content.ComponentName name){
+            if(service!=null)service.removeListener(uiListener);
+            bound=false;service=null;
+            surface.setEmptyLabel("EMERY SERVICE DISCONNECTED");
+        }
+    };
+    private final EmeryRuntime.Listener uiListener=new EmeryRuntime.Listener(){
+        @Override public void status(String message){
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                if(diagnosticStatus!=null)diagnosticStatus.setText(message);
+                if(message.startsWith("Emery start failed") ||
+                        message.startsWith("No Emery LCD") ||
+                        message.startsWith("Another Emery") ||
+                        message.startsWith("Emery QEMU stopped")){
+                    surface.setFrame(null);
+                    surface.setEmptyLabel("PEBBLEOS ERROR — SEE DIAGNOSTICS");
+                    gestures.reset();handler.removeCallbacks(gestureTimeout);
+                }
+            });
+        }
+        @Override public void frame(Bitmap image){
+            runOnUiThread(()->{
+                if(!isFinishing()&&!isDestroyed())surface.setFrame(image);
+            });
+        }
+    };
     private TextView diagnosticStatus;
     private boolean diagnostics;
 
@@ -49,16 +87,16 @@ public final class RearActivity extends Activity {
         surface.setDiagnosticOverlay(diagnostics);
         gestures=new TripleTapSelectRecognizer(new TripleTapSelectRecognizer.Sink(){
             @Override public void touch(TripleTapSelectRecognizer.Type type,int x,int y){
-                if(runtime==null||!runtime.isConnected())return;
-                runtime.touch(EmeryQmpCommands.TouchPhase.valueOf(type.name()),x,y);
+                if(service==null||!service.isConnected())return;
+                service.touch(EmeryQmpCommands.TouchPhase.valueOf(type.name()),x,y);
             }
             @Override public void select(){
                 if(runtime!=null&&runtime.isConnected())
-                    runtime.press(EmeryQmpCommands.Button.SELECT);
+                    service.press(EmeryQmpCommands.Button.SELECT);
             }
         });
         surface.setInputListener((type,x,y)->{
-            if(runtime==null||!runtime.isConnected()){
+            if(service==null||!service.isConnected()){
                 gestures.reset();
                 handler.removeCallbacks(gestureTimeout);
                 return;
@@ -77,29 +115,12 @@ public final class RearActivity extends Activity {
                 diagnosticStatus.setText("Emery firmware/QEMU not bundled in this APK");
             return;
         }
-        runtime=new EmeryRuntime(this,new EmeryRuntime.Listener(){
-            @Override public void status(String message){
-                runOnUiThread(()->{
-                    if(isFinishing()||isDestroyed())return;
-                    if(diagnosticStatus!=null)diagnosticStatus.setText(message);
-                    if(message.startsWith("Emery start failed") ||
-                            message.startsWith("No Emery LCD") ||
-                            message.startsWith("Another Emery") ||
-                            message.startsWith("Emery QEMU stopped")) {
-                        surface.setFrame(null);
-                        surface.setEmptyLabel("PEBBLEOS ERROR — SEE DIAGNOSTICS");
-                        gestures.reset();
-                        handler.removeCallbacks(gestureTimeout);
-                    }
-                });
-            }
-            @Override public void frame(Bitmap image){
-                runOnUiThread(()->{
-                    if(!isFinishing()&&!isDestroyed())surface.setFrame(image);
-                });
-            }
-        });
-        runtime.start();
+        // Explicit user launch creates one foreground service; closing or
+        // switching displays detaches the UI without terminating PebbleOS.
+        android.content.Intent intent=new android.content.Intent(this,EmeryEmulatorService.class);
+        intent.setAction(EmeryEmulatorService.ACTION_START);
+        startForegroundService(intent);
+        bindService(intent,serviceConnection,BIND_AUTO_CREATE);
     }
 
     /** Only the advanced diagnostic mode shows any Android buttons. */
@@ -131,7 +152,7 @@ public final class RearActivity extends Activity {
             params.setMargins(dp(2),0,dp(2),0);
             controls.addView(button,params);
             button.setOnClickListener(view->{
-                if(runtime!=null&&runtime.isConnected())runtime.press(key);
+                if(runtime!=null&&runtime.isConnected())service.press(key);
             });
         }
         root.addView(controls);
@@ -169,7 +190,9 @@ public final class RearActivity extends Activity {
     @Override protected void onDestroy(){
         handler.removeCallbacks(gestureTimeout);
         if(gestures!=null)gestures.reset();
-        if(runtime!=null)runtime.close();
+        if(bound && service!=null)service.removeListener(uiListener);
+        if(bound)unbindService(serviceConnection);
+        bound=false;service=null;
         super.onDestroy();
     }
 

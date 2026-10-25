@@ -220,87 +220,76 @@ public final class EmeryRuntime {
         }
     }
 
+    /**
+     * One serial owner for the lifetime of the emulator. This queue is polled
+     * while QEMU stays alive; UI navigation does not restart the guest.
+     */
     private void queueRequestedPbwInstall(){
-        android.content.SharedPreferences pref=context.getSharedPreferences(
-                "time2-pbw-install",Context.MODE_PRIVATE);
-        String chosen=pref.getString("pending_uuid",null);
-        String deleting=pref.getString("pending_delete_uuid",null);
-        // The pending guest delete is durable until PebbleOS acknowledges it.
-        // Removing it here lost deletes when QEMU exited or serial timed out.
-        if(chosen!=null || deleting!=null) {
-            pref.edit().remove("last_operation_error")
-                    .putString("last_operation_status",chosen!=null
-                            ? "Installing watchface in PebbleOS..."
-                            : "Removing watchface from PebbleOS...").apply();
-        }
         appInstallWorker.execute(()->{
-            try {
+            android.content.SharedPreferences pref=context.getSharedPreferences(
+                    "time2-pbw-install",Context.MODE_PRIVATE);
+            try{
                 File socket=new File(assets.root,"pebble.sock");
                 IOException last=null;
                 long until=System.nanoTime()+TimeUnit.SECONDS.toNanos(20);
                 while(!closing && System.nanoTime()<until && appLink==null){
-                    try{
-                        appLink=new EmeryPebbleLink(socket.getAbsolutePath());
-                    }catch(IOException pending){
-                        last=pending;
-                        Thread.sleep(200);
-                    }
+                    try { appLink=new EmeryPebbleLink(socket.getAbsolutePath()); }
+                    catch(IOException pending){ last=pending;Thread.sleep(200); }
                 }
                 if(closing)return;
                 if(appLink==null)throw new IOException("Pebble UART unavailable: "+last);
                 EmeryPbwInstaller installer=new EmeryPbwInstaller(appLink,this::emit);
-                try {
-                    if(deleting!=null){
-                        installer.uninstall(java.util.UUID.fromString(deleting));
-                        // ACK received: only now acknowledge our durable tombstone.
-                        if(deleting.equals(pref.getString("pending_delete_uuid",null)))
-                            pref.edit().remove("pending_delete_uuid").apply();
-                        if(deleting.equals(pref.getString("last_installed_uuid",null)))
-                            pref.edit().remove("last_installed_uuid").apply();
-                    }
-                    if(chosen!=null){
-                        java.util.UUID id=java.util.UUID.fromString(chosen);
-                        File file=new File(new File(context.getFilesDir(),"time2/pbws"),
-                                id+".pbw");
-                        if(!file.isFile())throw new IOException("Selected PBW is missing");
-                        String prior=pref.getString("last_installed_uuid",null);
-                        boolean running=installer.install(file,prior);
-                        pref.edit().putString("last_transferred_uuid",chosen).apply();
-                        // Confirmation is only assigned after sustained RUNNING.
-                        if(running)pref.edit().putString("last_installed_uuid",chosen).apply();
-                        else emit("PBW installed but guest launch NOT confirmed: "+chosen);
-                        if(chosen.equals(pref.getString("pending_uuid",null)))
-                            pref.edit().remove("pending_uuid").apply();
-                    }
-                } catch(Exception installError) {
-                    // Retry only when user explicitly requests install again;
-                    // do not repeatedly install a failed PBW on every boot.
-                    if(chosen!=null && chosen.equals(pref.getString("pending_uuid",null)))
-                        pref.edit().remove("pending_uuid").apply();
-                    // Do not disconnect the virtual phone after a failed PBW
-                    // transfer. The Pebble guest needs AppVersion/phone traffic
-                    // even while it displays its own watchface failure UI.
-                    if(!closing)emit("PEBBLE APP TASK FAILED: "+installError.getMessage());
-                }
-                // The old Android parser reported a partial idle frame as a
-                // fatal error. Clear only that exact stale pre-fix error once
-                // we have an actual, established live companion connection.
-                String priorError=pref.getString("last_operation_error",null);
-                if(priorError!=null && priorError.contains("QEMU serial body was not received"))
+                String oldError=pref.getString("last_operation_error",null);
+                if(oldError!=null && oldError.contains("QEMU serial body was not received"))
                     pref.edit().remove("last_operation_error").apply();
-                if(!closing)emit("Pebble serial companion connected");
-                // Keep the companion alive on success *and* recoverable failure.
+                emit("Pebble serial companion connected");
                 while(!closing && process!=null && process.isAlive() && appLink!=null){
-                    appLink.serviceOnce(1);
+                    String deleting=pref.getString("pending_delete_uuid",null);
+                    String chosen=pref.getString("pending_uuid",null);
+                    if(deleting==null && chosen==null){
+                        appLink.serviceOnce(1);
+                        continue;
+                    }
+                    try{
+                        if(deleting!=null){
+                            installer.uninstall(java.util.UUID.fromString(deleting));
+                            // Tombstone is consumed only after guest deletion ACK.
+                            if(deleting.equals(pref.getString("pending_delete_uuid",null)))
+                                pref.edit().remove("pending_delete_uuid").commit();
+                            if(deleting.equals(pref.getString("last_installed_uuid",null)))
+                                pref.edit().remove("last_installed_uuid").apply();
+                        }
+                        if(chosen!=null){
+                            java.util.UUID id=java.util.UUID.fromString(chosen);
+                            File pbw=new File(new File(context.getFilesDir(),"time2/pbws"),
+                                    id+".pbw");
+                            if(!pbw.isFile())throw new IOException("Requested PBW missing: "+chosen);
+                            String previous=pref.getString("last_installed_uuid",null);
+                            boolean stable=installer.install(pbw,previous);
+                            pref.edit().putString("last_transferred_uuid",chosen).apply();
+                            if(stable)pref.edit().putString("last_installed_uuid",chosen).apply();
+                            else emit("PBW installed but guest launch NOT confirmed: "+chosen);
+                            if(chosen.equals(pref.getString("pending_uuid",null)))
+                                pref.edit().remove("pending_uuid").commit();
+                        }
+                    }catch(Exception error){
+                        if(chosen!=null && chosen.equals(pref.getString("pending_uuid",null)))
+                            pref.edit().remove("pending_uuid").commit();
+                        // On a failed deletion retain pending_delete_uuid for retry
+                        // once the guest/connection recovers.
+                        if(!closing)emit("PEBBLE APP TASK FAILED: "+error.getMessage());
+                        // Don't hammer a broken guest with repeated failed deletes.
+                        if(deleting!=null)Thread.sleep(1000);
+                    }
                 }
-            }catch(InterruptedException interrupted){
+            }catch(InterruptedException stopped){
                 Thread.currentThread().interrupt();
-            }catch(Exception error){
-                if(!closing)emit("PEBBLE APP TASK FAILED: "+error.getMessage());
+            }catch(Exception failure){
+                if(!closing)emit("PEBBLE APP TASK FAILED: "+failure.getMessage());
             }finally{
-                EmeryPebbleLink link=appLink;
+                EmeryPebbleLink channel=appLink;
                 appLink=null;
-                if(link!=null)try{link.close();}catch(IOException ignored){}
+                if(channel!=null)try{channel.close();}catch(IOException ignored){}
             }
         });
     }

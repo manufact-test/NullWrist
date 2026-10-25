@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -123,27 +124,32 @@ internal fun PianoGlassSurface(
         start = Offset.Zero,
         end = Offset(1300f, 900f)
     )
+    // Draw glass sheen on the surface itself, never as a fillMaxSize child:
+    // a measuring Canvas child would stretch wrap-content panels to screen height.
     Box(
-        modifier = modifier.clip(shape).background(fill).border(1.dp, outline, shape)
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val w = size.width
-            drawLine(
-                brush = Brush.horizontalGradient(
-                    listOf(Color.Transparent, PianoTone.highlight.copy(alpha = .51f), Color.Transparent)
-                ),
-                start = Offset(14.dp.toPx(), 1.5.dp.toPx()),
-                end = Offset(w - 14.dp.toPx(), 1.5.dp.toPx()),
-                strokeWidth = .85.dp.toPx()
-            )
-            drawRect(
-                brush = Brush.radialGradient(
-                    listOf(Color(0x1AFFFFFF), Color.Transparent),
-                    center = Offset(w * .04f, 0f),
-                    radius = w * .65f
+        modifier = modifier
+            .clip(shape)
+            .background(fill)
+            .drawBehind {
+                val w = size.width
+                drawLine(
+                    brush = Brush.horizontalGradient(
+                        listOf(Color.Transparent, PianoTone.highlight.copy(alpha = .51f), Color.Transparent)
+                    ),
+                    start = Offset(14.dp.toPx(), 1.5.dp.toPx()),
+                    end = Offset(w - 14.dp.toPx(), 1.5.dp.toPx()),
+                    strokeWidth = .85.dp.toPx()
                 )
-            )
-        }
+                drawRect(
+                    brush = Brush.radialGradient(
+                        listOf(Color(0x1AFFFFFF), Color.Transparent),
+                        center = Offset(w * .04f, 0f),
+                        radius = w * .65f
+                    )
+                )
+            }
+            .border(1.dp, outline, shape)
+    ) {
         content()
     }
 }

@@ -32,7 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-internal enum class PianoIcon { Back, Camera, Flashlight }
+internal enum class PianoIcon { Back, Camera, Flashlight, Phone, Wallet }
 
 @Composable
 internal fun PianoSquareButton(
@@ -110,6 +110,40 @@ internal fun PianoSquareButton(
                         center = Offset(w * .5f, h * .57f),
                         style = Stroke(stroke)
                     )
+                }
+                PianoIcon.Phone -> {
+                    // Classic receiver silhouette: outlined, balanced with the camera glyph.
+                    val receiver = Path().apply {
+                        moveTo(w * .20f, h * .16f)
+                        cubicTo(w * .10f, h * .23f, w * .17f, h * .43f, w * .32f, h * .62f)
+                        cubicTo(w * .48f, h * .82f, w * .70f, h * .92f, w * .80f, h * .78f)
+                        lineTo(w * .68f, h * .63f)
+                        lineTo(w * .57f, h * .70f)
+                        cubicTo(w * .43f, h * .61f, w * .34f, h * .49f, w * .30f, h * .38f)
+                        lineTo(w * .38f, h * .28f)
+                        close()
+                    }
+                    drawPath(receiver, foreground, style = Stroke(stroke,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                        join = androidx.compose.ui.graphics.PathJoin.Round))
+                }
+                PianoIcon.Wallet -> {
+                    drawRoundRect(
+                        color = foreground,
+                        topLeft = Offset(w * .13f, h * .25f),
+                        size = Size(w * .74f, h * .61f),
+                        cornerRadius = CornerRadius(3.dp.toPx()),
+                        style = Stroke(stroke)
+                    )
+                    segment(.20f, .23f, .71f, .23f)
+                    drawCircle(
+                        color = foreground,
+                        radius = w * .18f,
+                        center = Offset(w * .50f, h * .55f),
+                        style = Stroke(stroke)
+                    )
+                    segment(.50f, .47f, .50f, .64f)
+                    segment(.45f, .50f, .55f, .50f)
                 }
                 PianoIcon.Flashlight -> {
                     val head = Path().apply {

@@ -66,3 +66,16 @@ Project name is intentionally spelled **orangre piano**.
 - Swipe up on home opens the app drawer from below; swipe down **from the top of the drawer list** returns home using a matching vertical transition.
 - Closing gesture listens to touch movement without consuming it, to avoid breaking regular vertical list scrolling and letter selection. If the list has been scrolled down, scroll to the beginning before swiping down to close.
 - Android back button and the visible square arrow continue to work. The existing reduced-animation option still applies.
+
+## v0.4.0 / ATELIER design system
+
+Premium visual / motion system refresh while retaining working Titan 2 features.
+
+- Custom **5×7 raster clock** drawn on Canvas, not a device font, with deliberate pixel-spacing, copper highlight and subtle minute crossfade. Date remains tappable.
+- Unified pearl/copper/obsidian tones, restrained orbital ambient glow and deterministic micro-pixel grid. Photo wallpaper remains usable underneath a translucent legibility scrim.
+- Reusable layered glass material: soft inner top glint, light-catching gradient edge, warm translucent interior. Designed as an optical approximation; this is **not** GPU background-blur or refractive glass.
+- Tactile micro-motion in favorite entries, app list and icon controls. No heavy lottie/vector images or network assets.
+- First-class letter rail: active glass capsule, quick haptic ticks per letter, popup letter lens, animated jump for short distances, direct jump for distant letters. Works with Latin/Cyrillic and regular scroll.
+- Settings gain a consistent glass/metal hierarchy, refined toggles, and section hairlines.
+- Existing quiet animation setting reduces transitions and haptic effects. The reduced motion option is local to the launcher.
+- **Signed debug APK caveat:** ephemeral CI signing keys still require uninstalling the previous build (local settings/wallpaper cleared). A privately stored persistent signing key is necessary for smooth upgrade installs.

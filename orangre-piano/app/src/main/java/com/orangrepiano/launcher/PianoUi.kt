@@ -17,6 +17,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -66,6 +69,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -296,14 +301,13 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-            } else {
-                Box(Modifier.fillMaxSize().background(
-                    Brush.linearGradient(listOf(Color(0xFF100F0E), Color(0xFF302018), Color(0xFF130F0D)))
-                ))
-                PixelMotif()
             }
+            PianoAtmosphere(wallpaperPresent = wallpaper != null)
             Box(Modifier.fillMaxSize().background(
-                Brush.verticalGradient(listOf(Ink.copy(alpha = .46f), Ink.copy(alpha = .27f), Ink.copy(alpha = .87f)))
+                Brush.verticalGradient(
+                    if (wallpaper == null) listOf(Color(0x110A090B),Color.Transparent,Color(0x42100D10))
+                    else listOf(Ink.copy(alpha = .48f),Ink.copy(alpha = .35f),Ink.copy(alpha = .79f))
+                )
             ))
 
             AnimatedContent(
@@ -334,7 +338,7 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                 when (current) {
                     Page.HOME -> HomePage(
                         apps = installed, favorites = favorites, slots = slots, glass = glass,
-                        language = language,
+                        language = language, quiet = quiet,
                         onClock = { openDefaultClock(context, language) },
                         onCalendar = { openDefaultCalendar(context, language) },
                         onCamera = { openDefaultCamera(context, language) },
@@ -348,7 +352,7 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                     Page.DRAWER -> DrawerPage(
                         apps = installed.filterNot { hideFavorites && it.key in favorites },
                         filter = filter, onFilter = { filter = it },
-                        language = language,
+                        language = language, quiet = quiet,
                         glass = glass, onHome = ::goHome,
                         onOpen = { openApp(context, it) }
                     )
@@ -450,14 +454,9 @@ private fun PixelMotif() {
 
 @Composable
 private fun GlassPanel(enabled: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val shape = RoundedCornerShape(18.dp)
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(if (enabled) Glass else NoGlass)
-            .border(1.dp, if (enabled) Line else Line.copy(alpha = .3f), shape)
-            .padding(horizontal = 15.dp, vertical = 8.dp)
-    ) { content() }
+    PianoGlassSurface(modifier = modifier, enabled = enabled) {
+        Box(Modifier.padding(horizontal = 15.dp, vertical = 8.dp)) { content() }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -468,6 +467,7 @@ private fun HomePage(
     slots: Int,
     glass: Boolean,
     language: String,
+    quiet: Boolean,
     onClock: () -> Unit,
     onCalendar: () -> Unit,
     onCamera: () -> Unit,
@@ -506,7 +506,7 @@ private fun HomePage(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ClockBlock(compact = compact, language = language, onClock = onClock, onCalendar = onCalendar)
+                ClockBlock(compact = compact, language = language, quiet = quiet, onClock = onClock, onCalendar = onCalendar)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     PianoSquareButton(
                         icon = PianoIcon.Camera,
@@ -530,12 +530,23 @@ private fun HomePage(
                         val entry = apps.firstOrNull { it.key == favorites.getOrNull(index) }
                         val interaction = remember { MutableInteractionSource() }
                         val pressed by interaction.collectIsPressedAsState()
+                        val scale by animateFloatAsState(
+                            targetValue = if (pressed && !quiet) .982f else 1f,
+                            animationSpec = tween(if (quiet) 1 else 145, easing = FastOutSlowInEasing),
+                            label = "favorite_press"
+                        )
+                        val rowTint by animateColorAsState(
+                            targetValue = if (pressed) Color(0x445E4035)
+                                else if (index % 2 == 0) Color(0x10FFE0CF) else Color.Transparent,
+                            animationSpec = tween(if (quiet) 1 else 160), label = "favorite_tint"
+                        )
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(lineHeight)
                                 .clip(RoundedCornerShape(9.dp))
-                                .background(if (pressed) Orange.copy(alpha = .16f) else Color.Transparent)
+                                .background(rowTint)
+                                .graphicsLayer(scaleX = scale, scaleY = scale)
                                 .combinedClickable(
                                     interactionSource = interaction,
                                     indication = null,
@@ -552,7 +563,10 @@ private fun HomePage(
                                 fontSize = if (compact) 16.sp else 18.sp,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f))
-                            if (entry != null) Box(Modifier.size(4.dp).background(Orange.copy(alpha = .72f)))
+                            if (entry != null) {
+                                Box(Modifier.size(5.dp).clip(RoundedCornerShape(1.dp))
+                                    .background(if (pressed) PianoTone.pearl else PianoTone.copper.copy(alpha = .78f)))
+                            }
                         }
                         if (index != slots - 1) HorizontalDivider(color = Line.copy(alpha = .27f))
                     }
@@ -578,6 +592,7 @@ private fun HomePage(
 private fun ClockBlock(
     compact: Boolean,
     language: String,
+    quiet: Boolean,
     onClock: () -> Unit,
     onCalendar: () -> Unit
 ) {
@@ -586,14 +601,13 @@ private fun ClockBlock(
     }
     val locale = if (language == "ru") Locale.forLanguageTag("ru") else Locale.ENGLISH
     Column {
-        Text(now.format(DateTimeFormatter.ofPattern("HH:mm")),
-            fontSize = if (compact) 51.sp else 60.sp,
-            fontWeight = FontWeight.SemiBold,
-            fontFamily = FontFamily.Monospace,
-            letterSpacing = (-4).sp,
-            lineHeight = if (compact) 55.sp else 64.sp,
-            color = Peach,
-            modifier = Modifier.clickable(onClick = onClock))
+        PianoPixelClock(
+            time = now.format(DateTimeFormatter.ofPattern("HH:mm")),
+            compact = compact,
+            quiet = quiet,
+            description = tr(language, "Open clock", "Открыть часы"),
+            onClick = onClock
+        )
         Text(
             now.format(DateTimeFormatter.ofPattern("EEEE  ·  d MMMM", locale)).uppercase(locale),
             color = Subtle, fontFamily = FontFamily.Monospace,
@@ -610,6 +624,7 @@ private fun DrawerPage(
     filter: String,
     onFilter: (String) -> Unit,
     language: String,
+    quiet: Boolean,
     glass: Boolean,
     onHome: () -> Unit,
     onOpen: (AppEntry) -> Unit
@@ -624,12 +639,37 @@ private fun DrawerPage(
     val keys = groups.keys.toList()
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var previewLetter by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(previewLetter) {
+        if (previewLetter != null) {
+            delay(if (quiet) 350 else 620)
+            previewLetter = null
+        }
+    }
     val indices = remember(groups) {
         buildMap {
             var index = 0
             groups.forEach { (letter, entries) ->
                 put(letter, index)
                 index += entries.size + 1
+            }
+        }
+    }
+    val currentLetter by remember(list, keys, indices) {
+        androidx.compose.runtime.derivedStateOf {
+            keys.lastOrNull { (indices[it] ?: 0) <= list.firstVisibleItemIndex }
+                ?: keys.firstOrNull()
+        }
+    }
+    fun navigateLetter(letter: String) {
+        val index = indices[letter] ?: return
+        previewLetter = letter
+        scope.launch {
+            val distance = kotlin.math.abs(index - list.firstVisibleItemIndex)
+            if (quiet || distance > 36) {
+                list.scrollToItem(index)
+            } else {
+                list.animateScrollToItem(index)
             }
         }
     }
@@ -661,7 +701,17 @@ private fun DrawerPage(
             OutlinedTextField(
                 value = filter, onValueChange = onFilter, singleLine = true,
                 label = { Text(tr(language, "Search / type to filter", "Поиск по названию"), fontSize = 12.sp) },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(13.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PianoTone.peach,
+                    unfocusedBorderColor = PianoTone.border.copy(alpha = .50f),
+                    focusedTextColor = PianoTone.pearl,
+                    unfocusedTextColor = PianoTone.pearl,
+                    focusedLabelColor = PianoTone.peach,
+                    unfocusedLabelColor = PianoTone.secondary,
+                    cursorColor = PianoTone.peach
+                )
             )
             PianoSquareButton(
                 icon = PianoIcon.Back,
@@ -671,36 +721,67 @@ private fun DrawerPage(
             )
         }
         Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxSize()) {
-            LazyColumn(modifier = Modifier.weight(1f).fillMaxHeight(), state = list) {
-                groups.forEach { (letter, entries) ->
-                    item(key = "head_" + letter) {
-                        Text(letter, fontFamily = FontFamily.Monospace, color = Orange,
-                            fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp, bottom = 5.dp))
+        Box(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyColumn(modifier = Modifier.weight(1f).fillMaxHeight(), state = list) {
+                    groups.forEach { (letter, entries) ->
+                        item(key = "head_" + letter) {
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 5.dp)) {
+                                Box(Modifier.size(6.dp).clip(RoundedCornerShape(1.dp))
+                                    .background(PianoTone.copper))
+                                Spacer(Modifier.width(8.dp))
+                                Text(letter, fontFamily = FontFamily.Monospace, color = PianoTone.peach,
+                                    fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                Spacer(Modifier.width(8.dp))
+                                Box(Modifier.weight(1f).height(1.dp)
+                                    .background(Brush.horizontalGradient(
+                                        listOf(PianoTone.border.copy(alpha = .38f), Color.Transparent))))
+                            }
+                        }
+                        items(entries, key = { it.key }) { app ->
+                            val interaction = remember { MutableInteractionSource() }
+                            val pressed by interaction.collectIsPressedAsState()
+                            val tint by animateColorAsState(
+                                if (pressed) Color(0x775F4037) else Color.Transparent,
+                                animationSpec = tween(if (quiet) 1 else 160),
+                                label = "app_row_tint"
+                            )
+                            val rowScale by animateFloatAsState(
+                                if (pressed && !quiet) .974f else 1f,
+                                animationSpec = tween(if (quiet) 1 else 155), label = "app_row_press"
+                            )
+                            Box(
+                                Modifier.fillMaxWidth()
+                                    .padding(vertical = 2.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(tint)
+                                    .graphicsLayer(scaleX = rowScale, scaleY = rowScale)
+                                    .clickable(interactionSource = interaction, indication = null) { onOpen(app) }
+                                    .padding(horizontal = 10.dp, vertical = 9.dp)
+                            ) {
+                                Text(app.label, color = PianoTone.pearl, fontSize = 16.sp,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    fontWeight = FontWeight.Normal)
+                            }
+                        }
                     }
-                    items(entries, key = { it.key }) { app ->
-                        Text(app.label, color = Cream, fontSize = 17.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.fillMaxWidth().clickable { onOpen(app) }
-                                .padding(vertical = 8.dp, horizontal = 4.dp))
-                        HorizontalDivider(color = Line.copy(alpha = .18f))
+                    if (results.isEmpty()) item {
+                        Text(tr(language, "NO MATCHES", "НИЧЕГО НЕ НАЙДЕНО"),
+                            color = Subtle, modifier = Modifier.padding(top = 30.dp))
                     }
                 }
-                if (results.isEmpty()) item {
-                    Text(tr(language, "NO MATCHES", "НИЧЕГО НЕ НАЙДЕНО"), color = Subtle, modifier = Modifier.padding(top = 30.dp))
-                }
+                PianoLetterRail(
+                    letters = keys,
+                    selected = previewLetter ?: currentLetter,
+                    quiet = quiet,
+                    onLetter = ::navigateLetter
+                )
             }
-            Column(
-                Modifier.width(28.dp).fillMaxHeight().verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                keys.forEach { letter ->
-                    Text(letter, fontFamily = FontFamily.Monospace, color = Orange,
-                        fontSize = 10.sp, modifier = Modifier
-                            .clickable { scope.launch { list.animateScrollToItem(indices[letter] ?: 0) } }
-                            .padding(horizontal = 5.dp, vertical = 3.dp))
-                }
-            }
+            PianoLetterPreview(
+                letter = previewLetter, quiet = quiet,
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 54.dp)
+            )
         }
     }
 }
@@ -756,7 +837,9 @@ private fun SettingsPage(
                 }
             }
         }
-        repeat(slots) { index ->
+        PianoGlassSurface(modifier = Modifier.fillMaxWidth()) {
+          Column(Modifier.padding(horizontal = 10.dp, vertical = 5.dp)) {
+           repeat(slots) { index ->
             val label = apps.firstOrNull { it.key == favorites.getOrNull(index) }?.label ?: tr(language, "+ choose app", "+ выбрать приложение")
             Row(
                 Modifier.fillMaxWidth().height(39.dp),
@@ -772,7 +855,9 @@ private fun SettingsPage(
                 Text("↓", color = if (index < slots - 1) Orange else Subtle.copy(alpha = .35f),
                     modifier = Modifier.clickable(enabled = index < slots - 1) { onMove(index, 1) }.padding(8.dp))
             }
-            HorizontalDivider(color = Line.copy(alpha = .22f))
+            if (index != slots - 1) HorizontalDivider(color = PianoTone.border.copy(alpha = .23f))
+           }
+          }
         }
         Spacer(Modifier.height(19.dp))
         SectionTitle(tr(language, "02 / APPEARANCE", "02 / ОФОРМЛЕНИЕ"))
@@ -808,7 +893,7 @@ private fun SettingsPage(
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · personal build 0.3.0", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · atelier edition 0.4.0", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }
@@ -816,16 +901,39 @@ private fun SettingsPage(
 
 @Composable
 private fun SectionTitle(label: String) {
-    Text(label, color = Orange, fontFamily = FontFamily.Monospace,
-        fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = .6.sp)
+    Row(verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 8.dp)) {
+        Box(Modifier.size(6.dp).clip(RoundedCornerShape(1.dp))
+            .background(PianoTone.copper))
+        Spacer(Modifier.width(8.dp))
+        Text(label, color = PianoTone.peach, fontFamily = FontFamily.Monospace,
+            fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = .65.sp)
+        Spacer(Modifier.width(9.dp))
+        Box(Modifier.weight(1f).height(1.dp)
+            .background(Brush.horizontalGradient(
+                listOf(PianoTone.border.copy(alpha = .36f), Color.Transparent))))
+    }
 }
 
 @Composable
 private fun SettingRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().height(47.dp),
+    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)
+        .clip(RoundedCornerShape(11.dp))
+        .background(Color(0x303D302E))
+        .padding(horizontal = 10.dp)
+        .height(46.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(title, color = Cream, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-        Switch(checked = checked, onCheckedChange = onChange)
+        Text(title, color = PianoTone.pearl, fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+            modifier = Modifier.weight(1f))
+        Switch(
+            checked = checked, onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = PianoTone.pearl,
+                checkedTrackColor = PianoTone.copper,
+                uncheckedTrackColor = Color(0xFF493A38),
+                uncheckedThumbColor = PianoTone.secondary
+            )
+        )
     }
 }

@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -70,7 +71,7 @@ internal fun PianoLetterRail(
             onLetter(letter)
         }
     }
-    val gesture = Modifier.pointerInput(letters, scrolling.value) {
+    val gesture = Modifier.pointerInput(letters) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             fun indexAt(y: Float): Int =

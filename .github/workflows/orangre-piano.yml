@@ -37,21 +37,21 @@ jobs:
           path: orangre-piano/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publish orangre piano v0.3.1 to GitHub Releases
+      - name: Publish orangre piano v0.4.0 to GitHub Releases
         if: github.event_name == 'push' && github.ref == 'refs/heads/orangre-piano/dev'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v0.3.1.apk
-          TAG="orangre-piano-v0.3.1"
+          cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v0.4.0.apk
+          TAG="orangre-piano-v0.4.0"
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG" ../orangre-piano-v0.3.1.apk \
+            gh release create "$TAG" ../orangre-piano-v0.4.0.apk \
               --repo "$GITHUB_REPOSITORY" \
               --target "$GITHUB_SHA" \
-              --title "orangre piano v0.3.1 (Titan 2)" \
-              --notes "Titan 2 text-only launcher: A-Z search and the square back arrow on one line, settings back arrow beside title, and swipe-down from the top of the app list to return home. Vertical panel transition animates the app drawer below the home screen. Camera, torch, wallpapers and existing settings remain. Debug signing keys vary per workflow run: uninstall the previous beta first. Independent from NullWrist." \
+              --title "orangre piano v0.4.0 (Titan 2)" \
+              --notes "orangre piano 0.4 — Atelier Design Pass. Custom rendered 5x7 pixel clock, polished layered copper/pearl glass, quiet background grid and light, animated press states, magnetic bilingual A-Z letter rail with haptic navigation and floating letter loupe, unified refined settings. Same core launcher, camera, torch, wallpapers and keyboard search. DEBUG signing changes between GitHub runners: uninstall previous test APK before installing. NullWrist remains independent." \
               --prerelease
           else
-            gh release upload "$TAG" ../orangre-piano-v0.3.1.apk --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" ../orangre-piano-v0.4.0.apk --clobber --repo "$GITHUB_REPOSITORY"
           fi

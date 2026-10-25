@@ -4,13 +4,22 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -34,14 +43,35 @@ internal fun PianoSquareButton(
     active: Boolean = false,
     edge: Dp = 40.dp
 ) {
-    val shape = RoundedCornerShape(10.dp)
-    val foreground = if (active) Color(0xFFF6E9D9) else Color(0xFFF4C6A6)
+    val shape = RoundedCornerShape(11.dp)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (pressed) .90f else 1f,
+        animationSpec = tween(160),
+        label = "square_press"
+    )
+    val glow by animateColorAsState(
+        if (active) Color(0xFFB86D53) else Color(0xFF332623),
+        animationSpec = tween(230),
+        label = "square_glow"
+    )
+    val foreground = if (active) Color(0xFFF9EBDD) else Color(0xFFF4C6A6)
     Box(
         modifier = modifier.size(edge)
             .clip(shape)
-            .background(if (active) Color(0x99BD6F4B) else Color(0x99302620))
-            .border(1.dp, if (active) Color(0xFFE7A17C) else Color(0x66F4C6A6), shape)
-            .clickable(onClickLabel = description, role = Role.Button, onClick = onClick)
+            .background(Brush.verticalGradient(
+                listOf(if (active) Color(0xFF9E614A) else Color(0x99564540), glow)
+            ))
+            .border(1.dp, if (active) Color(0xFFF6C8A4) else Color(0x88F4C6A6), shape)
+            .graphicsLayer(scaleX = scale, scaleY = scale)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClickLabel = description,
+                role = Role.Button,
+                onClick = onClick
+            )
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center
     ) {

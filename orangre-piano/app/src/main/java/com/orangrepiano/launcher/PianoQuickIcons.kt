@@ -125,7 +125,7 @@ internal fun PianoSquareButton(
                     }
                     drawPath(receiver, foreground, style = Stroke(stroke,
                         cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                        join = androidx.compose.ui.graphics.PathJoin.Round))
+                        join = androidx.compose.ui.graphics.StrokeJoin.Round))
                 }
                 PianoIcon.Wallet -> {
                     drawRoundRect(

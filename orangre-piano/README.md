@@ -113,3 +113,20 @@ Premium visual / motion system refresh while retaining working Titan 2 features.
 - Guided first-run setup requests the HOME role, offers notification-access settings, approximate location consent and optional hiding of the Android status bar. All steps may be skipped and revisited via Settings. Android requires users to approve those settings; this app never circumvents them.
 - Setup only uses ACCESS_COARSE_LOCATION, INTERNET and preexisting CAMERA (for torch); no analytics, telemetry or advertising. The sole external weather request goes to api.open-meteo.com.
 - Updated Android API 36 debug preview passes GitHub Actions build and lint; stable APK and AAB remain gated on release signing secrets.
+
+## v1.1.1 RC1 — Play Protect sideload compatibility
+
+Google's enhanced fraud protection rejects apps installed from a browser or
+file manager when they declare sensitive `BIND_NOTIFICATION_LISTENER_SERVICE`
+notification-listener access. This affected the 1.1.0 RC1 direct download.
+
+- Removed the NotificationListenerService component from the Android manifest.
+- Removed notification listener onboarding, badge logic, and on-device listener
+  implementation. **Notification badges are unavailable in this build.**
+- Retained the clean text-only home list, Open-Meteo forecast with optional
+  coarse location, 2×2 quick action buttons and first-run launcher setup.
+- GitHub Actions checks the **packaged AndroidManifest.xml** to verify the
+  sensitive notification permission/service is absent.
+- Play Protect stays enabled. Passing the permission-based block is expected,
+  but installation still depends on Google's other malware and reputation checks.
+- Stable updates remain gated on a persistent, privately held signing key.

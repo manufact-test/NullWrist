@@ -51,7 +51,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-1.0.1-rc1-debug-apk
+          name: orangre-piano-1.1.0-rc1-debug-apk
           path: orangre-piano/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -91,7 +91,7 @@ jobs:
         if: env.PIANO_RELEASE_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-v1.0.1-signed-release
+          name: orangre-piano-v1.1.0-signed-release
           path: |
             orangre-piano/app/build/outputs/apk/release/app-release.apk
             orangre-piano/app/build/outputs/bundle/release/app-release.aab
@@ -104,27 +104,27 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PIANO_RELEASE_READY" == "true" ]]; then
-            TAG="orangre-piano-v1.0.1"
-            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.0.1.apk
-            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.0.1.aab
+            TAG="orangre-piano-v1.1.0"
+            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.1.0.apk
+            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.1.0.aab
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.0.1.apk ../orangre-piano-v1.0.1.aab --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.0.apk ../orangre-piano-v1.1.0.aab --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.0.1.apk ../orangre-piano-v1.0.1.aab \
+              gh release create "$TAG" ../orangre-piano-v1.1.0.apk ../orangre-piano-v1.1.0.aab \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.0.1 — ATELIER" \
-                --notes "Signed production APK and Android App Bundle. Dedicated Titan 2 launcher, premium ATELIER styling, optical letter alignment, bespoke adaptive piano icon, and refined inset favorite-row glass. No ads, analytics or internet permission."
+                --title "orangre piano 1.1.0 — ATELIER" \
+                --notes "Signed production APK and Android App Bundle. Dedicated Titan 2 launcher, premium ATELIER styling, optical letter alignment, bespoke adaptive piano icon, with weather powered by Open-Meteo, local notification counts, 2x2 shortcuts and first-run onboarding. Location and notification access are opt-in; no analytics or ads."
             fi
           else
-            TAG="orangre-piano-v1.0.1-rc1"
-            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.0.1-rc1.apk
+            TAG="orangre-piano-v1.1.0-rc1"
+            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.1.0-rc1.apk
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.0.1-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.0-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.0.1-rc1.apk \
+              gh release create "$TAG" ../orangre-piano-v1.1.0-rc1.apk \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.0.1 RC1 — ATELIER" \
-                --notes "Installable preview with refined home favorite rows: separate numbered rail and right-end markers, uniformly subtle inset glass surface per label, animated press glow; no alternating row fills. Includes the piano adaptive/monochrome icon, Android 16 target and full launcher functionality. DEBUG signature changes between CI runners: uninstall the previous build first, losing app-local settings. Not a signed Play Store release; to enable stable upgrades, configure protected signing secrets documented in orangre-piano/RELEASE.md." \
+                --title "orangre piano 1.1.0 RC1 — ATELIER" \
+                --notes "Installable preview: unhighlighted favorites, privacy-preserving notification counters, minimal Open-Meteo weather strip (no key), 2x2 camera/flashlight/phone/wallet shortcuts, first-launch Home/notification/location/status-bar setup. Weather and notification features require user-granted Android permissions. DEBUG signature changes between CI runners: uninstall the previous build first, losing app-local settings. Not a signed Play Store release; to enable stable upgrades, configure protected signing secrets documented in orangre-piano/RELEASE.md." \
                 --prerelease
             fi
           fi

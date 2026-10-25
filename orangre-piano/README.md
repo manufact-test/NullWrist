@@ -102,3 +102,14 @@ Premium visual / motion system refresh while retaining working Titan 2 features.
 - Preserved 5/6 favorite slots, existing row heights and Titan 2 no-scroll sizing.
 - CI builds and lints an Android 16 release candidate; stable store signing remains
   conditional on private production keystore secrets (see RELEASE.md).
+
+## v1.1.0 RC1 — Launcher essentials and first-run configuration
+
+- All favorite-list backgrounds and alternating highlights removed; text-only rows with number, name, and optional *nonzero* notification counter directly beside the app name.
+- App counts require explicit Android Notification Listener access; the listener aggregates only notification package names, ignores ongoing/foreground/group-summary notifications, and does not save titles, contents, contacts or individual notification objects.
+- A compact live-weather ticker below the date obtains current temperature and conditions from **Open-Meteo** (no account or API key); approximate device location is requested at first launch. No background-location permission, no weather tracking service. Forecasts are cached for 45 minutes and the widget retains the last successful value offline.
+- Weather provider credit: [Open-Meteo](https://open-meteo.com/) — weather data CC BY 4.0, free noncommercial access subject to fair-use limits. Commercial distribution requires review of provider terms.
+- Two additional matching square vector buttons form a 2×2 quick-action arrangement: phone (system ACTION_DIAL by default) and wallet (choose an installed app on first tap). Both shortcuts can be reconfigured via settings.
+- Guided first-run setup requests the HOME role, offers notification-access settings, approximate location consent and optional hiding of the Android status bar. All steps may be skipped and revisited via Settings. Android requires users to approve those settings; this app never circumvents them.
+- Setup only uses ACCESS_COARSE_LOCATION, INTERNET and preexisting CAMERA (for torch); no analytics, telemetry or advertising. The sole external weather request goes to api.open-meteo.com.
+- Updated Android API 36 debug preview passes GitHub Actions build and lint; stable APK and AAB remain gated on release signing secrets.

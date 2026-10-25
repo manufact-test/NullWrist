@@ -193,6 +193,29 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
 
     var installed by remember { mutableStateOf(installedApps(context)) }
     var favorites by remember { mutableStateOf(prefs.favorites) }
+    var todos by remember { mutableStateOf(prefs.todos) }
+    var editingTodo by remember { mutableIntStateOf(-1) }
+    var todoDraft by remember { mutableStateOf("") }
+
+    fun editTodo(index: Int) {
+        if (index !in 0 until 6) return
+        todoDraft = todos[index].text
+        editingTodo = index
+    }
+    fun saveTodo(index: Int, text: String) {
+        val normalized = text.trim().take(500)
+        val old = todos.getOrNull(index) ?: return
+        prefs.setTodo(index, normalized, done = old.text == normalized && old.done)
+        todos = prefs.todos
+    }
+    fun toggleTodo(index: Int) {
+        val todo = todos.getOrNull(index) ?: return
+        if (todo.text.isBlank()) editTodo(index)
+        else {
+            prefs.setTodo(index, todo.text, !todo.done)
+            todos = prefs.todos
+        }
+    }
     var slots by remember { mutableIntStateOf(prefs.slots) }
     var glass by remember { mutableStateOf(prefs.glass) }
     var quiet by remember { mutableStateOf(prefs.quiet) }
@@ -411,7 +434,9 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
             ) { current ->
                 when (current) {
                     Page.HOME -> HomePage(
-                        apps = installed, favorites = favorites, slots = slots, glass = glass,
+                        apps = installed, favorites = favorites, slots = slots,
+                        todos = todos, onTodoEdit = ::editTodo, onTodoToggle = ::toggleTodo,
+                        glass = glass,
                         language = language, quiet = quiet,
                         onClock = { openDefaultClock(context, language) },
                         onCalendar = { openDefaultCalendar(context, language) },
@@ -470,6 +495,64 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                     )
                 }
             }
+        }
+
+        if (editingTodo >= 0) {
+            val index = editingTodo
+            AlertDialog(
+                onDismissRequest = { editingTodo = -1 },
+                containerColor = Color(0xFF25201F),
+                title = {
+                    Text(
+                        tr(language, "TO DO / " + (index + 1), "ЗАМЕТКА / " + (index + 1)),
+                        color = PianoTone.peach,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                text = {
+                    OutlinedTextField(
+                        value = todoDraft,
+                        onValueChange = { todoDraft = it.take(500) },
+                        label = { Text(tr(language, "Write anything", "Напиши что угодно")) },
+                        minLines = 2,
+                        maxLines = 5,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = PianoTone.pearl,
+                            unfocusedTextColor = PianoTone.pearl,
+                            focusedBorderColor = PianoTone.peach,
+                            unfocusedBorderColor = PianoTone.border,
+                            cursorColor = PianoTone.peach
+                        )
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        saveTodo(index, todoDraft)
+                        editingTodo = -1
+                    }) {
+                        Text(tr(language, "SAVE", "СОХРАНИТЬ"), color = PianoTone.peach)
+                    }
+                },
+                dismissButton = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        if (todos.getOrNull(index)?.text?.isNotEmpty() == true) {
+                            TextButton(onClick = {
+                                prefs.setTodo(index, "")
+                                todos = prefs.todos
+                                editingTodo = -1
+                            }) {
+                                Text(tr(language, "CLEAR", "ОЧИСТИТЬ"), color = PianoTone.secondary)
+                            }
+                        }
+                        TextButton(onClick = { editingTodo = -1 }) {
+                            Text(tr(language, "CANCEL", "ОТМЕНА"), color = PianoTone.secondary)
+                        }
+                    }
+                }
+            )
         }
 
         if (showSetup) {
@@ -622,6 +705,9 @@ private fun HomePage(
     apps: List<AppEntry>,
     favorites: List<String>,
     slots: Int,
+    todos: List<PianoTodo>,
+    onTodoEdit: (Int) -> Unit,
+    onTodoToggle: (Int) -> Unit,
     glass: Boolean,
     language: String,
     quiet: Boolean,
@@ -710,65 +796,90 @@ private fun HomePage(
                 }
             }
             GlassPanel(enabled = glass, modifier = Modifier.fillMaxWidth()) {
-                Column {
-                    repeat(slots) { index ->
-                        val entry = apps.firstOrNull { it.key == favorites.getOrNull(index) }
-                        val interaction = remember { MutableInteractionSource() }
-                        val pressed by interaction.collectIsPressedAsState()
-                        val count = if (entry == null) 0
-                            else (unreadCounts[entry.packageName] ?: 0)
-                        Row(
-                            modifier = Modifier.fillMaxWidth().height(lineHeight)
-                                .combinedClickable(
-                                    interactionSource = interaction,
-                                    indication = null,
-                                    onClick = {
-                                        if (entry == null) onChoose(index) else onOpen(entry)
-                                    },
-                                    onLongClick = { onChoose(index) }
-                                ),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                (index + 1).toString().padStart(2, '0'),
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 10.sp,
-                                color = PianoTone.copper.copy(alpha = .7f),
-                                modifier = Modifier.width(35.dp)
-                            )
+                // Balanced columns with the same six baselines; no added vertical scroll.
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(lineHeight * 6),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f).padding(end = 7.dp)) {
+                        repeat(6) { index ->
+                            val entry = if (index < slots)
+                                apps.firstOrNull { it.key == favorites.getOrNull(index) }
+                            else null
+                            val interaction = remember { MutableInteractionSource() }
+                            val pressed by interaction.collectIsPressedAsState()
+                            val count = if (entry == null) 0
+                                else (unreadCounts[entry.packageName] ?: 0)
                             Row(
-                                modifier = Modifier.weight(1f),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                                modifier = Modifier.fillMaxWidth().height(lineHeight)
+                                    .then(
+                                        if (index < slots) Modifier.combinedClickable(
+                                            interactionSource = interaction,
+                                            indication = null,
+                                            onClick = {
+                                                if (entry == null) onChoose(index) else onOpen(entry)
+                                            },
+                                            onLongClick = { onChoose(index) }
+                                        ) else Modifier
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    entry?.label ?: tr(language,
-                                        "+  assign application", "+  выбрать приложение"),
-                                    color = if (entry == null) Subtle.copy(alpha = .7f)
-                                        else if (pressed) PianoTone.peach else Cream,
-                                    fontSize = if (compact) 16.sp else 18.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
+                                    (index + 1).toString().padStart(2, '0'),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 9.sp,
+                                    color = PianoTone.copper.copy(alpha = .7f),
+                                    modifier = Modifier.width(23.dp)
                                 )
-                                // No badge at zero: nothing is drawn or measured.
-                                if (count > 0) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
                                     Text(
-                                        text = if (count > 99) "99+" else count.toString(),
-                                        color = PianoTone.pearl,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 10.sp,
+                                        when {
+                                            index >= slots -> ""
+                                            entry != null -> entry.label
+                                            else -> tr(language, "+  assign", "+  выбрать")
+                                        },
+                                        color = if (entry == null) Subtle.copy(alpha = .7f)
+                                            else if (pressed) PianoTone.peach else Cream,
+                                        fontSize = if (compact) 12.sp else 14.sp,
                                         maxLines = 1,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(5.dp))
-                                            .background(PianoTone.copper.copy(alpha = .65f))
-                                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
+                                    if (count > 0) {
+                                        Text(
+                                            if (count > 99) "99+" else count.toString(),
+                                            color = PianoTone.pearl,
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 9.sp,
+                                            maxLines = 1,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(5.dp))
+                                                .background(PianoTone.copper.copy(alpha = .65f))
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+                    Box(
+                        Modifier.width(1.dp).fillMaxHeight()
+                            .background(PianoTone.border.copy(alpha = .34f))
+                    )
+                    PianoTodoPanel(
+                        todos = todos,
+                        lineHeight = lineHeight,
+                        compact = compact,
+                        language = language,
+                        onEdit = onTodoEdit,
+                        onToggle = onTodoToggle,
+                        modifier = Modifier.weight(1f).padding(start = 8.dp)
+                    )
                 }
             }
             Row(

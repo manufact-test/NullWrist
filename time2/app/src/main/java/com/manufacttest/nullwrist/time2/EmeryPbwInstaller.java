@@ -146,6 +146,36 @@ public final class EmeryPbwInstaller {
     }
 
     /**
+     * Launch already transferred PBW without BlobDB INSERT/PutBytes/INSTALL.
+     * Avoids wiping the app's per-UUID persistent data on every launch.
+     * If the guest no longer has the file, report it; never silently replace
+     * a potentially newer saved game with a fresh installation.
+     */
+    public boolean launchInstalled(UUID uuid,String previouslyRunning)throws IOException{
+        progress.update("PebbleOS: launching previously transferred app (no reinstall)...");
+        EmeryPebbleWire.Packet version=link.transact(0x10,new byte[]{0},0x10,35);
+        if(version.payload.length<2 || version.payload[0]!=1)
+            throw new IOException("Guest version handshake failed for fast launch");
+        if(previouslyRunning!=null && !previouslyRunning.equals(uuid.toString())){
+            try{
+                ByteArrayOutputStream stop=new ByteArrayOutputStream();
+                stop.write(2);EmeryPebbleWire.uuid(stop,UUID.fromString(previouslyRunning));
+                link.send(0x34,stop.toByteArray());
+            }catch(IllegalArgumentException invalid){
+                // Malformed historical UUID must not block launching a valid app.
+            }
+        }
+        ByteArrayOutputStream launch=new ByteArrayOutputStream(17);
+        launch.write(1);EmeryPebbleWire.uuid(launch,uuid);
+        link.send(0x34,launch.toByteArray());
+        boolean stable=awaitRunning(uuid,12);
+        if(stable)progress.update("PebbleOS confirmed RUNNING_STABLE: "+uuid);
+        else progress.update("PBW previously transferred but launch NOT confirmed: "+uuid+
+                " — hold LAUNCH to explicitly reinstall if necessary");
+        return stable;
+    }
+
+    /**
      * Delete an app from the GUEST AppDB, not just the Android PBW library.
      * BlobDB DELETE 0x04, database 0x02, UUID key. No CLEAR command.
      */

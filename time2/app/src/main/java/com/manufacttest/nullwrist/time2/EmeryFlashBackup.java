@@ -79,6 +79,9 @@ public final class EmeryFlashBackup {
             try{
                 Files.move(temporary.toPath(),destination.toPath(),
                         StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
+                // A different SPI image can contain different app versions/IDs.
+                // Do not reuse stale Android-side proof of prior guest transfers.
+                new EmeryInstallLedger(context).invalidate();
             }catch(java.nio.file.AtomicMoveNotSupportedException unsupported){
                 throw new IOException("Atomic flash restore unsupported; preserving old data",
                         unsupported);

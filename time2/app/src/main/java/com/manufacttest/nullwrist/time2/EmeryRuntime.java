@@ -239,6 +239,7 @@ public final class EmeryRuntime {
                 if(closing)return;
                 if(appLink==null)throw new IOException("Pebble UART unavailable: "+last);
                 EmeryPbwInstaller installer=new EmeryPbwInstaller(appLink,this::emit);
+                EmeryInstallLedger ledger=new EmeryInstallLedger(context);
                 String oldError=pref.getString("last_operation_error",null);
                 if(oldError!=null && oldError.contains("QEMU serial body was not received"))
                     pref.edit().remove("last_operation_error").apply();
@@ -254,6 +255,7 @@ public final class EmeryRuntime {
                         if(deleting!=null){
                             installer.uninstall(java.util.UUID.fromString(deleting));
                             // Tombstone is consumed only after guest deletion ACK.
+                            ledger.forget(deleting);
                             if(deleting.equals(pref.getString("pending_delete_uuid",null)))
                                 pref.edit().remove("pending_delete_uuid").commit();
                             if(deleting.equals(pref.getString("last_installed_uuid",null)))
@@ -265,8 +267,20 @@ public final class EmeryRuntime {
                                     id+".pbw");
                             if(!pbw.isFile())throw new IOException("Requested PBW missing: "+chosen);
                             String previous=pref.getString("last_installed_uuid",null);
-                            boolean stable=installer.install(pbw,previous);
-                            pref.edit().putString("last_transferred_uuid",chosen).apply();
+                            String force=pref.getString("pending_force_reinstall_uuid",null);
+                            boolean reinstall=chosen.equals(force);
+                            if(reinstall)
+                                pref.edit().remove("pending_force_reinstall_uuid").commit();
+                            boolean stable;
+                            if(!reinstall && ledger.matches(chosen,pbw)){
+                                stable=installer.launchInstalled(id,previous);
+                            }else{
+                                stable=installer.install(pbw,previous);
+                                // A guest transfer was completed. Record immutable PBW hash
+                                // even when later RUNNING_STABLE is not confirmed.
+                                ledger.record(chosen,pbw);
+                                pref.edit().putString("last_transferred_uuid",chosen).apply();
+                            }
                             if(stable)pref.edit().putString("last_installed_uuid",chosen).apply();
                             else emit("PBW installed but guest launch NOT confirmed: "+chosen);
                             if(chosen.equals(pref.getString("pending_uuid",null)))

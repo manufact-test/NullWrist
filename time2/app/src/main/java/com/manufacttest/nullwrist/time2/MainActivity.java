@@ -241,9 +241,25 @@ public final class MainActivity extends Activity {
             String lastId=getSharedPreferences("time2-pbw-install",MODE_PRIVATE)
                     .getString("last_installed_uuid","");
             text(copy,item.uuid.equals(lastId)?"Last confirmed running":
-                    "Imported · choose INSTALL",10,MUTED,Gravity.START,4);
-            TextView install=action("INSTALL",false,()->install(item));
+                    "Imported · choose LAUNCH / INSTALL",10,MUTED,Gravity.START,4);
+            File localPbw=new File(new File(getFilesDir(),"time2/pbws"),item.uuid+".pbw");
+            boolean previouslyTransferred=false;
+            try{ previouslyTransferred=new EmeryInstallLedger(this).matches(item.uuid,localPbw); }
+            catch(IOException ignored){ /* corrupt or missing file is not installed */ }
+            TextView install=action(previouslyTransferred?"LAUNCH":"INSTALL",false,()->install(item));
             install.setTextSize(11);
+            install.setOnLongClickListener(view->{
+                new AlertDialog.Builder(this)
+                    .setTitle("Reinstall "+item.name+"?")
+                    .setMessage("This uploads the PBW to the guest again. Reinstalling a game may reset its saved progress. Proceed only if normal LAUNCH fails.")
+                    .setNegativeButton("CANCEL",null)
+                    .setPositiveButton("REINSTALL",(dialog,which)->{
+                        getSharedPreferences("time2-pbw-install",MODE_PRIVATE).edit()
+                            .putString("pending_force_reinstall_uuid",item.uuid).commit();
+                        install(item);
+                    }).show();
+                return true;
+            });
             line.addView(install,new LinearLayout.LayoutParams(dp(88),dp(48)));
             TextView remove=action("×",false,()->confirmRemove(item));
             remove.setContentDescription("Remove "+item.name+" from library and watch");

@@ -3,6 +3,7 @@ package com.orangrepiano.launcher
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.provider.Settings
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -137,6 +138,11 @@ private fun tr(lang: String, en: String, ru: String): String = if (lang == "ru")
 fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     val context = LocalContext.current
     val prefs = remember { LauncherPrefs(context) }
+    val badgesSupported = BuildConfig.BADGES_SUPPORTED
+    var notificationEnabled by remember { mutableStateOf(
+        badgesSupported && pianoHasNotificationAccess(context)
+    ) }
+    val notifications = PianoNotificationCounts.counts
     val scope = rememberCoroutineScope()
     val weatherRepo = remember(context) { PianoWeatherRepository(context) }
     var weather by remember { mutableStateOf(weatherRepo.cached()) }
@@ -269,6 +275,7 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
             if (event == Lifecycle.Event.ON_RESUME) {
                 installed = installedApps(context)
                 favorites = prefs.favorites
+                if (badgesSupported) notificationEnabled = pianoHasNotificationAccess(context)
                 locationEnabled = weatherRepo.hasLocationPermission()
                 cameraEnabled = ContextCompat.checkSelfPermission(
                     context, Manifest.permission.CAMERA
@@ -412,6 +419,7 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                         onWallet = { openQuickApp("wallet") },
                         weather = weather, weatherLoading = weatherLoading,
                         onWeather = { refreshWeather(force = true) },
+                        unreadCounts = if (notificationEnabled) notifications else emptyMap(),
                         torchEnabled = torchEnabled,
                         onOpen = { openApp(context, it) },
                         onChoose = ::chooseFavorite,
@@ -454,7 +462,10 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                         onSetup = { showSetup = true },
                         onChooseWallet = { showQuickChooser("wallet") },
                         onChoosePhone = { showQuickChooser("phone") },
-                        onWeather = { refreshWeather(force = true) }
+                        onWeather = { refreshWeather(force = true) },
+                        badgesSupported = badgesSupported,
+                        notificationEnabled = notificationEnabled,
+                        onNotificationAccess = { pianoOpenNotificationAccess(context) }
                     )
                 }
             }
@@ -463,6 +474,9 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
         if (showSetup) {
             PianoSetupDialog(
                 language = language,
+                badgesSupported = badgesSupported,
+                notificationEnabled = notificationEnabled,
+                onNotification = { pianoOpenNotificationAccess(context) },
                 weatherEnabled = locationEnabled,
                 cameraEnabled = cameraEnabled,
                 hideStatusBar = hideStatusBar,
@@ -620,6 +634,7 @@ private fun HomePage(
     weather: PianoWeather?,
     weatherLoading: Boolean,
     onWeather: () -> Unit,
+    unreadCounts: Map<String, Int>,
     torchEnabled: Boolean,
     onOpen: (AppEntry) -> Unit,
     onChoose: (Int) -> Unit,
@@ -700,6 +715,8 @@ private fun HomePage(
                         val entry = apps.firstOrNull { it.key == favorites.getOrNull(index) }
                         val interaction = remember { MutableInteractionSource() }
                         val pressed by interaction.collectIsPressedAsState()
+                        val count = if (entry == null) 0
+                            else (unreadCounts[entry.packageName] ?: 0)
                         Row(
                             modifier = Modifier.fillMaxWidth().height(lineHeight)
                                 .combinedClickable(
@@ -734,7 +751,21 @@ private fun HomePage(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false)
                                 )
-
+                                // No badge at zero: nothing is drawn or measured.
+                                if (count > 0) {
+                                    Text(
+                                        text = if (count > 99) "99+" else count.toString(),
+                                        color = PianoTone.pearl,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 10.sp,
+                                        maxLines = 1,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(5.dp))
+                                            .background(PianoTone.copper.copy(alpha = .65f))
+                                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -981,7 +1012,10 @@ private fun SettingsPage(
     onSetup: () -> Unit,
     onChooseWallet: () -> Unit,
     onChoosePhone: () -> Unit,
-    onWeather: () -> Unit
+    onWeather: () -> Unit,
+    badgesSupported: Boolean,
+    notificationEnabled: Boolean,
+    onNotificationAccess: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         .padding(horizontal = 19.dp, vertical = 6.dp)) {
@@ -1075,13 +1109,25 @@ private fun SettingsPage(
         TextButton(onClick = onWeather) {
             Text(tr(language, "UPDATE WEATHER / LOCATION", "ОБНОВИТЬ ПОГОДУ"), color = Orange)
         }
+        if (badgesSupported) {
+            TextButton(onClick = onNotificationAccess) {
+                Text(tr(language,
+                    if (notificationEnabled) "NOTIFICATION COUNTS: ENABLED" else "ENABLE NOTIFICATION COUNTS",
+                    if (notificationEnabled) "СЧЁТЧИКИ: ВКЛЮЧЕНЫ" else "ВКЛЮЧИТЬ СЧЁТЧИКИ"
+                ), color = Orange)
+            }
+            Text(tr(language,
+                "Android requires explicit Notification Access. Counts are derived on-device; message content is never stored.",
+                "Android потребует разрешить доступ к уведомлениям. Счётчики вычисляются на устройстве, сообщения не сохраняются."
+            ), fontSize = 10.sp, color = Subtle)
+        }
         TextButton(onClick = onSetup) {
             Text(tr(language, "FIRST-RUN SETUP", "ПЕРВОНАЧАЛЬНАЯ НАСТРОЙКА"), color = Orange)
         }
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · atelier edition 1.1", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · atelier edition 1.1.2", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

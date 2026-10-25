@@ -24,11 +24,14 @@ import androidx.compose.ui.unit.sp
 
 /**
  * First-launch opt-in walkthrough: system roles/settings cannot be auto-granted.
- * All privileges are optional. No notification listener is requested by this APK.
+ * All privileges are optional. Only the dedicated badges build can request notification access.
  */
 @Composable
 internal fun PianoSetupDialog(
     language: String,
+    badgesSupported: Boolean,
+    notificationEnabled: Boolean,
+    onNotification: () -> Unit,
     weatherEnabled: Boolean,
     cameraEnabled: Boolean,
     hideStatusBar: Boolean,
@@ -60,6 +63,18 @@ internal fun PianoSetupDialog(
                 SetupStep("01", t("DEFAULT HOME", "ГЛАВНЫЙ ЭКРАН"),
                     t("Choose orangre piano as Home", "Выбрать orangre piano"), onHome)
                 HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
+                if (badgesSupported) {
+                    SetupStep("•", t("NOTIFICATION BADGES", "СЧЁТЧИКИ УВЕДОМЛЕНИЙ"),
+                        if (notificationEnabled) t("ACCESS ✓", "ДОСТУП ✓")
+                        else t("Open permission settings", "Разрешить доступ"),
+                        onNotification
+                    )
+                    Text(t(
+                        "Android requires your consent. Direct browser downloads may be blocked by Play Protect.",
+                        "Android запросит согласие. Play Защита может блокировать загрузки расширенной версии из браузера."
+                    ), fontSize = 10.sp, color = PianoTone.secondary, lineHeight = 13.sp)
+                    HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
+                }
                 SetupStep("02", t("LOCAL WEATHER", "ПОГОДА"),
                     if (weatherEnabled) t("LOCATION ✓", "ГЕОЛОКАЦИЯ ✓")
                     else t("Allow approximate location", "Разрешить примерную геолокацию"), onLocation)
@@ -80,8 +95,8 @@ internal fun PianoSetupDialog(
                     Switch(checked = hideStatusBar, onCheckedChange = onHideBar)
                 }
                 Text(t(
-                    "Weather by Open-Meteo; location is only used for the forecast. No notification access is requested.",
-                    "Погода: Open-Meteo. Геолокация нужна только для прогноза. Доступ к уведомлениям не запрашивается."
+                    "Weather data: Open-Meteo. Approximate location is sent only for forecasts; notification counts, when enabled, stay on-device.",
+                    "Источник погоды: Open-Meteo. Примерная геолокация нужна только для прогноза; счётчики уведомлений остаются на устройстве."
                 ), fontSize = 10.sp, color = PianoTone.secondary, lineHeight = 14.sp)
             }
         },

@@ -12,8 +12,22 @@ android {
         applicationId = "com.orangrepiano.launcher"
         minSdk = 28
         targetSdk = 36
-        versionCode = 103
-        versionName = "1.1.1"
+        versionCode = 104
+        versionName = "1.1.2"
+    }
+
+    // Two separate manifests: standard works with direct GitHub APK installs;
+    // badges is an optional developer build with explicit user-granted notification access.
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("standard") {
+            dimension = "distribution"
+            buildConfigField("boolean", "BADGES_SUPPORTED", "false")
+        }
+        create("badges") {
+            dimension = "distribution"
+            buildConfigField("boolean", "BADGES_SUPPORTED", "true")
+        }
     }
 
     // Never commit the private release key. GitHub Actions passes it through
@@ -61,7 +75,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 }
 

@@ -530,23 +530,30 @@ private fun HomePage(
                         val entry = apps.firstOrNull { it.key == favorites.getOrNull(index) }
                         val interaction = remember { MutableInteractionSource() }
                         val pressed by interaction.collectIsPressedAsState()
-                        val scale by animateFloatAsState(
-                            targetValue = if (pressed && !quiet) .982f else 1f,
+                        // ATELIER polish: the number and the copper marker are isolated
+                        // from the glass name surface. Every row shares the same quiet
+                        // material: no alternating full-width tint or colliding edges.
+                        val insetScale by animateFloatAsState(
+                            targetValue = if (pressed && !quiet) .985f else 1f,
                             animationSpec = tween(if (quiet) 1 else 145, easing = FastOutSlowInEasing),
-                            label = "favorite_press"
+                            label = "favorite_label_press"
                         )
-                        val rowTint by animateColorAsState(
-                            targetValue = if (pressed) Color(0x445E4035)
-                                else if (index % 2 == 0) Color(0x10FFE0CF) else Color.Transparent,
-                            animationSpec = tween(if (quiet) 1 else 160), label = "favorite_tint"
+                        val insetTint by animateColorAsState(
+                            targetValue = if (pressed) Color(0x594F362F) else Color(0x0CFFF2E3),
+                            animationSpec = tween(if (quiet) 1 else 190),
+                            label = "favorite_label_tint"
                         )
+                        val insetBorder by animateColorAsState(
+                            targetValue = if (pressed) PianoTone.peach.copy(alpha = .42f)
+                                else PianoTone.peach.copy(alpha = .065f),
+                            animationSpec = tween(if (quiet) 1 else 190),
+                            label = "favorite_label_edge"
+                        )
+                        val insetShape = RoundedCornerShape(8.dp)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(lineHeight)
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(rowTint)
-                                .graphicsLayer(scaleX = scale, scaleY = scale)
                                 .combinedClickable(
                                     interactionSource = interaction,
                                     indication = null,
@@ -555,20 +562,51 @@ private fun HomePage(
                                 ),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text((index + 1).toString().padStart(2, '0'),
-                                fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = Orange.copy(alpha = .7f),
-                                modifier = Modifier.width(36.dp))
-                            Text(entry?.label ?: tr(language, "+  assign application", "+  выбрать приложение"),
-                                color = if (entry == null) Subtle.copy(alpha = .7f) else Cream,
-                                fontSize = if (compact) 16.sp else 18.sp,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f))
-                            if (entry != null) {
-                                Box(Modifier.size(5.dp).clip(RoundedCornerShape(1.dp))
-                                    .background(if (pressed) PianoTone.pearl else PianoTone.copper.copy(alpha = .78f)))
+                            Text(
+                                (index + 1).toString().padStart(2, '0'),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.sp,
+                                color = PianoTone.copper.copy(alpha = .70f),
+                                modifier = Modifier.width(30.dp)
+                            )
+                            Spacer(Modifier.width(7.dp))
+                            Box(
+                                modifier = Modifier.weight(1f).fillMaxHeight()
+                                    .padding(vertical = 2.dp)
+                                    .graphicsLayer(scaleX = insetScale, scaleY = insetScale)
+                                    .clip(insetShape)
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(insetTint, insetTint.copy(alpha = .66f))
+                                        )
+                                    )
+                                    .border(1.dp, insetBorder, insetShape)
+                                    .padding(horizontal = 10.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    entry?.label ?: tr(
+                                        language,
+                                        "+  assign application",
+                                        "+  выбрать приложение"
+                                    ),
+                                    color = if (entry == null) Subtle.copy(alpha = .70f) else Cream,
+                                    fontSize = if (compact) 16.sp else 18.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
+                            Spacer(Modifier.width(10.dp))
+                            Box(
+                                Modifier.size(5.dp)
+                                    .clip(RoundedCornerShape(1.dp))
+                                    .background(
+                                        if (entry == null) Color.Transparent
+                                        else if (pressed) PianoTone.pearl
+                                        else PianoTone.copper.copy(alpha = .78f)
+                                    )
+                            )
                         }
-                        if (index != slots - 1) HorizontalDivider(color = Line.copy(alpha = .27f))
                     }
                 }
             }

@@ -87,3 +87,18 @@ Premium visual / motion system refresh while retaining working Titan 2 features.
 - Upgraded build tooling and target to Android 16 / API 36 for Google Play 2026 minimum target requirements.
 - Automated preview lint, APK signature verification, icon/package checks, and production APK/AAB generation **only** with persistent signing secrets; see [RELEASE.md](RELEASE.md).
 - No signing secrets committed. An unsigned production release is **not** published as stable; debug-signed RC1 is installable after uninstalling former preview APKs.
+
+
+## v1.0.1 RC1 — Favorite keys optical polish
+
+- Removed alternating zebra tint on the whole favorite row; all resting rows use the same restrained material.
+- Retained the outer tap and long-press hit targets, including empty-slot assignment.
+- Split each favorite visually into a fixed-width mono slot index, 7 dp air gap,
+  subtly inset glass label capsule, 10 dp end gap, and separate copper pixel marker.
+  The capsule uses a delicate border and fades toward the right to avoid large flat stripes.
+- Only the inset glass responds to press (soft scaling and copper tint), keeping
+  slot numbers and end markers visibly independent.
+- Removed full-width dividing lines between favorite rows to preserve clear spacing.
+- Preserved 5/6 favorite slots, existing row heights and Titan 2 no-scroll sizing.
+- CI builds and lints an Android 16 release candidate; stable store signing remains
+  conditional on private production keystore secrets (see RELEASE.md).

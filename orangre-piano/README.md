@@ -181,3 +181,21 @@ notification-listener access. This affected the 1.1.0 RC1 direct download.
 - CI builds and lints a single APK and verifies the signed package contains
   the notification listener. Production signed APK/AAB still require protected
   keystore GitHub secrets.
+
+## v1.1.4 RC1 — six-slot To-Do alongside favorites
+
+- HOME glass panel is split into two balanced columns: favorite launch keys
+  on the left and **six editable To-Do rows** on the right. Thin copper
+  divider separates the sections; row height and total panel height unchanged.
+- Tap any To-Do text to open RU/EN editing dialog, accepting up to 500
+  characters including newlines; SAVE, CANCEL, CLEAR actions are provided.
+- To-Do rows include small completion checkboxes. Completed items are
+  struck through and muted. Empty tasks display a quiet placeholder.
+- Six notes and completion states persist across app restarts via
+  `LauncherPrefs` SharedPreferences; they are not uploaded or synchronized.
+- App favorites preserve all original tap/long-press behaviors; numeric
+  notification counters remain visible when nonzero. At half width labels
+  truncate gracefully instead of overflowing the screen.
+- The release remains a developer preview with user-authorized notification
+  access. Browser installation may be blocked by Play Protect; use
+  authorized USB/ADB testing without disabling Play Protect.

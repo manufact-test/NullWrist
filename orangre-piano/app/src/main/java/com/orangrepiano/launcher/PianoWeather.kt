@@ -10,6 +10,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -65,7 +66,7 @@ internal class PianoWeatherRepository(private val context: Context) {
             System.currentTimeMillis() - old.updatedAtMillis < 45 * 60 * 1000) return old
         if (!hasLocationPermission()) return old
         return try {
-            val location = locate() ?: return old
+            val location = withTimeoutOrNull(9_000L) { locate() } ?: return old
             val latest = withContext(Dispatchers.IO) {
                 val lat = location.latitude
                 val lon = location.longitude

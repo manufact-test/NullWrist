@@ -1,5 +1,8 @@
 package com.orangrepiano.launcher
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,10 +31,12 @@ internal fun PianoSetupDialog(
     language: String,
     notificationEnabled: Boolean,
     weatherEnabled: Boolean,
+    cameraEnabled: Boolean,
     hideStatusBar: Boolean,
     onHome: () -> Unit,
     onNotification: () -> Unit,
     onLocation: () -> Unit,
+    onCameraAccess: () -> Unit,
     onHideBar: (Boolean) -> Unit,
     onDone: () -> Unit
 ) {
@@ -46,9 +51,12 @@ internal fun PianoSetupDialog(
                 color = PianoTone.peach, fontSize = 18.sp)
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text(t("Four small steps to make your launcher yours. Permissions are optional.",
-                    "Четыре шага настройки лаунчера. Все разрешения — по желанию."),
+            Column(
+                modifier = Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Text(t("Personalize your launcher. Every permission is optional.",
+                    "Настройте лаунчер под себя. Все разрешения — по желанию."),
                     color = PianoTone.secondary, fontSize = 12.sp)
                 Spacer(Modifier.height(2.dp))
                 SetupStep("01", t("DEFAULT HOME", "ГЛАВНЫЙ ЭКРАН"),
@@ -57,15 +65,23 @@ internal fun PianoSetupDialog(
                 SetupStep("02", t("NOTIFICATIONS", "УВЕДОМЛЕНИЯ"),
                     if (notificationEnabled) t("CONNECTED ✓", "ПОДКЛЮЧЕНО ✓")
                     else t("Enable app counters", "Включить счётчики"), onNotification)
+                Text(t(
+                    "For GitHub APKs, Android may ask: App info → ⋮ → Allow restricted settings.",
+                    "Для APK с GitHub Android может потребовать: О приложении → ⋮ → Разрешить ограниченные настройки."
+                ), fontSize = 10.sp, color = PianoTone.secondary, lineHeight = 13.sp)
                 HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
                 SetupStep("03", t("LOCAL WEATHER", "ПОГОДА"),
                     if (weatherEnabled) t("LOCATION ✓", "ГЕОЛОКАЦИЯ ✓")
                     else t("Allow approximate location", "Разрешить примерную геолокацию"), onLocation)
                 HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
+                SetupStep("04", t("FLASHLIGHT", "ФОНАРИК"),
+                    if (cameraEnabled) t("CAMERA ACCESS ✓", "ДОСТУП ✓")
+                    else t("Allow camera access", "Разрешить доступ к камере"), onCameraAccess)
+                HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
-                        Text("04  " + t("HIDE TOP BAR", "СКРЫТЬ ВЕРХНЮЮ СТРОКУ"),
+                        Text("05  " + t("HIDE TOP BAR", "СКРЫТЬ ВЕРХНЮЮ СТРОКУ"),
                             fontFamily = FontFamily.Monospace, fontSize = 11.sp,
                             color = PianoTone.pearl)
                         Text(t("The notification shade still works", "Шторка остаётся доступна"),

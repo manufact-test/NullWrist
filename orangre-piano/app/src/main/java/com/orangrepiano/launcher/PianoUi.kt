@@ -142,6 +142,15 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     var weather by remember { mutableStateOf(weatherRepo.cached()) }
     var weatherLoading by remember { mutableStateOf(false) }
     var locationEnabled by remember { mutableStateOf(weatherRepo.hasLocationPermission()) }
+    var cameraEnabled by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val cameraSetupRequest = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { allowed -> cameraEnabled = allowed }
     var notificationEnabled by remember { mutableStateOf(hasNotificationAccess(context)) }
     var showSetup by remember { mutableStateOf(!prefs.setupFinished) }
     var quickChooser by remember { mutableStateOf<String?>(null) }
@@ -264,6 +273,9 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                 favorites = prefs.favorites
                 notificationEnabled = hasNotificationAccess(context)
                 locationEnabled = weatherRepo.hasLocationPermission()
+                cameraEnabled = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.CAMERA
+                ) == PackageManager.PERMISSION_GRANTED
                 if (locationEnabled) refreshWeather()
             }
         }
@@ -458,10 +470,12 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                 language = language,
                 notificationEnabled = notificationEnabled,
                 weatherEnabled = locationEnabled,
+                cameraEnabled = cameraEnabled,
                 hideStatusBar = hideStatusBar,
                 onHome = onRequestHome,
                 onNotification = { openNotificationAccessSettings(context) },
                 onLocation = { locationRequest.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
+                onCameraAccess = { cameraSetupRequest.launch(Manifest.permission.CAMERA) },
                 onHideBar = {
                     prefs.setHideStatusBar(it)
                     hideStatusBar = it

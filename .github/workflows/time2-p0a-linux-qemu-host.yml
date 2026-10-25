@@ -44,8 +44,7 @@ jobs:
           file "$qemu" | tee time2/p0a-qemu-host/file.txt
           ldd "$qemu" | tee time2/p0a-qemu-host/ldd.txt
           printf '%s\n' "$SDK_VERSION" > time2/p0a-qemu-host/sdk-version.txt
-          sha256sum time2/p0a-qemu-host/qemu-pebble > time2/p0a-qemu-host/SHA256SUMS
-          (cd time2/p0a-qemu-host && sha256sum -c SHA256SUMS)
+          (cd time2/p0a-qemu-host && sha256sum qemu-pebble > SHA256SUMS && sha256sum -c SHA256SUMS)
       - name: Share tool executable for isolated local testing only
         uses: actions/upload-artifact@v4
         with:

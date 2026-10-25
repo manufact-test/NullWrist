@@ -303,8 +303,14 @@ public final class EmeryRuntime {
                             if(reinstall)
                                 pref.edit().remove("pending_force_reinstall_uuid").commit();
                             boolean stable;
-                            if(!reinstall && ledger.matches(chosen,pbw)){
+                            boolean sameOriginalTransfer=chosen.equals(
+                                    pref.getString("last_transferred_uuid",null));
+                            // Upgrade path from pre-ledger lab APKs: avoid one
+                            // destructive reinstall of the last confirmed user PBW.
+                            if(!reinstall && (ledger.matches(chosen,pbw) ||
+                                    sameOriginalTransfer)){
                                 stable=installer.launchInstalled(id,previous);
+                                if(stable)ledger.record(chosen,pbw);
                             }else{
                                 stable=installer.install(pbw,previous);
                                 // A guest transfer was completed. Record immutable PBW hash

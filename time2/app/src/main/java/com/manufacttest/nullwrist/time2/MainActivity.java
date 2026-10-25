@@ -254,9 +254,13 @@ public final class MainActivity extends Activity {
                     .setMessage("This uploads the PBW to the guest again. Reinstalling a game may reset its saved progress. Proceed only if normal LAUNCH fails.")
                     .setNegativeButton("CANCEL",null)
                     .setPositiveButton("REINSTALL",(dialog,which)->{
+                        if(!EmeryAssets.isBundled(this)){
+                            showMessage("Emulator unavailable","Emery artifacts missing");return;
+                        }
                         getSharedPreferences("time2-pbw-install",MODE_PRIVATE).edit()
-                            .putString("pending_force_reinstall_uuid",item.uuid).commit();
-                        install(item);
+                            .putString("pending_force_reinstall_uuid",item.uuid)
+                            .putString("pending_uuid",item.uuid).commit();
+                        openWatch(false);
                     }).show();
                 return true;
             });
@@ -285,6 +289,7 @@ public final class MainActivity extends Activity {
             return;
         }
         getSharedPreferences("time2-pbw-install",MODE_PRIVATE).edit()
+                .remove("pending_force_reinstall_uuid")
                 .putString("pending_uuid",item.uuid).apply();
         openWatch(false);
     }

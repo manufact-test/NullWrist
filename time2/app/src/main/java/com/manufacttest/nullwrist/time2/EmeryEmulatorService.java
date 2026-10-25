@@ -43,8 +43,20 @@ public final class EmeryEmulatorService extends Service {
 
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         if(intent!=null && ACTION_STOP.equals(intent.getAction())){
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            stopSelf();
+            if(runtime==null){stopSelf();return START_NOT_STICKY;}
+            // Never abruptly SIGTERM a live game when it could persist state
+            // in its app DEINIT callback. The single serial owner sends STOP.
+            android.os.Handler main=new android.os.Handler(android.os.Looper.getMainLooper());
+            final boolean[] completed={false};
+            Runnable stop=()->main.post(()->{
+                if(completed[0])return;
+                completed[0]=true;
+                stopSelf();
+            });
+            runtime.requestGracefulStop(stop);
+            // Failsafe for blocked/failed guest protocol. Do not leave an
+            // immortal foreground service if QEMU no longer responds.
+            main.postDelayed(stop,30000);
             return START_NOT_STICKY;
         }
         Intent launch=new Intent(this,MainActivity.class);

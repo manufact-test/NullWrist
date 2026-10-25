@@ -37,6 +37,7 @@ public final class EmeryRuntime {
     private volatile boolean ownsSession;
     private final AtomicBoolean displayRefreshQueued=new AtomicBoolean(false);
     private volatile boolean closing;
+    private volatile Runnable gracefulStopCompletion;
     private volatile boolean connected;
     private volatile Process process;
     private final ExecutorService appInstallWorker=Executors.newSingleThreadExecutor(r->{
@@ -245,6 +246,36 @@ public final class EmeryRuntime {
                     pref.edit().remove("last_operation_error").apply();
                 emit("Pebble serial companion connected");
                 while(!closing && process!=null && process.isAlive() && appLink!=null){
+                    Runnable completion=gracefulStopCompletion;
+                    if(completion!=null){
+                        gracefulStopCompletion=null;
+                        try{
+                            emit("PebbleOS: graceful stop requested for save-data flush");
+                            // Ask the real guest which app runs now. Do not stop a
+                            // stale UUID remembered by the Android companion.
+                            byte[] query=new byte[17];query[0]=3;
+                            appLink.send(0x34,query);
+                            EmeryPebbleWire.Packet state=appLink.waitFor(0x34,3);
+                            if(state.payload.length>=17 && state.payload[0]==1){
+                                byte[] stop=new byte[17];stop[0]=2;
+                                System.arraycopy(state.payload,1,stop,1,16);
+                                boolean nonzero=false;
+                                for(int i=1;i<17;i++)if(stop[i]!=0)nonzero=true;
+                                if(nonzero){
+                                    appLink.send(0x34,stop);
+                                    // Let the guest execute deinit()/persist_write_*
+                                    // on its own FreeRTOS app task before QEMU exits.
+                                    Thread.sleep(1100);
+                                }
+                            }
+                        }catch(Exception saveError){
+                            if(!closing)emit("PebbleOS graceful stop not confirmed: "+
+                                    saveError.getMessage());
+                        }finally{
+                            completion.run();
+                        }
+                        return;
+                    }
                     String deleting=pref.getString("pending_delete_uuid",null);
                     String chosen=pref.getString("pending_uuid",null);
                     if(deleting==null && chosen==null){
@@ -306,6 +337,19 @@ public final class EmeryRuntime {
                 if(channel!=null)try{channel.close();}catch(IOException ignored){}
             }
         });
+    }
+
+    /**
+     * Send app STOP through the live Pebble protocol before shutting QEMU
+     * down. Completion is called by the one serial owner after guest DEINIT
+     * had time to persist data. No extra writer races with AppFetch/PutBytes.
+     */
+    public void requestGracefulStop(Runnable onFinished){
+        if(closing || process==null || !process.isAlive() || appLink==null){
+            onFinished.run();
+            return;
+        }
+        gracefulStopCompletion=onFinished;
     }
 
     public void touch(EmeryQmpCommands.TouchPhase phase,int x,int y){

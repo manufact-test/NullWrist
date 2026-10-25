@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.SocketTimeoutException;
-import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -21,6 +20,8 @@ public final class EmeryPebbleLink implements Closeable {
     private final InputStream input;
     private final OutputStream output;
     private final EmeryPebbleWire.Decoder decoder=new EmeryPebbleWire.Decoder();
+    private final EmeryControlFramer control=new EmeryControlFramer();
+    private final byte[] readBuffer=new byte[4096];
     private volatile boolean closed;
 
     public EmeryPebbleLink(String unixPath)throws IOException{
@@ -85,58 +86,32 @@ public final class EmeryPebbleLink implements Closeable {
     }
 
     private EmeryPebbleWire.Packet next(long deadline)throws IOException{
-        EmeryPebbleWire.Packet existing=decoder.poll();
-        if(existing!=null)return existing;
         while(!closed && System.nanoTime()<deadline){
-            byte[] header=readExactly(6,deadline);
-            if(header==null)return null;
-            int signature=EmeryPebbleWire.u16(header,0);
-            int proto=EmeryPebbleWire.u16(header,2);
-            int length=EmeryPebbleWire.u16(header,4);
-            if(signature!=0xFEED)throw new IOException("Pebble/QEMU control signature mismatch");
-            if(length>EmeryPebbleWire.MAX_CONTROL_PAYLOAD)
-                throw new IOException("Oversized QEMU serial frame");
-            byte[] body=readExactly(length+2,deadline);
-            if(body==null)throw new IOException("QEMU serial body was not received");
-            if(EmeryPebbleWire.u16(body,length)!=0xBEEF)
-                throw new IOException("Pebble/QEMU control footer mismatch");
-            if(proto!=EmeryPebbleWire.SPP)continue;
-            decoder.append(Arrays.copyOf(body,length));
-            EmeryPebbleWire.Packet parsed=decoder.poll();
-            if(parsed!=null)return parsed;
-        }
-        return null;
-    }
-
-    private byte[] readExactly(int length,long deadline)throws IOException{
-        byte[] buffer=new byte[length];
-        int done=0;
-        while(done<length){
-            if(closed)throw new IOException("Emery link closed");
-            if(System.nanoTime()>=deadline){
-                if(done==0)return null; // no traffic during idle guest session
-                throw new IOException("Partial QEMU serial frame timed out ("+done+"/"+length+")");
+            EmeryPebbleWire.Packet nested=decoder.poll();
+            if(nested!=null)return nested;
+            EmeryControlFramer.Frame frame=control.poll();
+            if(frame!=null){
+                if(frame.type==EmeryPebbleWire.SPP){
+                    decoder.append(frame.payload);
+                }
+                continue;
             }
             try{
-                int n=input.read(buffer,done,length-done);
-                if(n<0)throw new IOException("QEMU serial channel closed");
-                done+=n;
-            }catch(SocketTimeoutException retry){
-                // Bounded timeouts permit interruption while the guest boots.
+                int count=input.read(readBuffer);
+                if(count<0)throw new IOException("QEMU serial peer closed");
+                if(count>0)control.append(readBuffer,count);
+            }catch(SocketTimeoutException idle){
+                // QEMU is asynchronous. An idle read is not a broken serial
+                // packet, and every buffered partial frame survives the wait.
             }catch(IOException candidate){
-                // Android LocalSocket may expose a normal SO_RCVTIMEO EAGAIN as
-                // IOException("Try again"), rather than SocketTimeoutException.
-                // A prior 0.6.1 install completed successfully, then the idle
-                // companion loop disconnected because this was treated as fatal.
-                // Continue only for this specific transient receive condition.
-                String reason=candidate.getMessage();
-                if(!closed && ("Try again".equals(reason) ||
-                        "EAGAIN".equals(reason) ||
-                        "Resource temporarily unavailable".equals(reason)))continue;
+                String message=candidate.getMessage();
+                if(!closed && ("Try again".equals(message) ||
+                        "EAGAIN".equals(message) ||
+                        "Resource temporarily unavailable".equals(message)))continue;
                 throw candidate;
             }
         }
-        return buffer;
+        return null;
     }
 
     @Override public void close()throws IOException {

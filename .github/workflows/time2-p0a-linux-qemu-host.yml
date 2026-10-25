@@ -1,0 +1,59 @@
+name: NullWrist Time 2 — isolated Linux QEMU host for private PBW checks
+
+on:
+  push:
+    branches: ["feature/time2-standalone"]
+    paths:
+      - ".github/workflows/time2-p0a-linux-qemu-host.yml"
+      - "time2/upstream.lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-qemu-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install checksum-pinned SDK 0.1.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json
+          with open("time2/upstream.lock.json") as f: lock=json.load(f)
+          print("SDK_VERSION="+lock["pebbleos_sdk"]["version"])
+          print("SDK_INSTALLER_SHA256="+lock["pebbleos_sdk"]["installer_sha256"])
+          PY
+      - name: Extract actual upstream QEMU host binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p time2/p0a-qemu-host
+          curl --fail --location --retry 3 --silent --show-error             "https://github.com/coredevices/PebbleOS-SDK/releases/download/v${SDK_VERSION}/pebbleos-sdk-installer.sh"             -o time2/p0a-qemu-host/sdk-installer.sh
+          echo "${SDK_INSTALLER_SHA256}  time2/p0a-qemu-host/sdk-installer.sh" | sha256sum -c -
+          sh time2/p0a-qemu-host/sdk-installer.sh --version "$SDK_VERSION" --defaults
+          # shellcheck disable=SC1090
+          source "$HOME/pebbleos-sdk-$SDK_VERSION/env.sh"
+          qemu="$HOME/pebbleos-sdk-$SDK_VERSION/qemu/bin/qemu-pebble"
+          test -x "$qemu"
+          cp -L "$qemu" time2/p0a-qemu-host/qemu-pebble
+          chmod 755 time2/p0a-qemu-host/qemu-pebble
+          file "$qemu" | tee time2/p0a-qemu-host/file.txt
+          ldd "$qemu" | tee time2/p0a-qemu-host/ldd.txt
+          printf '%s\n' "$SDK_VERSION" > time2/p0a-qemu-host/sdk-version.txt
+          sha256sum time2/p0a-qemu-host/qemu-pebble > time2/p0a-qemu-host/SHA256SUMS
+          (cd time2/p0a-qemu-host && sha256sum -c SHA256SUMS)
+      - name: Share tool executable for isolated local testing only
+        uses: actions/upload-artifact@v4
+        with:
+          name: time2-p0a-upstream-linux-qemu-host
+          path: |
+            time2/p0a-qemu-host/qemu-pebble
+            time2/p0a-qemu-host/file.txt
+            time2/p0a-qemu-host/ldd.txt
+            time2/p0a-qemu-host/sdk-version.txt
+            time2/p0a-qemu-host/SHA256SUMS
+          if-no-files-found: error

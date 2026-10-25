@@ -24,12 +24,11 @@ import androidx.compose.ui.unit.sp
 
 /**
  * First-launch opt-in walkthrough: system roles/settings cannot be auto-granted.
- * All privileges are optional. Only the dedicated badges build can request notification access.
+ * All privileges are optional. Notification access requires explicit Android consent.
  */
 @Composable
 internal fun PianoSetupDialog(
     language: String,
-    badgesSupported: Boolean,
     notificationEnabled: Boolean,
     onNotification: () -> Unit,
     weatherEnabled: Boolean,
@@ -63,18 +62,16 @@ internal fun PianoSetupDialog(
                 SetupStep("01", t("DEFAULT HOME", "ГЛАВНЫЙ ЭКРАН"),
                     t("Choose orangre piano as Home", "Выбрать orangre piano"), onHome)
                 HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
-                if (badgesSupported) {
-                    SetupStep("•", t("NOTIFICATION BADGES", "СЧЁТЧИКИ УВЕДОМЛЕНИЙ"),
-                        if (notificationEnabled) t("ACCESS ✓", "ДОСТУП ✓")
-                        else t("Open permission settings", "Разрешить доступ"),
-                        onNotification
-                    )
-                    Text(t(
-                        "Android requires your consent. Direct browser downloads may be blocked by Play Protect.",
-                        "Android запросит согласие. Play Защита может блокировать загрузки расширенной версии из браузера."
-                    ), fontSize = 10.sp, color = PianoTone.secondary, lineHeight = 13.sp)
-                    HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
-                }
+                SetupStep("•", t("NOTIFICATION BADGES", "СЧЁТЧИКИ УВЕДОМЛЕНИЙ"),
+                    if (notificationEnabled) t("ACCESS ✓", "ДОСТУП ✓")
+                    else t("Open permission settings", "Разрешить доступ"),
+                    onNotification
+                )
+                Text(t(
+                    "Android requires your consent. Internet-downloaded APKs with notification access may be blocked by Play Protect.",
+                    "Android запросит согласие. Play Защита может блокировать APK из браузера с таким доступом."
+                ), fontSize = 10.sp, color = PianoTone.secondary, lineHeight = 13.sp)
+                HorizontalDivider(color = PianoTone.border.copy(alpha = .18f))
                 SetupStep("02", t("LOCAL WEATHER", "ПОГОДА"),
                     if (weatherEnabled) t("LOCATION ✓", "ГЕОЛОКАЦИЯ ✓")
                     else t("Allow approximate location", "Разрешить примерную геолокацию"), onLocation)

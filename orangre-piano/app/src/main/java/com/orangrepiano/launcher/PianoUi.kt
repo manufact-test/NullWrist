@@ -90,11 +90,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
@@ -106,6 +108,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -138,10 +141,9 @@ private fun tr(lang: String, en: String, ru: String): String = if (lang == "ru")
 fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     val context = LocalContext.current
     val prefs = remember { LauncherPrefs(context) }
-    val badgesSupported = BuildConfig.BADGES_SUPPORTED
-    var notificationEnabled by remember { mutableStateOf(
-        badgesSupported && pianoHasNotificationAccess(context)
-    ) }
+    var notificationEnabled by remember {
+        mutableStateOf(pianoHasNotificationAccess(context))
+    }
     val notifications = PianoNotificationCounts.counts
     val scope = rememberCoroutineScope()
     val weatherRepo = remember(context) { PianoWeatherRepository(context) }
@@ -275,7 +277,7 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
             if (event == Lifecycle.Event.ON_RESUME) {
                 installed = installedApps(context)
                 favorites = prefs.favorites
-                if (badgesSupported) notificationEnabled = pianoHasNotificationAccess(context)
+                notificationEnabled = pianoHasNotificationAccess(context)
                 locationEnabled = weatherRepo.hasLocationPermission()
                 cameraEnabled = ContextCompat.checkSelfPermission(
                     context, Manifest.permission.CAMERA
@@ -463,7 +465,6 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                         onChooseWallet = { showQuickChooser("wallet") },
                         onChoosePhone = { showQuickChooser("phone") },
                         onWeather = { refreshWeather(force = true) },
-                        badgesSupported = badgesSupported,
                         notificationEnabled = notificationEnabled,
                         onNotificationAccess = { pianoOpenNotificationAccess(context) }
                     )
@@ -474,7 +475,6 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
         if (showSetup) {
             PianoSetupDialog(
                 language = language,
-                badgesSupported = badgesSupported,
                 notificationEnabled = notificationEnabled,
                 onNotification = { pianoOpenNotificationAccess(context) },
                 weatherEnabled = locationEnabled,
@@ -898,20 +898,48 @@ private fun DrawerPage(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(9.dp)
         ) {
-            OutlinedTextField(
-                value = filter, onValueChange = onFilter, singleLine = true,
-                label = { Text(tr(language, "Search / type to filter", "Поиск по названию"), fontSize = 12.sp) },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(13.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PianoTone.peach,
-                    unfocusedBorderColor = PianoTone.border.copy(alpha = .50f),
-                    focusedTextColor = PianoTone.pearl,
-                    unfocusedTextColor = PianoTone.pearl,
-                    focusedLabelColor = PianoTone.peach,
-                    unfocusedLabelColor = PianoTone.secondary,
-                    cursorColor = PianoTone.peach
-                )
+            var searchFocused by remember { mutableStateOf(false) }
+            val searchShape = RoundedCornerShape(11.dp)
+            BasicTextField(
+                value = filter,
+                onValueChange = onFilter,
+                singleLine = true,
+                textStyle = TextStyle(
+                    color = PianoTone.pearl,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp
+                ),
+                cursorBrush = SolidColor(PianoTone.peach),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp)
+                    .onFocusChanged { searchFocused = it.isFocused }
+                    .clip(searchShape)
+                    .background(Color(0x44352A28))
+                    .border(
+                        width = 1.dp,
+                        color = if (searchFocused) PianoTone.peach
+                            else PianoTone.border.copy(alpha = .65f),
+                        shape = searchShape
+                    )
+                    .padding(horizontal = 12.dp),
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (filter.isEmpty()) {
+                            Text(
+                                tr(language, "Search apps", "Поиск приложений"),
+                                color = PianoTone.secondary,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                maxLines = 1
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
             )
             PianoSquareButton(
                 icon = PianoIcon.Back,
@@ -1013,7 +1041,6 @@ private fun SettingsPage(
     onChooseWallet: () -> Unit,
     onChoosePhone: () -> Unit,
     onWeather: () -> Unit,
-    badgesSupported: Boolean,
     notificationEnabled: Boolean,
     onNotificationAccess: () -> Unit
 ) {
@@ -1109,25 +1136,23 @@ private fun SettingsPage(
         TextButton(onClick = onWeather) {
             Text(tr(language, "UPDATE WEATHER / LOCATION", "ОБНОВИТЬ ПОГОДУ"), color = Orange)
         }
-        if (badgesSupported) {
-            TextButton(onClick = onNotificationAccess) {
-                Text(tr(language,
-                    if (notificationEnabled) "NOTIFICATION COUNTS: ENABLED" else "ENABLE NOTIFICATION COUNTS",
-                    if (notificationEnabled) "СЧЁТЧИКИ: ВКЛЮЧЕНЫ" else "ВКЛЮЧИТЬ СЧЁТЧИКИ"
-                ), color = Orange)
-            }
+        TextButton(onClick = onNotificationAccess) {
             Text(tr(language,
-                "Android requires explicit Notification Access. Counts are derived on-device; message content is never stored.",
-                "Android потребует разрешить доступ к уведомлениям. Счётчики вычисляются на устройстве, сообщения не сохраняются."
-            ), fontSize = 10.sp, color = Subtle)
+                if (notificationEnabled) "NOTIFICATION COUNTS: ENABLED" else "ENABLE NOTIFICATION COUNTS",
+                if (notificationEnabled) "СЧЁТЧИКИ: ВКЛЮЧЕНЫ" else "ВКЛЮЧИТЬ СЧЁТЧИКИ"
+            ), color = Orange)
         }
+        Text(tr(language,
+            "Android requires explicit Notification Access. Counts are derived on-device; message content is never stored.",
+            "Android потребует разрешить доступ к уведомлениям. Счётчики вычисляются на устройстве, сообщения не сохраняются."
+        ), fontSize = 10.sp, color = Subtle)
         TextButton(onClick = onSetup) {
             Text(tr(language, "FIRST-RUN SETUP", "ПЕРВОНАЧАЛЬНАЯ НАСТРОЙКА"), color = Orange)
         }
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · atelier edition 1.1.2", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · atelier edition 1.1.3", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

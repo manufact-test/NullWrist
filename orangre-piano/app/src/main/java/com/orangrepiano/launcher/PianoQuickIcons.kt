@@ -128,24 +128,26 @@ internal fun PianoSquareButton(
                         join = androidx.compose.ui.graphics.StrokeJoin.Round))
                 }
                 PianoIcon.Wallet -> {
-                    // A *single round coin*, with a light second rim and pixel-scale
-                    // central piano mark. Nothing rectangular or wallet-shaped.
-                    drawCircle(
-                        color = foreground, radius = w * .375f,
-                        center = Offset(w * .50f, h * .50f),
-                        style = Stroke(stroke)
+                    // Pure currency glyph: a balanced copper $ stroke, no surrounding coin.
+                    val dollar = Path().apply {
+                        moveTo(w * .72f, h * .28f)
+                        cubicTo(w * .62f, h * .17f, w * .34f, h * .17f, w * .27f, h * .35f)
+                        cubicTo(w * .20f, h * .51f, w * .49f, h * .50f, w * .60f, h * .55f)
+                        cubicTo(w * .79f, h * .61f, w * .76f, h * .78f, w * .62f, h * .83f)
+                        cubicTo(w * .46f, h * .90f, w * .29f, h * .82f, w * .23f, h * .74f)
+                    }
+                    drawPath(
+                        path = dollar, color = foreground,
+                        style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                            join = androidx.compose.ui.graphics.StrokeJoin.Round)
                     )
-                    drawCircle(
-                        color = foreground.copy(alpha = .50f), radius = w * .290f,
-                        center = Offset(w * .50f, h * .50f),
-                        style = Stroke(stroke * .60f)
+                    drawLine(
+                        color = foreground,
+                        start = Offset(w * .50f, h * .09f),
+                        end = Offset(w * .50f, h * .93f),
+                        strokeWidth = stroke * .91f,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
                     )
-                    segment(.35f, .34f, .35f, .66f)
-                    segment(.35f, .34f, .56f, .34f)
-                    segment(.56f, .34f, .56f, .66f)
-                    segment(.35f, .66f, .56f, .66f)
-                    segment(.44f, .35f, .44f, .48f)
-                    segment(.50f, .35f, .50f, .48f)
                 }
                 PianoIcon.Flashlight -> {
                     val head = Path().apply {

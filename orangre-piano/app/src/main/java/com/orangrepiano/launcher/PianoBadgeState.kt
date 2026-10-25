@@ -8,7 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
-/** Shared presentation state; no notification listener exists in the standard APK. */
+/** Notification badge state, updated only by the user-authorized system listener. */
 internal object PianoNotificationCounts {
     var counts by mutableStateOf<Map<String, Int>>(emptyMap())
         private set
@@ -21,7 +21,6 @@ internal object PianoNotificationCounts {
 }
 
 internal fun pianoHasNotificationAccess(context: Context): Boolean {
-    if (!BuildConfig.BADGES_SUPPORTED) return false
     val allowed = Settings.Secure.getString(
         context.contentResolver, "enabled_notification_listeners"
     ) ?: return false
@@ -31,7 +30,6 @@ internal fun pianoHasNotificationAccess(context: Context): Boolean {
 }
 
 internal fun pianoOpenNotificationAccess(context: Context) {
-    if (!BuildConfig.BADGES_SUPPORTED) return
     val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     try { context.startActivity(intent) }

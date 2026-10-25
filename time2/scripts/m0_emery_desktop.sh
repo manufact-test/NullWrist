@@ -64,6 +64,10 @@ python3 "$REPO_ROOT/time2/scripts/verify_emery_privilege_fix.py" --source "$LAB/
   --disassembly-dir "$LOGS/disassembly"
 echo "=== Recording the official QEMU launch arguments ==="
 pbl qemu --dry-run > "$LOGS/launch-command.txt" 2>&1
+echo "=== Generating QEMU micro/SPI flash targets explicitly ==="
+# pbl build alone links pebbleos.elf but does not guarantee these images.
+# The integration harness requires both targets before it can boot.
+pbl build qemu_image_micro qemu_image_spi 2>&1 | tee "$LOGS/flash-images-build.log"
 echo "=== Exporting independently reproducible Emery development firmware images ==="
 mkdir -p "$LOGS/firmware"
 for item in pebbleos.elf qemu_micro_flash.bin qemu_spi_flash.bin; do

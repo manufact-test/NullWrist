@@ -1,6 +1,6 @@
 {
   "captured_at": "2026-10-25",
-  "status": "P0-A source-pinned recovery candidate; Linux PBW Gate A and physical Titan 2 Gate B NOT YET VERIFIED",
+  "status": "P0-A Linux: official Emery fixed-source firmware builds; 4/4 upstream QEMU smoke; 3/3 original PBWs run 60 seconds and relaunch after SPI restart locally. Worker execution and P0-B Titan hardware NOT VERIFIED.",
   "pebbleos": {
     "repository": "https://github.com/coredevices/PebbleOS",
     "sha": "3b69e4b894d299c98ace176f3a5e40cdb786e905",
@@ -15,7 +15,7 @@
     "branch": "pebble-10.1",
     "machine": "pebble-emery",
     "cpu": "cortex-m33",
-    "notes": "Keep previously boot-verified pinned QEMU revision for initial recovery. Compatibility with fixed PebbleOS still requires CI integration evidence."
+    "notes": "SDK host QEMU 10.1.5-pebble19 validated against official fixed-source Emery; Android ARM64 QEMU remains pinned at prior boot-verified revision, requires physical Titan 2 testing."
   },
   "pebbleos_sdk": {
     "repository": "https://github.com/coredevices/PebbleOS-SDK",
@@ -25,5 +25,16 @@
     "release_tag": "v0.1.11",
     "installer_sha256": "ff5a6dcf1394c8040bd67e5da66314b1aff5f8f07b2acaac4d501d3c249dfcfa",
     "linux_x86_64_archive_sha256": "27e605f9a4801866f04a35f7d29a71a3e7ee1ff82e18ac12837b991f69137e45"
+  },
+  "p0a_linux_evidence": {
+    "firmware_run_id": 40229846534,
+    "firmware_run_commit": "843b101cb8589916b63b50856e87a844ac276614",
+    "firmware_sha256": "82c040d2ec3fe98963289aca07c31493e56d9ee6a323d07f3179cd17d65b4295",
+    "micro_flash_sha256": "3ea9fdcfebb552f5ae8aeb398ab2ce04bcf1f3a40baeb90e6a9d1481b11386b7",
+    "spi_flash_sha256": "94bd2ced51295050af0fd401863495680e0e7fcf10d0ff3c308611fb4cd86312",
+    "sdk_linux_qemu_sha256": "9a44c46dcf45820b5896426f9c127ab31ad3980f4bb1f23392419e414a5ccc4b",
+    "sdk_linux_qemu_version": "10.1.5-pebble19",
+    "private_pbw_results": "3/3 installed, 60s screenshots and matching AppRunState; flash relaunch 3/3; worker-specific execution not yet tested",
+    "reproducibility_note": "Input revisions are pinned; distinct source-identical Linux firmware builds produced different ELF SHA256 because of ELF build-id and non-functional debug-section bytes. This field pins the exact artifact used for Android lab."
   }
 }

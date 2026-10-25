@@ -40,9 +40,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mkdir -p time2/lab-input/native time2/lab-input/firmware
+          mkdir -p time2/lab-input/native time2/lab-input/firmware time2/lab-input/evidence
           gh run download 39699350838 -R "$GITHUB_REPOSITORY" -n time2-emery-native-experiment -D time2/lab-input/native
-          gh run download 39602123890 -R "$GITHUB_REPOSITORY" -n time2-emery-desktop-firmware -D time2/lab-input/firmware
+          # Fixed-source build, verified with three original PBWs on Linux (device testing still required).
+          gh run download 40229846534 -R "$GITHUB_REPOSITORY" -n time2-emery-fixed-source-p0a-firmware -D time2/lab-input/firmware
+          gh run download 40229846534 -R "$GITHUB_REPOSITORY" -n time2-emery-fixed-source-p0a-evidence -D time2/lab-input/evidence
       - name: Verify SHA256 and stage independent debug build
         run: |
           set -euo pipefail
@@ -62,11 +64,24 @@ jobs:
             cp "$origin" "$dest_assets/$item"
           done
           ( cd "$dest_assets"; sha256sum --check SHA256SUMS )
-          # The archived emulator ELF has a known app-entry privilege bug:
-          # it reads a kernel pointer after switching CONTROL.nPRIV.
-          # Fail closed unless its SHA and exact machine bytes are pinned.
-          python3 time2/scripts/patch_emery_guest_entry.py "$dest_assets/pebbleos.elf"
-          ( cd "$dest_assets"; sha256sum pebbleos.elf qemu_spi_flash.bin qemu_micro_flash.bin > SHA256SUMS )
+          # Source-built official privilege fix ONLY. No ELF trampoline and no MPU bypass.
+          python3 - <<'PY'
+          import hashlib,json,pathlib,sys
+          base=pathlib.Path('time2/lab-input')
+          lock=json.loads(pathlib.Path('time2/upstream.lock.json').read_text())
+          proof=lock['p0a_linux_evidence']
+          report=json.loads((base/'evidence/privilege-elf.json').read_text())
+          revision=(base/'evidence/pebbleos-revision.txt').read_text().strip()
+          assert revision==lock['pebbleos']['sha'], 'PebbleOS source SHA mismatch'
+          assert report['firmware']['elf_sha256']==proof['firmware_sha256'], 'ELF provenance mismatch'
+          assert len(report['checks'])==2 and all(x['result']=='pass' for x in report['checks']), 'privilege check incomplete'
+          firmware=pathlib.Path('time2/app/src/main/assets/emery')
+          for name,key in [('pebbleos.elf','firmware_sha256'),('qemu_micro_flash.bin','micro_flash_sha256'),('qemu_spi_flash.bin','spi_flash_sha256')]:
+              digest=hashlib.sha256((firmware/name).read_bytes()).hexdigest()
+              assert digest==proof[key], name+' differs from pinned evidence'
+          (firmware/'source-provenance.json').write_text(json.dumps({'pebbleos_sha':revision,'qemu_sha':lock['qemu']['sha'],'sdk':lock['pebbleos_sdk']['version'],'fixed_source_run':proof['firmware_run_id'],'firmware_sha256':proof['firmware_sha256'],'device_status':'NOT VERIFIED ON TITAN 2'},indent=2)+'\\n')
+          print('PASS: fixed-source firmware, both usermode wrappers, pinned checksums')
+          PY
           ( cd "$dest_assets"; sha256sum --check SHA256SUMS )
           file "$dest_native/libnullwrist_emery_qemu.so"
           ls -lh "$dest_assets" "$dest_native"
@@ -78,7 +93,7 @@ jobs:
       - name: Publish test-only APK
         uses: actions/upload-artifact@v4
         with:
-          name: nullwrist-time2-0.7.0-emery-device-lab-debug
+          name: nullwrist-time2-fixed-source-emery-device-lab-debug
           path: |
             time2/app/build/outputs/apk/debug/app-debug.apk
             time2/app/build/outputs/apk/debug/SHA256SUMS

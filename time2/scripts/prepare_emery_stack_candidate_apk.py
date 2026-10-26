@@ -25,7 +25,7 @@ def sha(data):
 
 def strip_apk_v2(data):
     marker=b"APK Sig Block 42"
-    pos=data.rfind(b"PK\\x05\\x06",max(0,len(data)-65557))
+    pos=data.rfind(b"PK\x05\x06",max(0,len(data)-65557))
     if pos<0 or pos+22>len(data):raise ValueError("Malformed APK EOCD")
     comment=struct.unpack_from("<H",data,pos+20)[0]
     if pos+22+comment != len(data):raise ValueError("APK EOCD comment invalid")
@@ -65,13 +65,13 @@ def prepare(base,source,out):
             if fields[0]!=OFFICIAL_ELF_SHA:raise ValueError("Firmware manifest mismatch")
             line=CANDIDATE_ELF_SHA+"  pebbleos.elf"
         converted.append(line)
-    entries[sums]=("\\n".join(converted)+"\\n").encode()
+    entries[sums]=("\n".join(converted)+"\n").encode()
     meta=json.loads(entries[provenance])
     meta.update(firmware_sha256=CANDIDATE_ELF_SHA,
                 variant="EXPERIMENTAL emery legacy 3.x 4KiB app stack, not a production fix",
                 candidate_source_run=RUN_ID,mpu="unchanged",
                 user_spi_storage="must preserve existing Android private qemu_spi_flash.bin")
-    entries[provenance]=(json.dumps(meta,indent=2,sort_keys=True)+"\\n").encode()
+    entries[provenance]=(json.dumps(meta,indent=2,sort_keys=True)+"\n").encode()
     out.parent.mkdir(parents=True,exist_ok=True)
     with zipfile.ZipFile(out,"w",allowZip64=False) as target:
         for filename,body in entries.items():

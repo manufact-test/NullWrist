@@ -454,7 +454,7 @@ public final class EmeryRuntime {
         if(assets==null)return;
         File log=new File(assets.root,"emery-host.log");
         try(FileOutputStream out=new FileOutputStream(log,true)){
-            out.write((System.currentTimeMillis()+" STORAGE: "+detail+"\\n")
+            out.write((System.currentTimeMillis()+" STORAGE: "+detail+System.lineSeparator())
                     .getBytes(StandardCharsets.UTF_8));
             out.getFD().sync();
         }catch(IOException ignored){}

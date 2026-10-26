@@ -84,7 +84,7 @@ public final class EmeryQmpClient implements Closeable {
         // Some QEMU builds close the socket immediately after accepting quit.
         // The process termination (not just a JSON reply) is authoritative.
         try {
-            request("{\\"execute\\":\\"quit\\"}");
+            request(EmeryQmpCommands.quit());
         } catch(IOException disconnected) {
             if(socket.isConnected() && !closed) {
                 // The caller waits for actual Process termination and retains

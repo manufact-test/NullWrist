@@ -73,7 +73,7 @@ public final class EmeryAssets {
             throw new IOException("SPI image size differs from original; preserving existing data");
         if(!initialized.exists()){
             try(FileOutputStream marker=new FileOutputStream(initialized)){
-                marker.write("nullwrist-time2-spi-v1\\n".getBytes(StandardCharsets.UTF_8));
+                marker.write("nullwrist-time2-spi-v1\n".getBytes(StandardCharsets.UTF_8));
                 marker.getFD().sync();
             }
         }

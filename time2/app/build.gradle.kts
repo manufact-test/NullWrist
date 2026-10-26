@@ -7,8 +7,8 @@ android {
         applicationId = "com.manufacttest.nullwrist.time2"
         minSdk = 35
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.8.0-persistence-lab"
+        versionCode = 10
+        versionName = "0.8.1-spi-guardian-lab"
         testInstrumentationRunner = "android.test.InstrumentationTestRunner"
     }
     buildTypes {

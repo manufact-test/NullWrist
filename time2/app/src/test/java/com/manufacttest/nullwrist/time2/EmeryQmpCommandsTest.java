@@ -4,6 +4,9 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class EmeryQmpCommandsTest {
+    @Test public void qmpQuitMustBeSingleValidJsonCommand(){
+        assertEquals("{\\\"execute\\\":\\\"quit\\\"}",EmeryQmpCommands.quit());
+    }
     @Test public void mapsEachButtonToPebbleKey() {
         assertTrue(EmeryQmpCommands.button(EmeryQmpCommands.Button.BACK).contains("\"left\""));
         assertTrue(EmeryQmpCommands.button(EmeryQmpCommands.Button.SELECT).contains("\"right\""));

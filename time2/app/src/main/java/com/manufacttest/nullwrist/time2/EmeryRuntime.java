@@ -245,6 +245,8 @@ public final class EmeryRuntime {
                 if(appLink==null)throw new IOException("Pebble UART unavailable: "+last);
                 EmeryPbwInstaller installer=new EmeryPbwInstaller(appLink,this::emit);
                 EmeryInstallLedger ledger=new EmeryInstallLedger(context);
+                EmeryGuestFaultMonitor faults=new EmeryGuestFaultMonitor(
+                        new File(assets.root,"emery-debug-uart2.bin"));
                 String oldError=pref.getString("last_operation_error",null);
                 if(oldError!=null && oldError.contains("QEMU serial body was not received"))
                     pref.edit().remove("last_operation_error").apply();
@@ -284,6 +286,12 @@ public final class EmeryRuntime {
                     String chosen=pref.getString("pending_uuid",null);
                     if(deleting==null && chosen==null){
                         appLink.serviceOnce(1);
+                        String fault=faults.nextFault();
+                        if(fault!=null){
+                            // Never show a crashed game as healthy just because
+                            // it once returned RUNNING_STABLE.
+                            emit("PEBBLE APP TASK FAILED: guest "+fault);
+                        }
                         continue;
                     }
                     try{

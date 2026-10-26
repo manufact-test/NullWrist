@@ -4,8 +4,10 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class EmeryQmpCommandsTest {
-    @Test public void qmpQuitMustBeSingleValidJsonCommand(){
-        assertEquals("{\\\"execute\\\":\\\"quit\\\"}",EmeryQmpCommands.quit());
+    @Test public void qmpQuitMustBeSingleValidJsonCommand() throws Exception {
+        org.json.JSONObject parsed=new org.json.JSONObject(EmeryQmpCommands.quit());
+        assertEquals("quit",parsed.getString("execute"));
+        assertEquals(1,parsed.length());
     }
     @Test public void mapsEachButtonToPebbleKey() {
         assertTrue(EmeryQmpCommands.button(EmeryQmpCommands.Button.BACK).contains("\"left\""));

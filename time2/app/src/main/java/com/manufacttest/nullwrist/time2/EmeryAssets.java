@@ -60,9 +60,23 @@ public final class EmeryAssets {
             atomicInstall(context,ROOT+ELF,elf,requiredHash(expected,ELF));
         }
         File spi=new File(privateRoot,SPI);
-        if (!spi.isFile()) atomicInstall(context,ROOT+SPI,spi,requiredHash(expected,SPI));
-        if (!spi.isFile() || spi.length() <= 0 || spi.length() > MAX_ASSET_BYTES)
-            throw new IOException("Invalid writable SPI storage");
+        // Never silently replace an existing user's flash just because the file
+        // was lost/corrupted during update or external cleanup.
+        File initialized=new File(privateRoot,"spi-initialized.marker");
+        if(!spi.isFile()){
+            if(initialized.isFile())throw new IOException(
+                    "Emery SPI missing after prior use; refusing automatic reset. Restore your backup.");
+            atomicInstall(context,ROOT+SPI,spi,requiredHash(expected,SPI));
+        }
+        long expectedSize=32L*1024*1024; // qemu_emery flash layout fixed to 32 MiB
+        if(!spi.isFile() || spi.length()!=expectedSize)
+            throw new IOException("SPI image size differs from original; preserving existing data");
+        if(!initialized.exists()){
+            try(FileOutputStream marker=new FileOutputStream(initialized)){
+                marker.write("nullwrist-time2-spi-v1\\n".getBytes(StandardCharsets.UTF_8));
+                marker.getFD().sync();
+            }
+        }
 
         return new Staged(privateRoot,qemu,elf,spi,
                 new File(privateRoot,"emery-fb-v2.bin"),

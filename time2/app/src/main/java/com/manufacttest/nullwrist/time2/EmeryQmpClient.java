@@ -79,6 +79,20 @@ public final class EmeryQmpClient implements Closeable {
         }
     }
 
+    /** QEMU shutdown protocol, not a SIGTERM. Call on the sole QMP worker. */
+    public synchronized void quit() throws IOException {
+        // Some QEMU builds close the socket immediately after accepting quit.
+        // The process termination (not just a JSON reply) is authoritative.
+        try {
+            request("{\\"execute\\":\\"quit\\"}");
+        } catch(IOException disconnected) {
+            if(socket.isConnected() && !closed) {
+                // The caller waits for actual Process termination and retains
+                // the raw flash backing file in all failure cases.
+            }
+        }
+    }
+
     private JSONObject readJsonLine() throws IOException {
         // Bound a single line to protect against corrupted/malicious output.
         StringBuilder line = new StringBuilder();

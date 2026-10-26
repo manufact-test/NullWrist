@@ -116,6 +116,10 @@ public final class EmeryRuntime {
                 builder.environment().put("PEBBLE_EMERY_FB_PATH",assets.frame.getAbsolutePath());
                 // Do not expose QMP or serial on 0.0.0.0.
                 if(closing) return;
+                // Keep the pre-boot user flash intact even if the guest crashes.
+                // Checkpoints never overwrite the guest image or restore silently.
+                new EmerySpiGuardian(assets.spi).beforeBoot();
+                emit("SPI pre-boot checkpoint: "+EmerySpiGuardian.digest(assets.spi));
                 emit("Booting genuine PebbleOS / Emery...");
                 process=builder.start();
 
@@ -391,23 +395,50 @@ public final class EmeryRuntime {
 
     private void shutdownProcess(){
         connected=false;
+        Process p=process;
+        boolean qemuQuit=false;
+        if(qmp!=null && p!=null && p.isAlive()){
+            try{
+                // Flush block devices by asking QEMU to quit first.
+                // Force-kill only as a safety fallback after timeout.
+                qmp.quit();
+                qemuQuit=p.waitFor(7,TimeUnit.SECONDS);
+            }catch(InterruptedException stop){
+                Thread.currentThread().interrupt();
+            }catch(IOException error){
+                recordShutdown("QMP quit transport: "+error.getMessage());
+            }
+        }
         if(qmp!=null){
             try{qmp.close();}catch(IOException ignored){}
             qmp=null;
         }
-        Process p=process;
         if(p!=null){
-            p.destroy();
             try{
-                if(!p.waitFor(3,TimeUnit.SECONDS)){
-                    p.destroyForcibly();
-                    p.waitFor(2,TimeUnit.SECONDS);
+                if(p.isAlive()){
+                    recordShutdown("QEMU did not quit cleanly, falling back to SIGTERM");
+                    p.destroy();
+                    if(!p.waitFor(4,TimeUnit.SECONDS)){
+                        p.destroyForcibly();
+                        p.waitFor(2,TimeUnit.SECONDS);
+                    }
                 }
-            } catch(InterruptedException interrupted){
+            }catch(InterruptedException stopped){
                 Thread.currentThread().interrupt();
                 p.destroyForcibly();
             }
             process=null;
+            if(assets!=null && !p.isAlive()){
+                try{
+                    if(qemuQuit){
+                        new EmerySpiGuardian(assets.spi).afterCleanStop();
+                        recordShutdown("QMP exit and SPI clean-stop checkpoint: "+
+                                EmerySpiGuardian.digest(assets.spi));
+                    }else recordShutdown("Unclean QEMU exit: preserving pre-boot SPI checkpoint");
+                }catch(IOException checkpointError){
+                    recordShutdown("SPI checkpoint error: "+checkpointError.getMessage());
+                }
+            }
         }
         // Only unlink after the process is gone, never while still live.
         if(assets!=null && (p==null||!p.isAlive())){
@@ -417,6 +448,16 @@ public final class EmeryRuntime {
             ownsSession=false;
             SESSION_ACTIVE.set(false);
         }
+    }
+
+    private void recordShutdown(String detail){
+        if(assets==null)return;
+        File log=new File(assets.root,"emery-host.log");
+        try(FileOutputStream out=new FileOutputStream(log,true)){
+            out.write((System.currentTimeMillis()+" STORAGE: "+detail+"\\n")
+                    .getBytes(StandardCharsets.UTF_8));
+            out.getFD().sync();
+        }catch(IOException ignored){}
     }
 
     private void emit(String text){

@@ -15,7 +15,9 @@ public final class EmeryQmpCommands {
     public enum TouchPhase { DOWN, MOVE, UP, CANCEL }
     public enum Button { BACK, UP, SELECT, DOWN }
 
-    public static String quit(){return "{\\\"execute\\\":\\\"quit\\\"}";}\n\n    public static String capabilities() {
+    public static String quit(){return "{\"execute\":\"quit\"}";}
+
+    public static String capabilities() {
         return "{\"execute\":\"qmp_capabilities\"}";
     }
 

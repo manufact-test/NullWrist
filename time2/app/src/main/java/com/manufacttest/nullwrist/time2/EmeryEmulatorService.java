@@ -75,6 +75,12 @@ public final class EmeryEmulatorService extends Service {
                 .addAction(new Notification.Action.Builder(null,"STOP",stop).build())
                 .build();
         startForeground(NOTIFICATION_ID,note,ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        if(runtime!=null && runtime.isTerminal()){
+            runtime.close(); // terminal; does not touch a new QMP socket
+            runtime=null;
+            lastFrame=null;
+            lastStatus="Restarting Emery after a completed guest exit";
+        }
         if(runtime==null){
             runtime=new EmeryRuntime(getApplicationContext(),new EmeryRuntime.Listener(){
                 @Override public void status(String message){

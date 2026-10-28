@@ -37,9 +37,11 @@ public final class RearActivity extends Activity {
     private EmulatorSurfaceView surface;
     private EmeryEmulatorService service;
     private boolean bound;
+    private boolean bindingRequested;
     private final android.content.ServiceConnection serviceConnection=new android.content.ServiceConnection(){
         @Override public void onServiceConnected(android.content.ComponentName name,
                                                   android.os.IBinder binder){
+            if(!bindingRequested)return;
             service=((EmeryEmulatorService.LocalBinder)binder).getService();
             bound=true;
             service.addListener(uiListener);
@@ -117,10 +119,29 @@ public final class RearActivity extends Activity {
         }
         // Explicit user launch creates one foreground service; closing or
         // switching displays detaches the UI without terminating PebbleOS.
+
+    }
+
+    @Override protected void onStart(){
+        super.onStart();
+        if(surface==null || !EmeryAssets.isBundled(this))return;
+        // Foreground service stays alive across display handoff, but a
+        // terminal guest may be deliberately restarted on return to the UI.
         android.content.Intent intent=new android.content.Intent(this,EmeryEmulatorService.class);
         intent.setAction(EmeryEmulatorService.ACTION_START);
         startForegroundService(intent);
-        bindService(intent,serviceConnection,BIND_AUTO_CREATE);
+        if(!bindingRequested){
+            bindingRequested=bindService(intent,serviceConnection,BIND_AUTO_CREATE);
+        }
+    }
+
+    @Override protected void onStop(){
+        if(service!=null)service.removeListener(uiListener);
+        if(bindingRequested)unbindService(serviceConnection);
+        bindingRequested=false;
+        bound=false;
+        service=null;
+        super.onStop();
     }
 
     /** Only the advanced diagnostic mode shows any Android buttons. */
@@ -190,9 +211,9 @@ public final class RearActivity extends Activity {
     @Override protected void onDestroy(){
         handler.removeCallbacks(gestureTimeout);
         if(gestures!=null)gestures.reset();
-        if(bound && service!=null)service.removeListener(uiListener);
-        if(bound)unbindService(serviceConnection);
-        bound=false;service=null;
+        if(service!=null)service.removeListener(uiListener);
+        if(bindingRequested)unbindService(serviceConnection);
+        bindingRequested=false;bound=false;service=null;
         super.onDestroy();
     }
 

@@ -37,6 +37,8 @@ public final class EmeryRuntime {
     private volatile boolean ownsSession;
     private final AtomicBoolean displayRefreshQueued=new AtomicBoolean(false);
     private volatile boolean closing;
+    private volatile boolean terminal;
+    private final EmeryQmpFailureGate refreshGate=new EmeryQmpFailureGate(3);
     private volatile Runnable gracefulStopCompletion;
     private volatile boolean connected;
     private volatile Process process;
@@ -52,6 +54,7 @@ public final class EmeryRuntime {
         this.listener=listener;
     }
     public boolean isConnected(){return connected&&!closing;}
+    public boolean isTerminal(){return terminal;}
     public static boolean isDeviceLabActive(){return SESSION_ACTIVE.get();}
 
     public void start(){
@@ -161,7 +164,12 @@ public final class EmeryRuntime {
         while(!closing){
             Process p=process;
             if(p==null || !p.isAlive()){
-                emit("Emery QEMU stopped. Check private runtime logs.");
+                if(!closing){
+                    emit("Emery QEMU stopped unexpectedly; SPI preserved. "+
+                            "Open the watch again to restart after reviewing diagnostics.");
+                    try{commands.execute(this::shutdownProcess);}
+                    catch(java.util.concurrent.RejectedExecutionException ignored){}
+                }
                 return;
             }
             try {
@@ -178,9 +186,13 @@ public final class EmeryRuntime {
                                 if(!closing && qmp!=null && connected){
                                     File ppm=new File(assets.root,"headless-frame.ppm");
                                     qmp.refreshHeadlessDisplay(ppm.getAbsolutePath());
+                                    if(refreshGate.ok())
+                                        emit("QMP display refresh recovered; guest kept running");
                                 }
                             } catch(IOException error) {
-                                emit("QMP screendump failed: "+error.getMessage());
+                                if(refreshGate.failed())
+                                    emit("QMP monitor warning: repeated refresh errors; "+
+                                            "guest preserved; "+error.getMessage());
                             } finally {
                                 displayRefreshQueued.set(false);
                             }
@@ -419,9 +431,9 @@ public final class EmeryRuntime {
         appInstallWorker.shutdownNow();
         EmeryPebbleLink serial=appLink;
         if(serial!=null)try{serial.close();}catch(IOException ignored){}
-        // If the worker is blocked in a QMP transaction, allow that bounded
-        // operation to finish and then tear down QEMU in its own worker.
-        commands.execute(this::shutdownProcess);
+        // An unexpected exit may already have finished shutdownProcess.
+        // Never run a second cleanup that could delete another session's QMP.
+        if(!terminal)commands.execute(this::shutdownProcess);
         commands.shutdown();
     }
 
@@ -482,6 +494,7 @@ public final class EmeryRuntime {
             ownsSession=false;
             SESSION_ACTIVE.set(false);
         }
+        terminal=true;
     }
 
     private void recordShutdown(String detail){

@@ -27,9 +27,15 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
+      # Ubuntu GitHub runners already provide Android cmdline-tools. The
+      # deprecated 'tools' SDK package requested by setup-android@v3 has been
+      # removed upstream, so use the installed sdkmanager directly.
+      - name: Locate Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ANDROID_HOME:?Android SDK missing from runner}"
+          command -v sdkmanager || test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
       - name: Android SDK
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - uses: gradle/actions/setup-gradle@v4

@@ -35,7 +35,9 @@ jobs:
         run: |
           set -euo pipefail
           : "${ANDROID_HOME:?Android SDK missing from runner}"
-          command -v sdkmanager || test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          sdkbin="$(find "$ANDROID_HOME/cmdline-tools" -maxdepth 4 -type f -name sdkmanager -print -quit)"
+          test -n "$sdkbin" && test -x "$sdkbin"
+          echo "$(dirname "$sdkbin")" >> "$GITHUB_PATH"
       - name: Android SDK
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - uses: gradle/actions/setup-gradle@v4

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- User-initiated local emulator requires a visible foreground service on Android 16. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/ic_nullwrist_time2"
+        android:roundIcon="@drawable/ic_nullwrist_time2"
+        android:label="NullWrist Time 2"
+        android:theme="@style/Theme.NullWristTime2"
+        android:usesCleartextTraffic="false">
+        <service android:name=".EmeryEmulatorService"
+                 android:exported="false"
+                 android:stopWithTask="false"
+                 android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                      android:value="User-initiated local PebbleOS emulator on rear display" />
+        </service>
+        <activity android:name=".RearActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

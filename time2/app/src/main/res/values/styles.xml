@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.NullWristTime2" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#08090D</item>
+        <item name="android:navigationBarColor">#08090D</item>
+        <item name="android:windowBackground">#08090D</item>
+        <item name="android:fontFamily">monospace</item>
+    </style>
+</resources>

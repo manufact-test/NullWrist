@@ -251,6 +251,7 @@ public final class EmeryRuntime {
                 if(oldError!=null && oldError.contains("QEMU serial body was not received"))
                     pref.edit().remove("last_operation_error").apply();
                 emit("Pebble serial companion connected");
+                long nextGuestStateProbe=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);
                 while(!closing && process!=null && process.isAlive() && appLink!=null){
                     Runnable completion=gracefulStopCompletion;
                     if(completion!=null){
@@ -286,6 +287,29 @@ public final class EmeryRuntime {
                     String chosen=pref.getString("pending_uuid",null);
                     if(deleting==null && chosen==null){
                         appLink.serviceOnce(1);
+                        long now=System.nanoTime();
+                        if(now>=nextGuestStateProbe){
+                            nextGuestStateProbe=now+TimeUnit.SECONDS.toNanos(8);
+                            try {
+                                byte[] query=new byte[17];query[0]=3;
+                                appLink.send(0x34,query);
+                                EmeryPebbleWire.Packet state=appLink.waitFor(0x34,2);
+                                if(EmeryGuestRunState.valid(state.payload)){
+                                    java.util.UUID active=EmeryGuestRunState.uuid(state.payload);
+                                    String current=active==null?null:active.toString();
+                                    String previous=pref.getString("guest_current_uuid",null);
+                                    android.content.SharedPreferences.Editor edit=pref.edit()
+                                        .putLong("guest_current_seen_ms",System.currentTimeMillis());
+                                    if(current==null)edit.remove("guest_current_uuid");
+                                    else edit.putString("guest_current_uuid",current);
+                                    edit.apply();
+                                    if(!java.util.Objects.equals(previous,current))
+                                        emit("Guest AppRunState: "+(current==null?"launcher":current));
+                                }
+                            }catch(IOException timeout){
+                                // A missed reply means unknown state, not an app fault.
+                            }
+                        }
                         String fault=faults.nextFault();
                         if(fault!=null){
                             // Never show a crashed game as healthy just because
@@ -331,7 +355,7 @@ public final class EmeryRuntime {
                                 pref.edit().putString("last_transferred_uuid",chosen).apply();
                             }
                             if(stable)pref.edit().putString("last_installed_uuid",chosen).apply();
-                            else emit("PBW installed but guest launch NOT confirmed: "+chosen);
+                            else emit("PBW transferred; launch not yet verified: "+chosen);
                             if(chosen.equals(pref.getString("pending_uuid",null)))
                                 pref.edit().remove("pending_uuid").commit();
                         }
@@ -403,6 +427,8 @@ public final class EmeryRuntime {
 
     private void shutdownProcess(){
         connected=false;
+        context.getSharedPreferences("time2-pbw-install",Context.MODE_PRIVATE)
+            .edit().remove("guest_current_uuid").remove("guest_current_seen_ms").apply();
         Process p=process;
         boolean qemuQuit=false;
         if(qmp!=null && p!=null && p.isAlive()){
@@ -478,11 +504,11 @@ public final class EmeryRuntime {
                     "time2-pbw-install",Context.MODE_PRIVATE);
             android.content.SharedPreferences.Editor update=prefs.edit()
                     .putString("last_operation_status",text);
-            if(text.startsWith("PEBBLE APP TASK FAILED") ||
-                    text.contains("NOT confirmed"))
+            if(text.startsWith("PEBBLE APP TASK FAILED"))
                 update.putString("last_operation_error",text);
             else if(text.startsWith("PebbleOS confirmed RUNNING_STABLE") ||
-                    text.startsWith("PebbleOS deleted watchface"))
+                    text.startsWith("PebbleOS deleted watchface") ||
+                    text.startsWith("PBW transferred; launch not yet verified"))
                 update.remove("last_operation_error");
             update.apply();
         }

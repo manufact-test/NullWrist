@@ -20,13 +20,7 @@ final class EmeryRunStateTracker {
      * A mismatch resets continuity; matching first/last must be >=10s apart.
      */
     boolean observe(byte[] response,long atNanos){
-        if(response==null || response.length<17 || response[0]!=1){
-            firstMatching=-1;matchingSamples=0;return false;
-        }
-        long high=0,low=0;
-        for(int i=1;i<9;i++)high=(high<<8)|(response[i]&255);
-        for(int i=9;i<17;i++)low=(low<<8)|(response[i]&255);
-        if(!expected.equals(new UUID(high,low))){
+        if(!expected.equals(EmeryGuestRunState.uuid(response))){
             firstMatching=-1;matchingSamples=0;return false;
         }
         if(firstMatching<0 || atNanos<firstMatching){

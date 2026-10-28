@@ -212,6 +212,8 @@ public final class EmeryPbwInstaller {
         long begin=System.nanoTime();
         long deadline=begin+java.util.concurrent.TimeUnit.SECONDS.toNanos(initialSeconds+12L);
         EmeryRunStateTracker tracker=new EmeryRunStateTracker(uuid,10);
+        UUID lastObserved=null;
+        int validResponses=0;
         byte[] query=new byte[17];query[0]=3;
         while(System.nanoTime()<deadline){
             if(Thread.currentThread().isInterrupted())
@@ -219,9 +221,10 @@ public final class EmeryPbwInstaller {
             link.send(0x34,query);
             try{
                 EmeryPebbleWire.Packet state=link.waitFor(0x34,2);
-                if(state.payload.length>=17 && state.payload[0]==1){
-                    boolean stable=tracker.observe(
-                            state.payload,System.nanoTime());
+                if(EmeryGuestRunState.valid(state.payload)){
+                    validResponses++;
+                    lastObserved=EmeryGuestRunState.uuid(state.payload);
+                    boolean stable=tracker.observe(state.payload,System.nanoTime());
                     if(stable)return true;
                 }
             }catch(IOException timeout){
@@ -233,6 +236,9 @@ public final class EmeryPbwInstaller {
                 throw new IOException("Watchface validation interrupted",stopped);
             }
         }
+        progress.update("PebbleOS: guest AppRunState probe inconclusive; target="+uuid+
+                ", valid replies="+validResponses+
+                ", last running UUID="+(lastObserved==null?"launcher/none":lastObserved));
         return false;
     }
 

@@ -160,18 +160,22 @@ public final class MainActivity extends Activity {
         info.setPadding(dp(14),0,0,0);
         content.addView(info,new LinearLayout.LayoutParams(0,-2,1));
         text(info,"YOUR PEBBLE TIME 2",10,AMBER,Gravity.START,0);
-        String lastId=getSharedPreferences("time2-pbw-install",MODE_PRIVATE)
-                .getString("last_installed_uuid","");
-        String name="Ready for a watchface";
-        for(EmeryPackageIndex.PackageInfo item:library.list()) {
-            if(item.uuid.equals(lastId)) {
-                name=item.name;break;
-            }
+        android.content.SharedPreferences guest=getSharedPreferences(
+                "time2-pbw-install",MODE_PRIVATE);
+        boolean live=EmeryGuestRunState.fresh(EmeryRuntime.isDeviceLabActive(),
+                guest.getLong("guest_current_seen_ms",0),System.currentTimeMillis());
+        String current=live?guest.getString("guest_current_uuid",null):null;
+        String previous=guest.getString("last_installed_uuid",null);
+        String name=live?(current==null?"PebbleOS launcher":"PebbleOS application")
+                :"Ready for a watchface";
+        for(EmeryPackageIndex.PackageInfo item:library.list()){
+            if(live && item.uuid.equals(current)){name=item.name;break;}
+            if(!live && item.uuid.equals(previous))name="Last confirmed: "+item.name;
         }
         text(info,name,18,WHITE,Gravity.START,8).setTypeface(Typeface.DEFAULT,Typeface.BOLD);
         text(info,"Last framebuffer snapshot",11,MUTED,Gravity.START,8);
-        text(info,"Only a guest RUNNING response confirms launch",
-                10,MUTED,Gravity.START,8);
+        text(info,live?"Current guest state observed via PebbleOS":
+                "Waiting for current guest state",10,MUTED,Gravity.START,8);
 
         // A failed install must be visible even when the rear screen still
         // displays the guest's own error dialog.
@@ -180,7 +184,11 @@ public final class MainActivity extends Activity {
         String failure=pbwState.getString("last_operation_error",null);
         String status=pbwState.getString("last_operation_status",null);
         if(failure!=null && !failure.isEmpty()) {
-            TextView warning=text(hero,failure,12,Color.rgb(255,120,92),
+            boolean unverifiedOnly=failure.contains("NOT confirmed") &&
+                    !failure.startsWith("PEBBLE APP TASK FAILED");
+            TextView warning=text(hero,unverifiedOnly?
+                    "PBW transferred; stable launch was not verified.":failure,
+                    12,unverifiedOnly?MUTED:Color.rgb(255,120,92),
                     Gravity.START,12);
             warning.setMaxLines(5);
         } else if(status!=null && !status.isEmpty()) {
@@ -238,9 +246,14 @@ public final class MainActivity extends Activity {
             copy.setPadding(0,dp(4),dp(8),dp(4));
             line.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
             text(copy,item.name,14,WHITE,Gravity.START,0);
-            String lastId=getSharedPreferences("time2-pbw-install",MODE_PRIVATE)
-                    .getString("last_installed_uuid","");
-            text(copy,item.uuid.equals(lastId)?"Last confirmed running":
+            android.content.SharedPreferences state=getSharedPreferences(
+                    "time2-pbw-install",MODE_PRIVATE);
+            boolean live=EmeryGuestRunState.fresh(EmeryRuntime.isDeviceLabActive(),
+                    state.getLong("guest_current_seen_ms",0),System.currentTimeMillis());
+            String active=live?state.getString("guest_current_uuid",null):null;
+            String lastId=state.getString("last_installed_uuid",null);
+            text(copy,item.uuid.equals(active)?"Running now in PebbleOS":
+                    item.uuid.equals(lastId)?"Previously confirmed running":
                     "Imported · choose LAUNCH / INSTALL",10,MUTED,Gravity.START,4);
             File localPbw=new File(new File(getFilesDir(),"time2/pbws"),item.uuid+".pbw");
             boolean previouslyTransferred=false;
@@ -289,6 +302,7 @@ public final class MainActivity extends Activity {
             return;
         }
         getSharedPreferences("time2-pbw-install",MODE_PRIVATE).edit()
+                .remove("last_operation_error").remove("last_operation_status")
                 .remove("pending_force_reinstall_uuid")
                 .putString("pending_uuid",item.uuid).apply();
         openWatch(false);
@@ -348,7 +362,7 @@ public final class MainActivity extends Activity {
                                     showMessage("Stopping PebbleOS","The guest process will be stopped. Only close it after saving app progress.");
                                     break;
                                 }
-                        case 5:showMessage("NullWrist Time 2 / 0.8.0-persistence-lab",
+                        case 5:showMessage("NullWrist Time 2 / 0.8.2-guest-state-lab",
                                 "Real Emery firmware display was verified on Titan 2. "
                                 +"Third-party watchface execution is still experimental. "
                                 +"Triple-tap sends Pebble SELECT. "

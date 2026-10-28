@@ -41,6 +41,37 @@ public final class MainActivity extends Activity {
     private static final int BORDER=Color.rgb(46,47,53);
     private LinearLayout layout;
     private LocalPbwLibrary library;
+    private EmulatorSurfaceView heroPreview;
+    private TextView heroFrameLabel;
+    private EmeryEmulatorService liveService;
+    private boolean liveBindingRequested;
+    private final EmeryRuntime.Listener liveListener=new EmeryRuntime.Listener(){
+        @Override public void status(String message){
+            // Android front UI is a viewer, never another QEMU owner.
+        }
+        @Override public void frame(Bitmap bitmap){
+            runOnUiThread(()->{
+                if(!isDestroyed() && heroPreview!=null){
+                    heroPreview.setFrame(bitmap);
+                    if(heroFrameLabel!=null)
+                        heroFrameLabel.setText("Live PebbleOS framebuffer");
+                }
+            });
+        }
+    };
+    private final android.content.ServiceConnection liveConnection=new android.content.ServiceConnection(){
+        @Override public void onServiceConnected(android.content.ComponentName name,
+                                                   android.os.IBinder binder){
+            if(!liveBindingRequested)return;
+            liveService=((EmeryEmulatorService.LocalBinder)binder).getService();
+            liveService.addListener(liveListener);
+        }
+        @Override public void onServiceDisconnected(android.content.ComponentName name){
+            liveService=null;
+            if(heroFrameLabel!=null)
+                heroFrameLabel.setText("Last framebuffer snapshot");
+        }
+    };
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -60,6 +91,24 @@ public final class MainActivity extends Activity {
     @Override protected void onRestart(){
         super.onRestart();
         if(library!=null)render();
+    }
+
+    @Override protected void onStart(){
+        super.onStart();
+        if(library!=null && EmeryRuntime.isDeviceLabActive() && !liveBindingRequested){
+            // BIND_AUTO_CREATE intentionally omitted; the front screen must
+            // not start a new guest just to show its preview.
+            liveBindingRequested=bindService(
+                new Intent(this,EmeryEmulatorService.class),liveConnection,0);
+        }
+    }
+
+    @Override protected void onStop(){
+        if(liveService!=null)liveService.removeListener(liveListener);
+        if(liveBindingRequested)unbindService(liveConnection);
+        liveBindingRequested=false;
+        liveService=null;
+        super.onStop();
     }
 
     private void render(){
@@ -134,6 +183,7 @@ public final class MainActivity extends Activity {
         hero.addView(content);
 
         EmulatorSurfaceView preview=new EmulatorSurfaceView(this);
+        heroPreview=preview;
         preview.setEmptyLabel("NO FRAME YET");
         // Use a real, validated *saved* Emery framebuffer, never fake a
         // watchface preview or claim that this snapshot is a live feed.
@@ -173,7 +223,7 @@ public final class MainActivity extends Activity {
             if(!live && item.uuid.equals(previous))name="Last confirmed: "+item.name;
         }
         text(info,name,18,WHITE,Gravity.START,8).setTypeface(Typeface.DEFAULT,Typeface.BOLD);
-        text(info,"Last framebuffer snapshot",11,MUTED,Gravity.START,8);
+        heroFrameLabel=text(info,"Last framebuffer snapshot",11,MUTED,Gravity.START,8);
         text(info,live?"Current guest state observed via PebbleOS":
                 "Waiting for current guest state",10,MUTED,Gravity.START,8);
 

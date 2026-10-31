@@ -122,7 +122,7 @@ internal fun PianoTodoPanel(
                     Text(
                         text = if (filled) todo.text.replace('\n', ' ')
                             else if (language == "ru") "Добавить" else "Add note",
-                        fontSize = if (compact) 10.sp else 12.sp,
+                        fontSize = if (compact) 9.5.sp else 11.sp,
                         fontWeight = if (filled) FontWeight.Medium else FontWeight.Normal,
                         color = when {
                             todo.done -> PianoTone.secondary.copy(alpha = .74f)

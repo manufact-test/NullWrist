@@ -4,6 +4,20 @@ Minimalist, text-only, orange-black Android HOME launcher designed for the squar
 
 An entirely separate Android application from NullWrist. Does not change the rear screen, Pebble runtime, or main NullWrist application.
 
+## v1.1.6 RC1 — keyboard-first search and optical spacing
+
+- The six To-Do notes use slightly smaller text (9.5sp on compact Titan 2 layouts,
+  11sp otherwise), so more of a note fits before ellipsis.
+- The glass panel's right inset, the To-Do divider-to-tile inset, and the top/bottom
+  visible tile margins are all 9.5dp; the row's 1.5dp center gap is accounted for.
+- Opening A–Z automatically gives its search field focus and asks Android to show
+  the active software keyboard. This uses the configured IME (including Plektra),
+  not a hard-coded third-party package. With physical keyboards, Android may
+  suppress the on-screen IME depending on the device's input settings.
+- Physical QWERTY search, Back/HOME gestures, hidden apps, counters and local data
+  remain intact. The HOME page does not steal focus from A–Z search anymore.
+
+
 ## v1.1.5 RC1 — launcher navigation and ATELIER finishing
 
 - The launcher activity uses a single HOME task: an Android bottom-edge **Home** gesture

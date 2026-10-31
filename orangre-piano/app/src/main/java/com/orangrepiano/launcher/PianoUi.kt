@@ -109,6 +109,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -387,7 +388,8 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
     }
 
     LaunchedEffect(page) {
-        if (page != Page.SETTINGS) {
+        // The drawer now owns keyboard focus; do not steal it with the root Box.
+        if (page == Page.HOME) {
             try { focus.requestFocus() } catch (_: Exception) { }
         }
     }
@@ -775,7 +777,9 @@ private fun PixelMotif() {
 @Composable
 private fun GlassPanel(enabled: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     PianoGlassSurface(modifier = modifier, enabled = enabled) {
-        Box(Modifier.padding(horizontal = 15.dp, vertical = 8.dp)) { content() }
+        // To-Do tiles have 1.5dp row spacing; compensate so their visible edge
+        // sits exactly 9.5dp from the panel on the right, top and bottom.
+        Box(Modifier.padding(horizontal = 9.5.dp, vertical = 8.dp)) { content() }
     }
 }
 
@@ -970,7 +974,7 @@ private fun HomePage(
                         language = language,
                         onEdit = onTodoEdit,
                         onToggle = onTodoToggle,
-                        modifier = Modifier.weight(1f).padding(start = 8.dp)
+                        modifier = Modifier.weight(1f).padding(start = 9.5.dp)
                     )
                 }
             }
@@ -1043,6 +1047,15 @@ private fun DrawerPage(
     val keys = groups.keys.toList()
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val searchFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        // Focus the search field only once when A–Z opens, after its first layout.
+        // Android will select the currently configured IME (e.g. Plektra).
+        delay(110)
+        searchFocus.requestFocus()
+        keyboard?.show()
+    }
     var previewLetter by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(previewLetter) {
         if (previewLetter != null) {
@@ -1117,6 +1130,7 @@ private fun DrawerPage(
                 modifier = Modifier
                     .weight(1f)
                     .height(40.dp)
+                    .focusRequester(searchFocus)
                     .onFocusChanged { searchFocused = it.isFocused }
                     .clip(searchShape)
                     .background(Color(0x44352A28))
@@ -1399,7 +1413,7 @@ private fun SettingsPage(
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · atelier edition 1.1.5", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · atelier edition 1.1.6", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

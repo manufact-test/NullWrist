@@ -56,7 +56,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-1.1.5-rc1-apk
+          name: orangre-piano-1.1.6-rc1-apk
           path: orangre-piano/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -96,7 +96,7 @@ jobs:
         if: env.PIANO_RELEASE_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-v1.1.5-signed-release
+          name: orangre-piano-v1.1.6-signed-release
           path: |
             orangre-piano/app/build/outputs/apk/release/app-release.apk
             orangre-piano/app/build/outputs/bundle/release/app-release.aab
@@ -109,27 +109,27 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PIANO_RELEASE_READY" == "true" ]]; then
-            TAG="orangre-piano-v1.1.5"
-            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.1.5.apk
-            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.1.5.aab
+            TAG="orangre-piano-v1.1.6"
+            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.1.6.apk
+            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.1.6.aab
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.1.5.apk ../orangre-piano-v1.1.5.aab --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.6.apk ../orangre-piano-v1.1.6.aab --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.1.5.apk ../orangre-piano-v1.1.5.aab \
+              gh release create "$TAG" ../orangre-piano-v1.1.6.apk ../orangre-piano-v1.1.6.aab \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.1.5 — ATELIER" \
-                --notes "System HOME gesture resets the drawer, long-press A-Z apps to hide or request uninstall, restore hidden apps in Preferences, refined six-key To-Do glass tiles and square notification counters. Android confirms removal and notification access remains user-authorized."
+                --title "orangre piano 1.1.6 — ATELIER" \
+                --notes "Polished To-Do typography and mathematically balanced glass-card margins; A-Z search now requests focus and the configured Android keyboard on entry (including Plektra). All v1.1.5 gestures, app actions, square counters and local data remain unchanged."
             fi
           else
-            TAG="orangre-piano-v1.1.5-rc1"
-            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.1.5-rc1.apk
+            TAG="orangre-piano-v1.1.6-rc1"
+            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.1.6-rc1.apk
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.1.5-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.6-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.1.5-rc1.apk \
+              gh release create "$TAG" ../orangre-piano-v1.1.6-rc1.apk \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.1.5 RC1 — ATELIER" \
-                --notes "System HOME gesture from A-Z returns to HOME; app long-press offers local hide or system-confirmed uninstall; hidden apps can be restored in settings; six To-Do entries are refined into copper/glass micro-tiles; notification counters are square. Android requires user-authorized Notification Access. Google Play Protect may block browser/file-manager installation for the notification listener: never disable Play Protect. Debug signatures may differ across CI runs and force reinstall, which erases local app data; export or record favorites and notes before uninstalling. A protected permanent signing key is still recommended." \
+                --title "orangre piano 1.1.6 RC1 — ATELIER" \
+                --notes "Six To-Do keys have smaller type for longer notes and visually even top/bottom/side spacing. Opening A-Z now focuses search and asks Android to show the current IME (e.g. Plektra); keyboard visibility still respects device hardware keyboard settings. All v1.1.5 functionality remains. Android requires user-authorized Notification Access; never disable Play Protect for installation. Debug signatures may differ across CI runs and force reinstall, erasing local app data; record notes, favorites and wallpaper before uninstalling." \
                 --prerelease
             fi
           fi

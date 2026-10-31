@@ -3,6 +3,7 @@ package com.orangrepiano.launcher
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCharacteristics
@@ -138,7 +139,7 @@ private enum class Page { HOME, DRAWER, SETTINGS }
 private fun tr(lang: String, en: String, ru: String): String = if (lang == "ru") ru else en
 
 @Composable
-fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
+fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     val context = LocalContext.current
     val prefs = remember { LauncherPrefs(context) }
     var notificationEnabled by remember {
@@ -220,10 +221,12 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     var glass by remember { mutableStateOf(prefs.glass) }
     var quiet by remember { mutableStateOf(prefs.quiet) }
     var hideFavorites by remember { mutableStateOf(prefs.hideFavoritesInDrawer) }
+    var hiddenPackages by remember { mutableStateOf(prefs.hiddenPackages) }
     var language by remember { mutableStateOf(prefs.language) }
     var hideStatusBar by remember { mutableStateOf(prefs.hideStatusBar) }
     var wallpaper by remember { mutableStateOf(getWallpaper(context)) }
     var page by remember { mutableStateOf(Page.HOME) }
+    var appActions by remember { mutableStateOf<AppEntry?>(null) }
     var filter by remember { mutableStateOf("") }
     var selectingSlot by remember { mutableIntStateOf(-1) }
     var pickerSearch by remember { mutableStateOf("") }
@@ -300,6 +303,7 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
             if (event == Lifecycle.Event.ON_RESUME) {
                 installed = installedApps(context)
                 favorites = prefs.favorites
+                hiddenPackages = prefs.hiddenPackages
                 notificationEnabled = pianoHasNotificationAccess(context)
                 locationEnabled = weatherRepo.hasLocationPermission()
                 cameraEnabled = ContextCompat.checkSelfPermission(
@@ -330,6 +334,39 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
     }
     fun goHome() { page = Page.HOME; filter = "" }
     fun goDrawer() { page = Page.DRAWER }
+    LaunchedEffect(homePulse) {
+        if (homePulse > 0) {
+            goHome()
+            appActions = null
+            editingTodo = -1
+            selectingSlot = -1
+            quickChooser = null
+        }
+    }
+    fun hideApp(app: AppEntry) {
+        prefs.setPackageHidden(app.packageName, true)
+        hiddenPackages = prefs.hiddenPackages
+        appActions = null
+    }
+    fun uninstallApp(app: AppEntry) {
+        appActions = null
+        try {
+            @Suppress("DEPRECATION")
+            val uninstall = Intent(Intent.ACTION_UNINSTALL_PACKAGE,
+                Uri.fromParts("package", app.packageName, null))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(uninstall)
+        } catch (_: Exception) {
+            // System apps and protected packages may only expose Disable in App info.
+            try {
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", app.packageName, null)))
+            } catch (_: Exception) {
+                Toast.makeText(context, tr(language, "App settings unavailable", "Настройки приложения недоступны"),
+                    Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     fun showQuickChooser(kind: String) {
         quickFilter = ""
         quickChooser = kind
@@ -454,15 +491,18 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                         onSettings = { page = Page.SETTINGS }
                     )
                     Page.DRAWER -> DrawerPage(
-                        apps = installed.filterNot { hideFavorites && it.key in favorites },
+                        apps = installed.filterNot { it.packageName in hiddenPackages ||
+                            (hideFavorites && it.key in favorites) },
                         filter = filter, onFilter = { filter = it },
                         language = language, quiet = quiet,
                         glass = glass, onHome = ::goHome,
-                        onOpen = { openApp(context, it) }
+                        onOpen = { openApp(context, it) },
+                        onAppActions = { appActions = it }
                     )
                     Page.SETTINGS -> SettingsPage(
                         apps = installed, favorites = favorites, slots = slots,
                         glass = glass, quiet = quiet, hideFavorites = hideFavorites,
+                        hiddenPackages = hiddenPackages,
                         hasWallpaper = wallpaper != null,
                         language = language, hideStatusBar = hideStatusBar,
                         onLanguage = { prefs.setLanguage(it); language = prefs.language },
@@ -480,6 +520,10 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                         onGlass = { prefs.setGlass(it); glass = it },
                         onQuiet = { prefs.setQuiet(it); quiet = it },
                         onHideFavorites = { prefs.setHideFavorites(it); hideFavorites = it },
+                        onUnhideApp = { packageName ->
+                            prefs.setPackageHidden(packageName, false)
+                            hiddenPackages = prefs.hiddenPackages
+                        },
                         onWallpaper = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                         onClearWallpaper = {
                             removeWallpaper(context)
@@ -495,6 +539,42 @@ fun PianoApp(onRequestHome: () -> Unit, onStatusBarChanged: (Boolean) -> Unit) {
                     )
                 }
             }
+        }
+
+        appActions?.let { app ->
+            AlertDialog(
+                onDismissRequest = { appActions = null },
+                containerColor = Color(0xFF25201F),
+                title = {
+                    Text(app.label, color = PianoTone.pearl,
+                        fontSize = 19.sp, fontWeight = FontWeight.Medium,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Text(tr(language, "APP ACTIONS", "ДЕЙСТВИЯ С ПРИЛОЖЕНИЕМ"),
+                            color = PianoTone.copper, fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp)
+                        TextButton(onClick = { hideApp(app) }, modifier = Modifier.fillMaxWidth()) {
+                            Text(tr(language, "HIDE FROM A–Z", "СКРЫТЬ ИЗ СПИСКА"),
+                                color = PianoTone.peach)
+                        }
+                        TextButton(onClick = { uninstallApp(app) }, modifier = Modifier.fillMaxWidth()) {
+                            Text(tr(language, "UNINSTALL APP…", "УДАЛИТЬ ПРИЛОЖЕНИЕ…"),
+                                color = PianoTone.pearl)
+                        }
+                        Text(tr(language,
+                            "Uninstall requires Android confirmation. Hidden apps can be restored in Preferences.",
+                            "Удаление подтверждается в Android. Скрытые приложения можно вернуть в настройках."),
+                            color = PianoTone.secondary, fontSize = 11.sp, lineHeight = 15.sp)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { appActions = null }) {
+                        Text(tr(language, "CANCEL", "ОТМЕНА"), color = PianoTone.secondary)
+                    }
+                }
+            )
         }
 
         if (editingTodo >= 0) {
@@ -850,18 +930,29 @@ private fun HomePage(
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
                                     if (count > 0) {
-                                        Text(
-                                            if (count > 99) "99+" else count.toString(),
-                                            color = PianoTone.pearl,
-                                            fontFamily = FontFamily.Monospace,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 9.sp,
-                                            maxLines = 1,
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(5.dp))
-                                                .background(PianoTone.copper.copy(alpha = .65f))
-                                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                                        )
+                                        // Fixed equal edges: even 99+ stays a square, not a pill.
+                                        val badgeEdge = when {
+                                            count > 99 -> 25.dp
+                                            count > 9 -> 21.dp
+                                            else -> 17.dp
+                                        }
+                                        Box(
+                                            modifier = Modifier.size(badgeEdge)
+                                                .clip(RoundedCornerShape(2.dp))
+                                                .background(PianoTone.copper.copy(alpha = .77f))
+                                                .border(1.dp, PianoTone.peach.copy(alpha = .56f),
+                                                    RoundedCornerShape(2.dp)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                if (count > 99) "99+" else count.toString(),
+                                                color = PianoTone.ink,
+                                                fontFamily = FontFamily.Monospace,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = if (count > 99) 8.sp else 9.sp,
+                                                maxLines = 1
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -875,6 +966,7 @@ private fun HomePage(
                         todos = todos,
                         lineHeight = lineHeight,
                         compact = compact,
+                        quiet = quiet,
                         language = language,
                         onEdit = onTodoEdit,
                         onToggle = onTodoToggle,
@@ -938,7 +1030,8 @@ private fun DrawerPage(
     quiet: Boolean,
     glass: Boolean,
     onHome: () -> Unit,
-    onOpen: (AppEntry) -> Unit
+    onOpen: (AppEntry) -> Unit,
+    onAppActions: (AppEntry) -> Unit
 ) {
     val results = remember(apps, filter) {
         apps.filter { filter.isBlank() || it.label.contains(filter, ignoreCase = true) }
@@ -1096,7 +1189,12 @@ private fun DrawerPage(
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(tint)
                                     .graphicsLayer(scaleX = rowScale, scaleY = rowScale)
-                                    .clickable(interactionSource = interaction, indication = null) { onOpen(app) }
+                                    .combinedClickable(
+                                        interactionSource = interaction,
+                                        indication = null,
+                                        onClick = { onOpen(app) },
+                                        onLongClick = { onAppActions(app) }
+                                    )
                                     .padding(horizontal = 10.dp, vertical = 9.dp)
                             ) {
                                 Text(app.label, color = PianoTone.pearl, fontSize = 16.sp,
@@ -1133,6 +1231,7 @@ private fun SettingsPage(
     glass: Boolean,
     quiet: Boolean,
     hideFavorites: Boolean,
+    hiddenPackages: Set<String>,
     hasWallpaper: Boolean,
     language: String,
     hideStatusBar: Boolean,
@@ -1145,6 +1244,7 @@ private fun SettingsPage(
     onGlass: (Boolean) -> Unit,
     onQuiet: (Boolean) -> Unit,
     onHideFavorites: (Boolean) -> Unit,
+    onUnhideApp: (String) -> Unit,
     onWallpaper: () -> Unit,
     onClearWallpaper: () -> Unit,
     onSetHome: () -> Unit,
@@ -1215,6 +1315,42 @@ private fun SettingsPage(
         Spacer(Modifier.height(12.dp))
         SectionTitle(tr(language, "03 / DIGITAL DETOX", "03 / DIGITAL DETOX"))
         SettingRow(tr(language, "HIDE FAVORITES IN A-Z", "СКРЫТЬ ИЗБРАННОЕ В СПИСКЕ"), hideFavorites, onHideFavorites)
+        Spacer(Modifier.height(8.dp))
+        val hiddenApps = apps.filter { it.packageName in hiddenPackages }
+            .distinctBy { it.packageName }
+        Text(tr(language, "HIDDEN APPS", "СКРЫТЫЕ ПРИЛОЖЕНИЯ") + "  /  " + hiddenApps.size,
+            fontSize = 11.sp, color = PianoTone.peach,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(vertical = 6.dp))
+        if (hiddenApps.isEmpty()) {
+            Text(tr(language,
+                "Long-press an app in A–Z to hide it here.",
+                "Удерживай приложение в списке A–Z, чтобы скрыть его."),
+                color = PianoTone.secondary, fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 5.dp))
+        } else {
+            PianoGlassSurface(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(horizontal = 11.dp, vertical = 6.dp)) {
+                    hiddenApps.forEachIndexed { index, app ->
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = 38.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(app.label, modifier = Modifier.weight(1f),
+                                color = PianoTone.pearl, fontSize = 12.sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            TextButton(onClick = { onUnhideApp(app.packageName) }) {
+                                Text(tr(language, "RESTORE", "ВЕРНУТЬ"),
+                                    color = PianoTone.peach, fontFamily = FontFamily.Monospace,
+                                    fontSize = 10.sp)
+                            }
+                        }
+                        if (index < hiddenApps.lastIndex)
+                            HorizontalDivider(color = PianoTone.border.copy(alpha = .2f))
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(13.dp))
         SectionTitle(tr(language, "04 / SYSTEM", "04 / СИСТЕМА"))
         Text(tr(language, "LANGUAGE / ЯЗЫК", "ЯЗЫК / LANGUAGE"),
@@ -1263,7 +1399,7 @@ private fun SettingsPage(
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · atelier edition 1.1.3", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · atelier edition 1.1.5", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

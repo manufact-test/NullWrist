@@ -66,6 +66,8 @@ class LauncherPrefs(context: Context) {
     val glass: Boolean get() = prefs.getBoolean("glass", true)
     val quiet: Boolean get() = prefs.getBoolean("quiet", false)
     val hideFavoritesInDrawer: Boolean get() = prefs.getBoolean("hide_favorites_drawer", false)
+    /** Packages hidden from the A-Z drawer; never uninstalls or disables applications. */
+    val hiddenPackages: Set<String> get() = prefs.getStringSet("hidden_packages", emptySet())?.toSet() ?: emptySet()
     val language: String get() = prefs.getString("language", "en").let { if (it == "ru") "ru" else "en" }
     val hideStatusBar: Boolean get() = prefs.getBoolean("hide_status_bar", false)
     val setupFinished: Boolean get() = prefs.getBoolean("setup_finished", false)
@@ -102,6 +104,12 @@ class LauncherPrefs(context: Context) {
     fun setGlass(v: Boolean) { prefs.edit().putBoolean("glass", v).apply() }
     fun setQuiet(v: Boolean) { prefs.edit().putBoolean("quiet", v).apply() }
     fun setHideFavorites(v: Boolean) { prefs.edit().putBoolean("hide_favorites_drawer", v).apply() }
+    fun setPackageHidden(packageName: String, hidden: Boolean) {
+        if (packageName.isBlank()) return
+        val updated = hiddenPackages.toMutableSet()
+        if (hidden) updated.add(packageName) else updated.remove(packageName)
+        prefs.edit().putStringSet("hidden_packages", updated).apply()
+    }
     fun setLanguage(v: String) { prefs.edit().putString("language", if (v == "ru") "ru" else "en").apply() }
     fun setHideStatusBar(v: Boolean) { prefs.edit().putBoolean("hide_status_bar", v).apply() }
     fun finishSetup() { prefs.edit().putBoolean("setup_finished", true).apply() }

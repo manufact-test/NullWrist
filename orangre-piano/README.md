@@ -4,6 +4,36 @@ Minimalist, text-only, orange-black Android HOME launcher designed for the squar
 
 An entirely separate Android application from NullWrist. Does not change the rear screen, Pebble runtime, or main NullWrist application.
 
+## v1.1.5 RC1 — launcher navigation and ATELIER finishing
+
+- The launcher activity uses a single HOME task: an Android bottom-edge **Home** gesture
+  sends the current A–Z drawer or preferences page back to the main screen.
+  The app's existing drawer swipe-down, hardware Back and on-screen arrow remain available.
+- **Long-press an app in the A–Z list** for two actions: hide it locally or ask
+  Android to uninstall the package. Uninstallation is always system-confirmed;
+  protected/system apps may offer only an application-details/disable route.
+- Hidden apps are stored by package ID in the existing launcher preferences,
+  excluded from A–Z and its search, and can be restored individually under
+  **Preferences → Digital Detox → Hidden Apps**. Hiding never removes the app
+  or changes favorites and quick shortcuts.
+- Six To-Do entries are now warm copper micro-glass keys with a subtle hairline,
+  two-digit pixel index, minimal checkbox and subdued completed state. Local
+  edit/check/clear behavior and six-row no-scroll Titan 2 layout are preserved.
+- Nonzero notification counters are true **squares** with gently softened
+  2dp corners and count-dependent equal width/height (including `99+`).
+- No telemetry, background uninstall, silent package removal or new remote service.
+
+**Upgrade caution:** debug signing in GitHub Actions is ephemeral unless a
+permanent private production keystore is configured. A mismatch may require
+uninstalling the prior APK, which clears local wallpaper, favorites and To-Do.
+Record the current data before uninstalling; never disable Play Protect to
+install the notification-enabled variant.
+
+Device QA: confirm bottom-edge HOME gesture from a scrolled drawer and search;
+long-press, cancel uninstall, hide/restore, system-app details behavior; persistence
+after launcher restart; all six To-Dos, notification counts `1`, `12`, `99+`;
+wallpaper and 5/6-favorite layouts on Titan 2.
+
 ## Current scope
 
 - Android HOME role (no root), safe to swap back to the stock launcher.

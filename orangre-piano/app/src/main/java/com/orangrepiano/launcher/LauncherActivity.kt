@@ -8,11 +8,17 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
 class LauncherActivity : ComponentActivity() {
+    // A HOME gesture re-delivers ACTION_MAIN to an existing launcher task.
+    // Compose observes this pulse to dismiss its internal drawer/settings page.
+    private var homePulse by mutableIntStateOf(0)
     private val homeRequest = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { }
@@ -27,10 +33,17 @@ class LauncherActivity : ComponentActivity() {
         applyStatusBarSetting()
         setContent {
             PianoApp(
+                homePulse = homePulse,
                 onRequestHome = ::requestHome,
                 onStatusBarChanged = { applyStatusBarSetting() }
             )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == Intent.ACTION_MAIN) homePulse++
     }
 
     override fun onResume() {

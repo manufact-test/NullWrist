@@ -1,6 +1,9 @@
 package com.orangrepiano.launcher
 
 import android.Manifest
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Rect as AndroidRect
+import android.graphics.Typeface as AndroidTypeface
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -30,6 +33,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -98,6 +102,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
@@ -948,14 +954,26 @@ private fun HomePage(
                                                     RoundedCornerShape(2.dp)),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Text(
-                                                if (count > 99) "99+" else count.toString(),
-                                                color = PianoTone.ink,
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = if (count > 99) 8.sp else 9.sp,
-                                                maxLines = 1
-                                            )
+                                            // Center the actual visible glyph bounds, not the font's
+                                            // ascent/descent padding (which made "1" sit too low).
+                                            val label = if (count > 99) "99+" else count.toString()
+                                            Canvas(Modifier.fillMaxSize()) {
+                                                val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                                                    color = PianoTone.ink.toArgb()
+                                                    typeface = AndroidTypeface.create(
+                                                        AndroidTypeface.MONOSPACE, AndroidTypeface.BOLD)
+                                                    textSize = (if (count > 99) 8.sp else 9.sp).toPx()
+                                                    textAlign = AndroidPaint.Align.LEFT
+                                                }
+                                                val glyphBounds = AndroidRect()
+                                                paint.getTextBounds(label, 0, label.length, glyphBounds)
+                                                drawContext.canvas.nativeCanvas.drawText(
+                                                    label,
+                                                    size.width / 2f - (glyphBounds.left + glyphBounds.right) / 2f,
+                                                    size.height / 2f - (glyphBounds.top + glyphBounds.bottom) / 2f,
+                                                    paint
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -1413,7 +1431,7 @@ private fun SettingsPage(
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · atelier edition 1.1.6", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · atelier edition 1.1.7", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

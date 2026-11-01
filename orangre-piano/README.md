@@ -4,6 +4,15 @@ Minimalist, text-only, orange-black Android HOME launcher designed for the squar
 
 An entirely separate Android application from NullWrist. Does not change the rear screen, Pebble runtime, or main NullWrist application.
 
+## v1.1.7 RC1 — notification counter optical alignment
+
+- Only the numeral inside each existing square badge changed. Android glyph
+  ink bounds are measured and centered in both axes, avoiding baseline drift
+  on narrow digits like `1` while keeping `99+` centered too.
+- Badge dimensions, corner radius, color, counts, To-Do, A–Z search, Plektra
+  focus, and launcher navigation remain unchanged.
+
+
 ## v1.1.6 RC1 — keyboard-first search and optical spacing
 
 - The six To-Do notes use slightly smaller text (9.5sp on compact Titan 2 layouts,

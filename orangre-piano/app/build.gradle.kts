@@ -12,8 +12,8 @@ android {
         applicationId = "com.orangrepiano.launcher"
         minSdk = 28
         targetSdk = 36
-        versionCode = 108
-        versionName = "1.1.6"
+        versionCode = 109
+        versionName = "1.1.7"
     }
 
     // Never commit the private release key. GitHub Actions passes it through

@@ -56,7 +56,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-1.1.9-rc1-apk
+          name: orangre-piano-1.1.10-rc1-apk
           path: orangre-piano/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -110,7 +110,7 @@ jobs:
         if: env.PIANO_RELEASE_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-v1.1.9-signed-release
+          name: orangre-piano-v1.1.10-signed-release
           path: |
             orangre-piano/app/build/outputs/apk/release/app-release.apk
             orangre-piano/app/build/outputs/bundle/release/app-release.aab
@@ -123,27 +123,27 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PIANO_RELEASE_READY" == "true" ]]; then
-            TAG="orangre-piano-v1.1.9"
-            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.1.9.apk
-            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.1.9.aab
+            TAG="orangre-piano-v1.1.10"
+            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.1.10.apk
+            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.1.10.aab
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.1.9.apk ../orangre-piano-v1.1.9.aab --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.10.apk ../orangre-piano-v1.1.10.aab --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.1.9.apk ../orangre-piano-v1.1.9.aab \
+              gh release create "$TAG" ../orangre-piano-v1.1.10.apk ../orangre-piano-v1.1.10.aab \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.1.9 — ATELIER" \
-                --notes "Orangre Piano 1.1.9 ATELIER: 5–8 favorite rows, compact 7/8 layout alongside six To-Do notes, more responsive swipes and asynchronous app refresh. Includes Fold safe insets, battery and keyboard toggle. Stable APK uses the pinned permanent signing certificate; migrating from older debug APKs can require a final reinstall."
+                --title "orangre piano 1.1.10 — ATELIER" \
+                --notes "Orangre Piano 1.1.10 ATELIER: 5–8 synchronized favorite/To-Do rows with aligned baselines, persistent 8-slot notes after resizing, unchanged premium styling and fixed glass-panel height. All v1.1.9 performance and Pixel Fold improvements retained. Stable APK only if the pinned permanent signing key is configured."
             fi
           else
-            TAG="orangre-piano-v1.1.9-rc1"
-            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.1.9-rc1.apk
+            TAG="orangre-piano-v1.1.10-rc1"
+            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.1.10-rc1.apk
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.1.9-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.10-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.1.9-rc1.apk \
+              gh release create "$TAG" ../orangre-piano-v1.1.10-rc1.apk \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.1.9 RC1 — ATELIER" \
-                --notes "Developer RC with 5–8 favorites and a performance pass. This APK has a temporary debug signature, not the permanent certificate; avoid reinstalling over existing builds until signed stable release is configured." \
+                --title "orangre piano 1.1.10 RC1 — ATELIER" \
+                --notes "Orangre Piano 1.1.10 RC1: 5–8 synchronized favorite/To-Do rows, preserved notes on decreasing and increasing the count. Debug-only certificate: do not replace your working installation until permanent signing secrets are configured." \
                 --prerelease
             fi
           fi

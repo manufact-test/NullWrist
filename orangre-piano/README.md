@@ -1,5 +1,18 @@
 # orangre piano 🍊
 
+## v1.1.10 RC1 — matching To-Do and favorite row counts
+
+- One setting under Favorite Keys controls both columns: 5/5, 6/6, 7/7
+  or 8/8 app/To-Do rows, with aligned centers and unchanged glass panel height.
+- The To-Do storage always retains all 8 entries. Choosing fewer rows only
+  hides extra items; switching back restores both text and completion status.
+- Existing 1–6 notes migrate without any reset, using the same preferences keys.
+- Preserves v1.1.9 performance improvements, cutout handling, animations,
+  keyboard option, notification counts, and original premium visual styling.
+- Production release remains gated on the pinned permanent signing certificate.
+
+
+
 ## v1.1.9 RC1 — 5–8 favorites and performance optimizations
 
 - Preferences → Favorite Keys: compact copper chips for 5, 6, 7, or 8 apps.

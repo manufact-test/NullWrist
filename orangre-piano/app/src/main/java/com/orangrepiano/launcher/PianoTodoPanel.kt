@@ -33,10 +33,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Six editable local notes on the same row baselines as app favorites. */
+/** Editable local notes: visible row count and baselines follow favorites (5–8). */
 @Composable
 internal fun PianoTodoPanel(
     todos: List<PianoTodo>,
+    count: Int,
     lineHeight: Dp,
     compact: Boolean,
     quiet: Boolean,
@@ -46,7 +47,7 @@ internal fun PianoTodoPanel(
     modifier: Modifier = Modifier
 ) {
     Column(modifier) {
-        repeat(6) { index ->
+        repeat(count.coerceIn(5, 8)) { index ->
             val todo = todos.getOrNull(index) ?: PianoTodo()
             val filled = todo.text.isNotBlank()
             val shape = RoundedCornerShape(7.dp)

@@ -215,7 +215,7 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
     var todoDraft by remember { mutableStateOf("") }
 
     fun editTodo(index: Int) {
-        if (index !in 0 until 6) return
+        if (index !in 0 until slots) return
         todoDraft = todos[index].text
         editingTodo = index
     }
@@ -843,14 +843,15 @@ private fun HomePage(
         }
     ) {
         // Titan 2's 1:1 display has limited usable dp height after Android insets.
-        // Keep the panel fixed; squeeze only 7/8 favorites into its left column.
+        // One glass panel, matching app and To-Do row counts for 5–8 choices.
         val compact = maxHeight < 445.dp
         val lineHeight = when {
             maxHeight < 375.dp -> 29.dp
             compact -> 33.dp
             else -> 38.dp
         }
-        val favoriteRowHeight = if (slots > 6) lineHeight * (6f / slots) else lineHeight
+        // Preserve the approved panel height while matching row baselines on both sides.
+        val panelRowHeight = lineHeight * (6f / slots)
         val appByKey = remember(apps) { apps.associateBy { it.key } }
         Column(
             Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 7.dp),
@@ -904,13 +905,13 @@ private fun HomePage(
                 }
             }
             GlassPanel(enabled = glass, modifier = Modifier.fillMaxWidth()) {
-                // Six unchanged To-Do baselines, up to eight compressed favorite rows.
+                // Both columns have exactly 'slots' evenly aligned rows.
                 Row(
                     modifier = Modifier.fillMaxWidth().height(lineHeight * 6),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f).padding(end = 7.dp)) {
-                        repeat(maxOf(6, slots)) { index ->
+                        repeat(slots) { index ->
                             val entry = if (index < slots)
                                 appByKey[favorites.getOrNull(index)]
                             else null
@@ -919,7 +920,7 @@ private fun HomePage(
                             val count = if (entry == null) 0
                                 else (unreadCounts[entry.packageName] ?: 0)
                             Row(
-                                modifier = Modifier.fillMaxWidth().height(favoriteRowHeight)
+                                modifier = Modifier.fillMaxWidth().height(panelRowHeight)
                                     .then(
                                         if (index < slots) Modifier.combinedClickable(
                                             interactionSource = interaction,
@@ -1011,7 +1012,8 @@ private fun HomePage(
                     )
                     PianoTodoPanel(
                         todos = todos,
-                        lineHeight = lineHeight,
+                        count = slots,
+                        lineHeight = panelRowHeight,
                         compact = compact,
                         quiet = quiet,
                         language = language,
@@ -1482,7 +1484,7 @@ private fun SettingsPage(
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · atelier edition 1.1.9", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · atelier edition 1.1.10", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

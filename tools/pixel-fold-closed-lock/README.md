@@ -8,8 +8,9 @@ works, but Android cancels that request on physically folding the phone. The v0.
 cannot keep the rear-display session across CLOSED/OPENED transitions.
 
 The beta uses Shizuku shell privileges (no root, no desktop) to request
-`cmd device_state base-state 0` instead, so Android is asked to **hold CLOSED**
-rather than enter the temporary rear-camera mode. **Not yet tested on real felix**.
+`cmd device_state state 0` instead, so Android is asked to **hold CLOSED**
+rather than enter the temporary rear-camera mode. A base-state override is deliberately
+NOT used: Android cancels it on physical posture change (DeviceStateManager documentation). **Not yet tested on real felix**.
 No automatic retry or deceptive success message. Only reports command exit status;
 the fold/unfold test is still necessary.
 
@@ -33,7 +34,7 @@ by a stock Android app.
 
 ## Technical
 - Uses Shizuku UserService (AIDL) as shell UID.
-- Only whitelisted `cmd device_state` operations: base-state 0, reset, diagnostics.
+- Only whitelisted `cmd device_state` operations: state 0, reset, diagnostics.
 - UI is offline, no analytics, no internet permission, no forced Accessibility access.
 - Does not automate system consent dialogs or require broad Accessibility privileges.
 - Side-by-side package `com.manufact.pixelfoldclosed`; v0.1 can be uninstalled separately.

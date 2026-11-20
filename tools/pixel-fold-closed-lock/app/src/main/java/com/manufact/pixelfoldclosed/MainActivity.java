@@ -93,7 +93,7 @@ public final class MainActivity extends Activity {
         scroll.addView(column);
         column.addView(text("PIXEL FOLD", 14, true, 0xff78aafc, 0));
         column.addView(text("Только внешний экран", 27, true, 0xfff5f6fc, 8));
-        column.addView(text("Постоянный режим CLOSED вместо временного REAR_DISPLAY. Для Android 17.", 15, false, 0xffb5bccc, 12));
+        column.addView(text("Принудительный режим CLOSED вместо временного REAR_DISPLAY. Для Android 17.", 15, false, 0xffb5bccc, 12));
         state = text("", 18, true, 0xfff0f1f6, 26);
         column.addView(state);
         instructions = text("", 14, false, 0xffcbd0dc, 16);
@@ -225,11 +225,11 @@ public final class MainActivity extends Activity {
             catch (Throwable t) { reply = "ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage(); }
             String finalReply = reply;
             runOnUiThread(() -> {
-                if (action == 0 && reply.startsWith("OK_BASE"))
+                if (action == 0 && reply.startsWith("OK_STATE"))
                     getSharedPreferences("state", Context.MODE_PRIVATE).edit().putBoolean("requested", true).apply();
                 if (action == 1 && reply.startsWith("OK_RESET"))
                     getSharedPreferences("state", Context.MODE_PRIVATE).edit().putBoolean("requested", false).apply();
-                String prefix = action == 0 && reply.startsWith("OK_BASE")
+                String prefix = action == 0 && reply.startsWith("OK_STATE")
                     ? "Android принял команду CLOSED. Теперь проверь раскрытие и складывание.\n\n"
                     : action == 1 && reply.startsWith("OK_RESET")
                     ? "Принудительный режим сброшен.\n\n" : "";

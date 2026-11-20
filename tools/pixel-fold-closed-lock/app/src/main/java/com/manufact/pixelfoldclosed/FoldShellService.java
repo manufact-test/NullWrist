@@ -11,9 +11,9 @@ public final class FoldShellService extends IFoldControl.Stub {
     @Override public String execute(int action) {
         switch (action) {
             case 0: {
-                Result r = run("cmd", "device_state", "base-state", "0");
-                if (r.exit != 0) return "ERROR: base-state 0: " + r.message;
-                return "OK_BASE\n" + r.message + "\n" + run("cmd", "device_state", "state").message;
+                Result r = run("cmd", "device_state", "state", "0");
+                if (r.exit != 0) return "ERROR: state 0: " + r.message;
+                return "OK_STATE\n" + r.message + "\n" + run("cmd", "device_state", "state").message;
             }
             case 1: {
                 Result a = run("cmd", "device_state", "base-state", "reset");

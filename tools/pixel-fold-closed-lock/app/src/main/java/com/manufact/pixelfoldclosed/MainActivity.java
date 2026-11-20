@@ -225,13 +225,13 @@ public final class MainActivity extends Activity {
             catch (Throwable t) { reply = "ERROR: " + t.getClass().getSimpleName() + ": " + t.getMessage(); }
             String finalReply = reply;
             runOnUiThread(() -> {
-                if (action == 0 && reply.startsWith("OK_STATE"))
+                if (action == 0 && finalReply.startsWith("OK_STATE"))
                     getSharedPreferences("state", Context.MODE_PRIVATE).edit().putBoolean("requested", true).apply();
-                if (action == 1 && reply.startsWith("OK_RESET"))
+                if (action == 1 && finalReply.startsWith("OK_RESET"))
                     getSharedPreferences("state", Context.MODE_PRIVATE).edit().putBoolean("requested", false).apply();
-                String prefix = action == 0 && reply.startsWith("OK_STATE")
+                String prefix = action == 0 && finalReply.startsWith("OK_STATE")
                     ? "Android принял команду CLOSED. Теперь проверь раскрытие и складывание.\n\n"
-                    : action == 1 && reply.startsWith("OK_RESET")
+                    : action == 1 && finalReply.startsWith("OK_RESET")
                     ? "Принудительный режим сброшен.\n\n" : "";
                 result.setText(prefix + finalReply);
                 refresh();

@@ -215,7 +215,8 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
     var todoDraft by remember { mutableStateOf("") }
 
     fun editTodo(index: Int) {
-        if (index !in 0 until slots) return
+        // Preferences are available before local slots state is declared.
+        if (index !in 0 until prefs.slots) return
         todoDraft = todos[index].text
         editingTodo = index
     }

@@ -56,7 +56,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-1.1.7-rc1-apk
+          name: orangre-piano-1.1.8-rc1-apk
           path: orangre-piano/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -96,7 +96,7 @@ jobs:
         if: env.PIANO_RELEASE_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-v1.1.7-signed-release
+          name: orangre-piano-v1.1.8-signed-release
           path: |
             orangre-piano/app/build/outputs/apk/release/app-release.apk
             orangre-piano/app/build/outputs/bundle/release/app-release.aab
@@ -109,26 +109,26 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PIANO_RELEASE_READY" == "true" ]]; then
-            TAG="orangre-piano-v1.1.7"
-            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.1.7.apk
-            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.1.7.aab
+            TAG="orangre-piano-v1.1.8"
+            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.1.8.apk
+            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.1.8.aab
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.1.7.apk ../orangre-piano-v1.1.7.aab --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.8.apk ../orangre-piano-v1.1.8.aab --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.1.7.apk ../orangre-piano-v1.1.7.aab \
+              gh release create "$TAG" ../orangre-piano-v1.1.8.apk ../orangre-piano-v1.1.8.aab \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.1.7 — ATELIER" \
+                --title "orangre piano 1.1.8 — ATELIER" \
                 --notes "Targeted fix: notification numerals are now optically centered inside their existing square counters using the glyph's actual ink bounds. No other UI behavior changed."
             fi
           else
-            TAG="orangre-piano-v1.1.7-rc1"
-            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.1.7-rc1.apk
+            TAG="orangre-piano-v1.1.8-rc1"
+            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.1.8-rc1.apk
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.1.7-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.8-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.1.7-rc1.apk \
+              gh release create "$TAG" ../orangre-piano-v1.1.8-rc1.apk \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.1.7 RC1 — ATELIER" \
+                --title "orangre piano 1.1.8 RC1 — ATELIER" \
                 --notes "Targeted counter alignment fix only: draw each notification numeral from measured visible glyph bounds in the same unchanged square frame. Preserves Plektra search focus, To-Do tiles, gestures and all v1.1.6 functionality. Android requires user-authorized Notification Access; never disable Play Protect for installation. Debug signatures may differ across CI runs and force reinstall, erasing local app data; record notes, favorites and wallpaper before uninstalling." \
                 --prerelease
             fi

@@ -58,7 +58,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -228,6 +229,7 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
     var glass by remember { mutableStateOf(prefs.glass) }
     var quiet by remember { mutableStateOf(prefs.quiet) }
     var hideFavorites by remember { mutableStateOf(prefs.hideFavoritesInDrawer) }
+    var autoShowKeyboard by remember { mutableStateOf(prefs.autoShowKeyboard) }
     var hiddenPackages by remember { mutableStateOf(prefs.hiddenPackages) }
     var language by remember { mutableStateOf(prefs.language) }
     var hideStatusBar by remember { mutableStateOf(prefs.hideStatusBar) }
@@ -458,24 +460,21 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
                     if (quiet) {
                         fadeIn(tween(1)) togetherWith fadeOut(tween(1))
                     } else if (initialState == Page.HOME && targetState == Page.DRAWER) {
-                        (slideInVertically(animationSpec = tween(265), initialOffsetY = { it }) +
-                            fadeIn(tween(210))) togetherWith
-                            (slideOutVertically(animationSpec = tween(265), targetOffsetY = { -it / 5 }) +
-                                fadeOut(tween(210)))
+                        // Quick subtle travel, not a full-height slow slide.
+                        (slideInVertically(animationSpec = tween(110), initialOffsetY = { it / 12 }) +
+                            fadeIn(tween(85))) togetherWith fadeOut(tween(65))
                     } else if (initialState == Page.DRAWER && targetState == Page.HOME) {
-                        (slideInVertically(animationSpec = tween(265), initialOffsetY = { -it / 5 }) +
-                            fadeIn(tween(215))) togetherWith
-                            (slideOutVertically(animationSpec = tween(265), targetOffsetY = { it }) +
-                                fadeOut(tween(215)))
+                        (slideInVertically(animationSpec = tween(105), initialOffsetY = { -it / 14 }) +
+                            fadeIn(tween(85))) togetherWith fadeOut(tween(65))
                     } else {
-                        fadeIn(tween(180)) togetherWith fadeOut(tween(130))
+                        fadeIn(tween(95)) togetherWith fadeOut(tween(75))
                     }
                 },
                 label = "piano_navigation",
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
+                    // Safe around hole-punch cameras even when system bars are hidden.
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
             ) { current ->
                 when (current) {
                     Page.HOME -> HomePage(
@@ -503,6 +502,7 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
                             (hideFavorites && it.key in favorites) },
                         filter = filter, onFilter = { filter = it },
                         language = language, quiet = quiet,
+                        autoShowKeyboard = autoShowKeyboard,
                         glass = glass, onHome = ::goHome,
                         onOpen = { openApp(context, it) },
                         onAppActions = { appActions = it }
@@ -510,6 +510,7 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
                     Page.SETTINGS -> SettingsPage(
                         apps = installed, favorites = favorites, slots = slots,
                         glass = glass, quiet = quiet, hideFavorites = hideFavorites,
+                        autoShowKeyboard = autoShowKeyboard,
                         hiddenPackages = hiddenPackages,
                         hasWallpaper = wallpaper != null,
                         language = language, hideStatusBar = hideStatusBar,
@@ -527,6 +528,7 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
                         },
                         onGlass = { prefs.setGlass(it); glass = it },
                         onQuiet = { prefs.setQuiet(it); quiet = it },
+                        onAutoShowKeyboard = { prefs.setAutoShowKeyboard(it); autoShowKeyboard = it },
                         onHideFavorites = { prefs.setHideFavorites(it); hideFavorites = it },
                         onUnhideApp = { packageName ->
                             prefs.setPackageHidden(packageName, false)
@@ -854,6 +856,7 @@ private fun HomePage(
                         weather = weather, language = language,
                         loading = weatherLoading, onClick = onWeather
                     )
+                    PianoBatteryLine()
                 }
                 val keySize = if (compact) 37.dp else 41.dp
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -1050,6 +1053,7 @@ private fun DrawerPage(
     onFilter: (String) -> Unit,
     language: String,
     quiet: Boolean,
+    autoShowKeyboard: Boolean,
     glass: Boolean,
     onHome: () -> Unit,
     onOpen: (AppEntry) -> Unit,
@@ -1067,12 +1071,15 @@ private fun DrawerPage(
     val scope = rememberCoroutineScope()
     val searchFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
-    LaunchedEffect(Unit) {
-        // Focus the search field only once when A–Z opens, after its first layout.
-        // Android will select the currently configured IME (e.g. Plektra).
-        delay(110)
-        searchFocus.requestFocus()
-        keyboard?.show()
+    LaunchedEffect(autoShowKeyboard) {
+        // Focusing BasicTextField also requests the IME: skip both when off.
+        if (autoShowKeyboard) {
+            delay(90)
+            searchFocus.requestFocus()
+            keyboard?.show()
+        } else {
+            keyboard?.hide()
+        }
     }
     var previewLetter by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(previewLetter) {
@@ -1263,6 +1270,7 @@ private fun SettingsPage(
     glass: Boolean,
     quiet: Boolean,
     hideFavorites: Boolean,
+    autoShowKeyboard: Boolean,
     hiddenPackages: Set<String>,
     hasWallpaper: Boolean,
     language: String,
@@ -1275,6 +1283,7 @@ private fun SettingsPage(
     onSlots: (Int) -> Unit,
     onGlass: (Boolean) -> Unit,
     onQuiet: (Boolean) -> Unit,
+    onAutoShowKeyboard: (Boolean) -> Unit,
     onHideFavorites: (Boolean) -> Unit,
     onUnhideApp: (String) -> Unit,
     onWallpaper: () -> Unit,
@@ -1340,6 +1349,10 @@ private fun SettingsPage(
         SectionTitle(tr(language, "02 / APPEARANCE", "02 / ОФОРМЛЕНИЕ"))
         SettingRow(tr(language, "GLASS PANELS", "СТЕКЛЯННЫЕ ПАНЕЛИ"), glass, onGlass)
         SettingRow(tr(language, "QUIET ANIMATIONS", "МИНИМУМ АНИМАЦИЙ"), quiet, onQuiet)
+        SettingRow(
+            tr(language, "AUTO-SHOW KEYBOARD IN A-Z", "КЛАВИАТУРА ПРИ ОТКРЫТИИ СПИСКА"),
+            autoShowKeyboard, onAutoShowKeyboard
+        )
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onWallpaper) { Text(tr(language, "CHOOSE WALLPAPER", "ВЫБРАТЬ ОБОИ"), color = Orange) }
             if (hasWallpaper) TextButton(onClick = onClearWallpaper) { Text(tr(language, "REMOVE", "УДАЛИТЬ"), color = Subtle) }
@@ -1431,7 +1444,7 @@ private fun SettingsPage(
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · atelier edition 1.1.7", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · atelier edition 1.1.8", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

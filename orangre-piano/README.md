@@ -1,5 +1,20 @@
 # orangre piano 🍊
 
+## v1.1.8 RC1 — cutout-safe Pixel Fold layout, power and faster navigation
+
+- Content uses WindowInsets.safeDrawing rather than statusBarsPadding only,
+  so A–Z search and settings avoid punch-hole camera cutouts, even with
+  the Android status bar hidden.
+- New persisted Appearance toggle for automatic A–Z keyboard display (on by
+  default, preserving Titan 2/Plektra behavior). Off means no auto-focus
+  and no forced IME; manual tapping in search still summons your keyboard.
+- Live local battery percentage and fine copper progress rail under weather,
+  updated through Android's system battery broadcast, no permissions needed.
+- Reduced HOME ↔ A–Z transitions from 265ms full-screen travel to a small
+  105–110ms slide with a quick fade.
+- Existing 1.1.7 To-Do, favorites, counters, hide/uninstall and gestures intact.
+
+
 Minimalist, text-only, orange-black Android HOME launcher designed for the square **1440 x 1440** main display of the Unihertz Titan 2.
 
 An entirely separate Android application from NullWrist. Does not change the rear screen, Pebble runtime, or main NullWrist application.

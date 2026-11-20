@@ -65,6 +65,7 @@ class LauncherPrefs(context: Context) {
         (0 until slots).map { prefs.getString("fav_" + it, "") ?: "" }
     val glass: Boolean get() = prefs.getBoolean("glass", true)
     val quiet: Boolean get() = prefs.getBoolean("quiet", false)
+    val autoShowKeyboard: Boolean get() = prefs.getBoolean("auto_show_keyboard", true)
     val hideFavoritesInDrawer: Boolean get() = prefs.getBoolean("hide_favorites_drawer", false)
     /** Packages hidden from the A-Z drawer; never uninstalls or disables applications. */
     val hiddenPackages: Set<String> get() = prefs.getStringSet("hidden_packages", emptySet())?.toSet() ?: emptySet()
@@ -103,6 +104,7 @@ class LauncherPrefs(context: Context) {
     fun setSlots(n: Int) { prefs.edit().putInt("slots", n.coerceIn(5, 6)).apply() }
     fun setGlass(v: Boolean) { prefs.edit().putBoolean("glass", v).apply() }
     fun setQuiet(v: Boolean) { prefs.edit().putBoolean("quiet", v).apply() }
+    fun setAutoShowKeyboard(v: Boolean) { prefs.edit().putBoolean("auto_show_keyboard", v).apply() }
     fun setHideFavorites(v: Boolean) { prefs.edit().putBoolean("hide_favorites_drawer", v).apply() }
     fun setPackageHidden(packageName: String, hidden: Boolean) {
         if (packageName.isBlank()) return

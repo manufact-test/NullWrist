@@ -7,6 +7,29 @@
 - Android 16 target: `compileSdk = 36`, `targetSdk = 36`. Supported SDK starts at Android 9 (API 28).
 - All original user flows preserved (hardware-keyboard search, swipe drawer, favorites, camera, torch, clock, calendar, language and wallpaper).
 
+## Permanent signer created — production activation pending
+
+A dedicated 4096-bit RSA JKS release signing key was generated on 2026-11-20
+OUTSIDE this public repository. Its public signing certificate SHA-256 is:
+
+`FB4EDDBE667DE1B59158CF725C687E8CD779F611EF2AFD91E86194E2A9FAE2E6`
+
+GitHub Actions now verifies this pinned public fingerprint before allowing any
+stable signed release. The private JKS and passwords must NEVER be committed.
+The owner must add the four repository Actions secrets below using the private
+backup package supplied separately. This GitHub connector cannot write repository
+Actions secrets. Until the secrets exist, CI still publishes *debug-only RC*
+artifacts; the stable signed APK has NOT been produced.
+
+After provisioning secrets, rerun the `orangre piano — Android release` workflow
+for HEAD of `orangre-piano/dev`; it will publish `orangre-piano-v1.1.8.apk`
+from the permanently signed release build, provided all signature checks pass.
+The backup and credentials must be stored securely by the owner.
+
+IMPORTANT: Previously installed per-run debug certificates are different, so
+this first production-signed installation will require a final migration/reinstall.
+For all later updates retain this exact key and increase versionCode.
+
 ## Protected production signing is a release gate
 **The first stable installation must be signed with a permanent, private key.**
 The public GitHub repository must never contain the `.jks` file, private passwords, or base64 of the key. Its loss prevents same-key APK upgrades. Prior public debug versions were signed with *ephemeral* certificates; even a signed v1.0 cannot upgrade those in place.

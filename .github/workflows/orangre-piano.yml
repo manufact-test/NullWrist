@@ -73,6 +73,18 @@ jobs:
             printf '%s' "$PIANO_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/orangre-piano-release.jks"
             keytool -list -keystore "$RUNNER_TEMP/orangre-piano-release.jks" \
               -storepass "$PIANO_STORE_PASSWORD" -alias "$PIANO_KEY_ALIAS" >/dev/null
+            # Pin the *public* certificate digest so no future accidental key rotation
+            # can make users uninstall the launcher and lose local settings.
+            ACTUAL_SIGNER_SHA256="$(keytool -exportcert \
+              -keystore "$RUNNER_TEMP/orangre-piano-release.jks" \
+              -storepass "$PIANO_STORE_PASSWORD" -alias "$PIANO_KEY_ALIAS" \
+              | sha256sum | awk '{print $1}')"
+            EXPECTED_SIGNER_SHA256="fb4eddbe667de1b59158cf725c687e8cd779f611ef2afd91e86194e2a9fae2e6"
+            if [[ "$ACTUAL_SIGNER_SHA256" != "$EXPECTED_SIGNER_SHA256" ]]; then
+              echo "::error::Wrong Orangre Piano release certificate. Refusing to publish an incompatible APK."
+              exit 1
+            fi
+            echo "Confirmed pinned permanent signing certificate: $EXPECTED_SIGNER_SHA256"
             echo "PIANO_RELEASE_READY=true" >> "$GITHUB_ENV"
           else
             echo "PIANO_RELEASE_READY=false" >> "$GITHUB_ENV"
@@ -90,6 +102,8 @@ jobs:
           set -euo pipefail
           gradle :app:assembleRelease :app:bundleRelease --stacktrace
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk \
+            | grep -qi "fb4eddbe667de1b59158cf725c687e8cd779f611ef2afd91e86194e2a9fae2e6"
           test -s app/build/outputs/bundle/release/app-release.aab
 
       - name: Upload production deliverables
@@ -118,7 +132,7 @@ jobs:
               gh release create "$TAG" ../orangre-piano-v1.1.8.apk ../orangre-piano-v1.1.8.aab \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
                 --title "orangre piano 1.1.8 — ATELIER" \
-                --notes "Targeted fix: notification numerals are now optically centered inside their existing square counters using the glyph's actual ink bounds. No other UI behavior changed."
+                --notes "Stable production-signed Orangre Piano 1.1.8 with cutout-safe layout for Pixel Fold, optional auto-show keyboard, battery readout and faster navigation. This and future stable APKs use one permanent pinned signing certificate for in-place upgrades. Prior RC debug builds require one final reinstall to migrate."
             fi
           else
             TAG="orangre-piano-v1.1.8-rc1"
@@ -129,7 +143,7 @@ jobs:
               gh release create "$TAG" ../orangre-piano-v1.1.8-rc1.apk \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
                 --title "orangre piano 1.1.8 RC1 — ATELIER" \
-                --notes "Targeted counter alignment fix only: draw each notification numeral from measured visible glyph bounds in the same unchanged square frame. Preserves Plektra search focus, To-Do tiles, gestures and all v1.1.6 functionality. Android requires user-authorized Notification Access; never disable Play Protect for installation. Debug signatures may differ across CI runs and force reinstall, erasing local app data; record notes, favorites and wallpaper before uninstalling." \
+                --notes "Development-only debug APK. This is NOT the permanent signing certificate and may not upgrade installed versions in place. Wait for stable v1.1.8 after the private signing secrets are configured. Cutout-safe Pixel Fold layout, battery gauge, auto-show keyboard switch and snappy A-Z animation." \
                 --prerelease
             fi
           fi

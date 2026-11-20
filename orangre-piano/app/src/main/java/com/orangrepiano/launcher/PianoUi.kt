@@ -201,6 +201,14 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
     }
 
     var installed by remember { mutableStateOf(installedApps(context)) }
+    var appRefreshRequest by remember { mutableIntStateOf(0) }
+    LaunchedEffect(appRefreshRequest) {
+        if (appRefreshRequest > 0) {
+            // Avoid blocking animation and input while querying/sorting installed apps.
+            val refreshed = withContext(Dispatchers.IO) { installedApps(context) }
+            if (refreshed != installed) installed = refreshed
+        }
+    }
     var favorites by remember { mutableStateOf(prefs.favorites) }
     var todos by remember { mutableStateOf(prefs.todos) }
     var editingTodo by remember { mutableIntStateOf(-1) }
@@ -310,7 +318,7 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                installed = installedApps(context)
+                appRefreshRequest++
                 favorites = prefs.favorites
                 hiddenPackages = prefs.hiddenPackages
                 notificationEnabled = pianoHasNotificationAccess(context)
@@ -400,6 +408,11 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
         if (page == Page.HOME) {
             try { focus.requestFocus() } catch (_: Exception) { }
         }
+    }
+
+    val drawerApps = remember(installed, hiddenPackages, hideFavorites, favorites) {
+        installed.filterNot { it.packageName in hiddenPackages ||
+            (hideFavorites && it.key in favorites) }
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
@@ -498,8 +511,7 @@ fun PianoApp(homePulse: Int, onRequestHome: () -> Unit, onStatusBarChanged: (Boo
                         onSettings = { page = Page.SETTINGS }
                     )
                     Page.DRAWER -> DrawerPage(
-                        apps = installed.filterNot { it.packageName in hiddenPackages ||
-                            (hideFavorites && it.key in favorites) },
+                        apps = drawerApps,
                         filter = filter, onFilter = { filter = it },
                         language = language, quiet = quiet,
                         autoShowKeyboard = autoShowKeyboard,
@@ -819,9 +831,10 @@ private fun HomePage(
     onDrawer: () -> Unit,
     onSettings: () -> Unit
 ) {
-    var swipe by remember { mutableStateOf(0f) }
     BoxWithConstraints(
         Modifier.fillMaxSize().pointerInput(Unit) {
+            // Gesture-local float avoids recomposing the whole home on every pixel.
+            var swipe = 0f
             detectVerticalDragGestures(
                 onDragStart = { swipe = 0f },
                 onVerticalDrag = { _, amount -> swipe += amount },
@@ -830,13 +843,15 @@ private fun HomePage(
         }
     ) {
         // Titan 2's 1:1 display has limited usable dp height after Android insets.
-        // Fit the entire home without vertical scrolling, including all six rows.
+        // Keep the panel fixed; squeeze only 7/8 favorites into its left column.
         val compact = maxHeight < 445.dp
         val lineHeight = when {
             maxHeight < 375.dp -> 29.dp
             compact -> 33.dp
             else -> 38.dp
         }
+        val favoriteRowHeight = if (slots > 6) lineHeight * (6f / slots) else lineHeight
+        val appByKey = remember(apps) { apps.associateBy { it.key } }
         Column(
             Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 7.dp),
             verticalArrangement = Arrangement.SpaceBetween
@@ -889,22 +904,22 @@ private fun HomePage(
                 }
             }
             GlassPanel(enabled = glass, modifier = Modifier.fillMaxWidth()) {
-                // Balanced columns with the same six baselines; no added vertical scroll.
+                // Six unchanged To-Do baselines, up to eight compressed favorite rows.
                 Row(
                     modifier = Modifier.fillMaxWidth().height(lineHeight * 6),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f).padding(end = 7.dp)) {
-                        repeat(6) { index ->
+                        repeat(maxOf(6, slots)) { index ->
                             val entry = if (index < slots)
-                                apps.firstOrNull { it.key == favorites.getOrNull(index) }
+                                appByKey[favorites.getOrNull(index)]
                             else null
                             val interaction = remember { MutableInteractionSource() }
                             val pressed by interaction.collectIsPressedAsState()
                             val count = if (entry == null) 0
                                 else (unreadCounts[entry.packageName] ?: 0)
                             Row(
-                                modifier = Modifier.fillMaxWidth().height(lineHeight)
+                                modifier = Modifier.fillMaxWidth().height(favoriteRowHeight)
                                     .then(
                                         if (index < slots) Modifier.combinedClickable(
                                             interactionSource = interaction,
@@ -937,7 +952,11 @@ private fun HomePage(
                                         },
                                         color = if (entry == null) Subtle.copy(alpha = .7f)
                                             else if (pressed) PianoTone.peach else Cream,
-                                        fontSize = if (compact) 12.sp else 14.sp,
+                                        fontSize = when {
+                                            compact && slots > 6 -> 11.sp
+                                            compact -> 12.sp
+                                            else -> 14.sp
+                                        },
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f, fill = false)
@@ -945,8 +964,8 @@ private fun HomePage(
                                     if (count > 0) {
                                         // Fixed equal edges: even 99+ stays a square, not a pill.
                                         val badgeEdge = when {
-                                            count > 99 -> 25.dp
-                                            count > 9 -> 21.dp
+                                            count > 99 -> if (compact && slots > 6) 20.dp else 25.dp
+                                            count > 9 -> if (compact && slots > 6) 19.dp else 21.dp
                                             else -> 17.dp
                                         }
                                         Box(
@@ -960,15 +979,18 @@ private fun HomePage(
                                             // Center the actual visible glyph bounds, not the font's
                                             // ascent/descent padding (which made "1" sit too low).
                                             val label = if (count > 99) "99+" else count.toString()
-                                            Canvas(Modifier.fillMaxSize()) {
-                                                val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                                            // Cache native paint and text bounds between badge redraws.
+                                            val paint = remember {
+                                                AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
                                                     color = PianoTone.ink.toArgb()
                                                     typeface = AndroidTypeface.create(
                                                         AndroidTypeface.MONOSPACE, AndroidTypeface.BOLD)
-                                                    textSize = (if (count > 99) 8.sp else 9.sp).toPx()
                                                     textAlign = AndroidPaint.Align.LEFT
                                                 }
-                                                val glyphBounds = AndroidRect()
+                                            }
+                                            val glyphBounds = remember { AndroidRect() }
+                                            Canvas(Modifier.fillMaxSize()) {
+                                                paint.textSize = (if (count > 99) 8.sp else 9.sp).toPx()
                                                 paint.getTextBounds(label, 0, label.length, glyphBounds)
                                                 drawContext.canvas.nativeCanvas.drawText(
                                                     label,
@@ -1028,16 +1050,18 @@ private fun ClockBlock(
         while (true) { value = LocalDateTime.now(); delay(10_000) }
     }
     val locale = if (language == "ru") Locale.forLanguageTag("ru") else Locale.ENGLISH
+    val clockFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val dateFormatter = remember(language) { DateTimeFormatter.ofPattern("EEEE  ·  d MMMM", locale) }
     Column {
         PianoPixelClock(
-            time = now.format(DateTimeFormatter.ofPattern("HH:mm")),
+            time = now.format(clockFormatter),
             compact = compact,
             quiet = quiet,
             description = tr(language, "Open clock", "Открыть часы"),
             onClick = onClock
         )
         Text(
-            now.format(DateTimeFormatter.ofPattern("EEEE  ·  d MMMM", locale)).uppercase(locale),
+            now.format(dateFormatter).uppercase(locale),
             color = Subtle, fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, letterSpacing = .5.sp,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -1296,6 +1320,7 @@ private fun SettingsPage(
     notificationEnabled: Boolean,
     onNotificationAccess: () -> Unit
 ) {
+    val appByKey = remember(apps) { apps.associateBy { it.key } }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         .padding(horizontal = 19.dp, vertical = 6.dp)) {
         Row(
@@ -1315,18 +1340,31 @@ private fun SettingsPage(
         }
         Spacer(Modifier.height(17.dp))
         SectionTitle(tr(language, "01 / FAVORITE KEYS", "01 / ИЗБРАННОЕ"))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(tr(language, "SHOW", "ПОКАЗАТЬ"), color = Subtle, fontSize = 12.sp)
-            listOf(5, 6).forEach { n ->
-                TextButton(onClick = { onSlots(n) }) {
-                    Text(n.toString(), color = if (n == slots) Orange else Subtle, fontSize = 16.sp)
+            (5..8).forEach { n ->
+                val selected = n == slots
+                val shape = RoundedCornerShape(7.dp)
+                Box(
+                    Modifier.size(width = 37.dp, height = 32.dp)
+                        .clip(shape)
+                        .background(if (selected) PianoTone.copper.copy(alpha = .22f)
+                            else Color(0x303D302E))
+                        .border(1.dp, if (selected) PianoTone.copper.copy(alpha = .74f)
+                            else PianoTone.border.copy(alpha = .24f), shape)
+                        .clickable { onSlots(n) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(n.toString(), color = if (selected) PianoTone.peach else Subtle,
+                        fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium,
+                        fontSize = 13.sp)
                 }
             }
         }
         PianoGlassSurface(modifier = Modifier.fillMaxWidth()) {
           Column(Modifier.padding(horizontal = 10.dp, vertical = 5.dp)) {
            repeat(slots) { index ->
-            val label = apps.firstOrNull { it.key == favorites.getOrNull(index) }?.label ?: tr(language, "+ choose app", "+ выбрать приложение")
+            val label = appByKey[favorites.getOrNull(index)]?.label ?: tr(language, "+ choose app", "+ выбрать приложение")
             Row(
                 Modifier.fillMaxWidth().height(39.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1444,7 +1482,7 @@ private fun SettingsPage(
         Text(tr(language, "To switch back, open Android Settings → Default apps → Home app.", "Для возврата: Настройки Android → Приложения по умолчанию → Главный экран."),
             color = Subtle, fontSize = 11.sp, lineHeight = 16.sp)
         Spacer(Modifier.height(15.dp))
-        Text("orangre piano · atelier edition 1.1.8", fontFamily = FontFamily.Monospace,
+        Text("orangre piano · atelier edition 1.1.9", fontFamily = FontFamily.Monospace,
             fontSize = 10.sp, color = Subtle.copy(alpha = .65f))
         Spacer(Modifier.height(16.dp))
     }

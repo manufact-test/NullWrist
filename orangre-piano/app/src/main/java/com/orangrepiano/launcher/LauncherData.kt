@@ -60,9 +60,11 @@ data class PianoTodo(val text: String = "", val done: Boolean = false)
 
 class LauncherPrefs(context: Context) {
     private val prefs = context.getSharedPreferences("orangre_piano", Context.MODE_PRIVATE)
-    val slots: Int get() = prefs.getInt("slots", 6).coerceIn(5, 6)
-    val favorites: List<String> get() =
-        (0 until slots).map { prefs.getString("fav_" + it, "") ?: "" }
+    val slots: Int get() = prefs.getInt("slots", 6).coerceIn(5, 8)
+    // Preserve all eight positions when showing fewer favorites.
+    private val savedFavorites: List<String> get() =
+        (0 until 8).map { prefs.getString("fav_" + it, "") ?: "" }
+    val favorites: List<String> get() = savedFavorites.take(slots)
     val glass: Boolean get() = prefs.getBoolean("glass", true)
     val quiet: Boolean get() = prefs.getBoolean("quiet", false)
     val autoShowKeyboard: Boolean get() = prefs.getBoolean("auto_show_keyboard", true)
@@ -82,18 +84,21 @@ class LauncherPrefs(context: Context) {
     }
 
     fun setFavorite(index: Int, key: String) {
-        val current = favorites.toMutableList()
-        if (index !in current.indices) return
-        for (i in current.indices) if (i != index && current[i] == key) current[i] = ""
+        val current = savedFavorites.toMutableList()
+        if (index !in 0 until slots) return
+        // Clear duplicates even in temporarily hidden slots.
+        if (key.isNotBlank()) {
+            for (i in current.indices) if (i != index && current[i] == key) current[i] = ""
+        }
         current[index] = key
         val edit = prefs.edit()
         current.forEachIndexed { i, k -> edit.putString("fav_" + i, k) }
         edit.apply()
     }
     fun moveFavorite(from: Int, direction: Int) {
-        val current = favorites.toMutableList()
+        val current = savedFavorites.toMutableList()
         val target = from + direction
-        if (from !in current.indices || target !in current.indices) return
+        if (from !in 0 until slots || target !in 0 until slots) return
         val tmp = current[from]
         current[from] = current[target]
         current[target] = tmp
@@ -101,7 +106,7 @@ class LauncherPrefs(context: Context) {
         current.forEachIndexed { i, k -> edit.putString("fav_" + i, k) }
         edit.apply()
     }
-    fun setSlots(n: Int) { prefs.edit().putInt("slots", n.coerceIn(5, 6)).apply() }
+    fun setSlots(n: Int) { prefs.edit().putInt("slots", n.coerceIn(5, 8)).apply() }
     fun setGlass(v: Boolean) { prefs.edit().putBoolean("glass", v).apply() }
     fun setQuiet(v: Boolean) { prefs.edit().putBoolean("quiet", v).apply() }
     fun setAutoShowKeyboard(v: Boolean) { prefs.edit().putBoolean("auto_show_keyboard", v).apply() }

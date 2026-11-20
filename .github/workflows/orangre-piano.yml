@@ -56,7 +56,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-1.1.8-rc1-apk
+          name: orangre-piano-1.1.9-rc1-apk
           path: orangre-piano/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -110,7 +110,7 @@ jobs:
         if: env.PIANO_RELEASE_READY == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: orangre-piano-v1.1.8-signed-release
+          name: orangre-piano-v1.1.9-signed-release
           path: |
             orangre-piano/app/build/outputs/apk/release/app-release.apk
             orangre-piano/app/build/outputs/bundle/release/app-release.aab
@@ -123,27 +123,27 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$PIANO_RELEASE_READY" == "true" ]]; then
-            TAG="orangre-piano-v1.1.8"
-            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.1.8.apk
-            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.1.8.aab
+            TAG="orangre-piano-v1.1.9"
+            cp app/build/outputs/apk/release/app-release.apk ../orangre-piano-v1.1.9.apk
+            cp app/build/outputs/bundle/release/app-release.aab ../orangre-piano-v1.1.9.aab
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.1.8.apk ../orangre-piano-v1.1.8.aab --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.9.apk ../orangre-piano-v1.1.9.aab --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.1.8.apk ../orangre-piano-v1.1.8.aab \
+              gh release create "$TAG" ../orangre-piano-v1.1.9.apk ../orangre-piano-v1.1.9.aab \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.1.8 — ATELIER" \
-                --notes "Stable production-signed Orangre Piano 1.1.8 with cutout-safe layout for Pixel Fold, optional auto-show keyboard, battery readout and faster navigation. This and future stable APKs use one permanent pinned signing certificate for in-place upgrades. Prior RC debug builds require one final reinstall to migrate."
+                --title "orangre piano 1.1.9 — ATELIER" \
+                --notes "Orangre Piano 1.1.9 ATELIER: 5–8 favorite rows, compact 7/8 layout alongside six To-Do notes, more responsive swipes and asynchronous app refresh. Includes Fold safe insets, battery and keyboard toggle. Stable APK uses the pinned permanent signing certificate; migrating from older debug APKs can require a final reinstall."
             fi
           else
-            TAG="orangre-piano-v1.1.8-rc1"
-            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.1.8-rc1.apk
+            TAG="orangre-piano-v1.1.9-rc1"
+            cp app/build/outputs/apk/debug/app-debug.apk ../orangre-piano-v1.1.9-rc1.apk
             if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$TAG" ../orangre-piano-v1.1.8-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
+              gh release upload "$TAG" ../orangre-piano-v1.1.9-rc1.apk --clobber --repo "$GITHUB_REPOSITORY"
             else
-              gh release create "$TAG" ../orangre-piano-v1.1.8-rc1.apk \
+              gh release create "$TAG" ../orangre-piano-v1.1.9-rc1.apk \
                 --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-                --title "orangre piano 1.1.8 RC1 — ATELIER" \
-                --notes "Development-only debug APK. This is NOT the permanent signing certificate and may not upgrade installed versions in place. Wait for stable v1.1.8 after the private signing secrets are configured. Cutout-safe Pixel Fold layout, battery gauge, auto-show keyboard switch and snappy A-Z animation." \
+                --title "orangre piano 1.1.9 RC1 — ATELIER" \
+                --notes "Developer RC with 5–8 favorites and a performance pass. This APK has a temporary debug signature, not the permanent certificate; avoid reinstalling over existing builds until signed stable release is configured." \
                 --prerelease
             fi
           fi

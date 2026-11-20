@@ -1,5 +1,21 @@
 # orangre piano 🍊
 
+## v1.1.9 RC1 — 5–8 favorites and performance optimizations
+
+- Preferences → Favorite Keys: compact copper chips for 5, 6, 7, or 8 apps.
+- 7/8 apps fit the same home glass-panel height on both Titan 2 and Pixel Fold.
+  The To-Do area keeps six unchanged lines and all existing notes.
+- Switching from eight to five and back keeps the hidden positions and ordering.
+  Duplicate app selections are prevented across all eight stored positions.
+- Gesture travel is now a local float instead of per-pixel Compose state.
+- App list refresh after returning to Home runs on Dispatchers.IO rather than UI.
+- Drawer filtering and app lookup maps are memoized; badge paints and clock/date
+  formatters are reused rather than recreated on redraw.
+- Existing notification counters, camera cutout, battery indicator and Plektra
+  keyboard setting are preserved.
+
+
+
 ## v1.1.8 RC1 — cutout-safe Pixel Fold layout, power and faster navigation
 
 - Content uses WindowInsets.safeDrawing rather than statusBarsPadding only,

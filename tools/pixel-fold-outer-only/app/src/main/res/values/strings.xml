@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pixel Outer Only</string>
+    <string name="title">Только внешний экран</string>
+    <string name="intro">Для Pixel Fold с повреждённым внутренним дисплеем. Без Root, кабеля и ADB.</string>
+    <string name="status_active">● Внешний экран включён</string>
+    <string name="status_inactive">○ Обычный режим Android</string>
+    <string name="status_unsupported">Этот Android не разрешает приложению переключить дисплей. Скопируй диагностику и пришли разработчику.</string>
+    <string name="btn_enable">Включить только внешний экран</string>
+    <string name="btn_disable">Вернуть обычный режим</string>
+    <string name="howto">После нажатия Android может попросить подтвердить переключение. Подтверди на внешнем экране. Пока режим активен, приложение поддерживает его в фоне. После перезагрузки может потребоваться нажать кнопку заново.</string>
+    <string name="dialog_title">Вернуть внутренний экран?</string>
+    <string name="dialog_message">Если внутренний дисплей разбит, Android снова может перенести картинку на него. Продолжить?</string>
+    <string name="dialog_confirm">Да, вернуть</string>
+    <string name="cancel">Отмена</string>
+    <string name="btn_tile">Добавить кнопку в шторку</string>
+    <string name="btn_notifications">Разрешить уведомления</string>
+    <string name="btn_copy">Скопировать диагностику</string>
+    <string name="copied">Диагностика скопирована</string>
+    <string name="device_details">Устройство: %1$s\nAndroid: %2$s\nРежим: %3$s</string>
+    <string name="disclaimer">Экспериментальный режим. Система может отменить его при обновлении, перезагрузке или изменении положения корпуса. Физически отключить дисплей и датчики обычный APK не может.</string>
+    <string name="channel_name">Режим внешнего экрана</string>
+    <string name="notif_outer_title">Внешний экран активен</string>
+    <string name="notif_outer_text">Нажми, чтобы открыть настройки режима</string>
+    <string name="notif_inner_title">Обычный режим экранов</string>
+    <string name="notif_inner_text">Нажми, чтобы включить внешний экран</string>
+    <string name="tile_label">Внешний экран</string>
+    <string name="tile_on">Включён</string>
+    <string name="tile_off">Выключен</string>
+    <string name="tile_unsupported">Недоступно</string>
+    <string name="shortcut_switch">Включить внешний экран</string>
+    <string name="unsupported_toast">Переключение недоступно на этом устройстве</string>
+    <string name="toggle_failed">Android не дал переключить экран. Скопируй диагностику в приложении.</string>
+</resources>

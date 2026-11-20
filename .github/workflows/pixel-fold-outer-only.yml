@@ -1,0 +1,51 @@
+name: Pixel Outer Only APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/pixel-fold-outer-only/**'
+      - '.github/workflows/pixel-fold-outer-only.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: tools/pixel-fold-outer-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+      - name: Compile Android APK
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Check APK
+        run: test -s app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pixel-Outer-Only-0.1.0-beta1
+          path: tools/pixel-fold-outer-only/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Publish test APK as a GitHub prerelease
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create pixel-outer-only-v0.1.0-beta1 \
+            "app/build/outputs/apk/debug/app-debug.apk#Pixel-Outer-Only-0.1.0-beta1.apk" \
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "Pixel Outer Only 0.1.0 beta 1" \
+            --notes "Experimental original Pixel Fold outer-display override. Confirmation may be required; not a hardware-level disable." \
+            --prerelease --latest=false
